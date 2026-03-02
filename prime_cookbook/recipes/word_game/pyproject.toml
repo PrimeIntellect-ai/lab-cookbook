@@ -1,0 +1,13 @@
+[project]
+name = "recipe-word-game"
+version = "0.1.0"
+description = "Wordle-style word game — MultiTurnEnv with partial rewards"
+tags = ["multi-turn", "game", "reasoning", "partial-reward"]
+dependencies = ["verifiers>=0.1.10"]
+
+[tool.hatch.build]
+include = ["*.py", "pyproject.toml"]
+
+[tool.verifiers.eval]
+num_examples = 50
+rollouts_per_example = 4
