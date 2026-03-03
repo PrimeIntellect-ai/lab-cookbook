@@ -45,9 +45,7 @@ Feedback: B G B Y B
 → 'R' is in position 2, 'A' is in the word but not position 4.
 """
 
-# ---------------------------------------------------------------------------
 # Word list — 200 common 5-letter words
-# ---------------------------------------------------------------------------
 
 _WORDS = [
     "ABOUT", "ABOVE", "ABUSE", "ACTOR", "ACUTE", "ADMIT", "ADOPT", "ADULT",
@@ -77,9 +75,7 @@ _WORDS = [
 ]
 
 
-# ---------------------------------------------------------------------------
 # Feedback generation (no regex)
-# ---------------------------------------------------------------------------
 
 def _compute_feedback(guess: str, secret: str) -> str:
     """Return per-letter feedback string like 'G B Y B G'.
@@ -133,16 +129,12 @@ def _extract_guess(text: str) -> str | None:
     return None
 
 
-# ---------------------------------------------------------------------------
 # Reward schedule
-# ---------------------------------------------------------------------------
 
 _REWARD_BY_GUESS = {1: 1.00, 2: 0.90, 3: 0.75, 4: 0.60, 5: 0.45, 6: 0.30}
 
 
-# ---------------------------------------------------------------------------
 # MultiTurnEnv subclass
-# ---------------------------------------------------------------------------
 
 class WordleEnv(vf.MultiTurnEnv):
     """Wordle-style 5-letter word guessing game using MultiTurnEnv."""
@@ -210,9 +202,7 @@ class WordleEnv(vf.MultiTurnEnv):
         pass
 
 
-# ---------------------------------------------------------------------------
 # Dataset — 200 games, one secret word per row
-# ---------------------------------------------------------------------------
 
 def _build_dataset(seed: int = 42) -> Dataset:
     rng = random.Random(seed)
@@ -221,9 +211,7 @@ def _build_dataset(seed: int = 42) -> Dataset:
     return Dataset.from_list(rows)
 
 
-# ---------------------------------------------------------------------------
 # load_environment
-# ---------------------------------------------------------------------------
 
 def load_environment(
     num_examples: int = -1,

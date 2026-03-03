@@ -1,6 +1,6 @@
 # AGENTS.md — Coding Standards for LLM Agents
 
-This file defines the coding standards for any LLM agent (Claude, GPT-4, etc.) contributing to `prime-cookbook`. Read this before writing any code.
+This file defines the coding standards for any LLM agent contributing to `prime-cookbook`. Read this before writing any code.
 
 ---
 

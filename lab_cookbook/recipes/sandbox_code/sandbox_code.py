@@ -38,9 +38,7 @@ def solve(nums: list[int]) -> int:
     return sum(nums)
 """
 
-# ---------------------------------------------------------------------------
 # Dataset: 50 coding challenges
-# ---------------------------------------------------------------------------
 
 _CHALLENGES = [
     # (description, function_signature, test_cases)
@@ -358,9 +356,7 @@ def _build_dataset(seed: int = 42) -> Dataset:
     return Dataset.from_list(rows[:50])
 
 
-# ---------------------------------------------------------------------------
 # Reward — test-case pass rate via sandbox
-# ---------------------------------------------------------------------------
 
 async def code_reward(completion: str, answer: str, info: dict, **kwargs) -> float:
     """Execute model's code in sandbox and return fraction of tests passed.
@@ -456,9 +452,7 @@ def _parse_pass_rate(output: str) -> float:
         return 0.0
 
 
-# ---------------------------------------------------------------------------
 # load_environment
-# ---------------------------------------------------------------------------
 
 def load_environment(
     num_examples: int = -1,

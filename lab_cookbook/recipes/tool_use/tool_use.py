@@ -33,9 +33,7 @@ plain value with no extra text.
 Examples of final answers: "42", "hello", "5 words", "3.28 feet"
 """
 
-# ---------------------------------------------------------------------------
 # Tool implementations
-# ---------------------------------------------------------------------------
 
 def calculate(expression: str) -> str:
     """Evaluate a simple arithmetic expression and return the numeric result.
@@ -130,9 +128,7 @@ def convert_units(value: float, from_unit: str, to_unit: str) -> str:
     return f"{round(result, 4)} {label}"
 
 
-# ---------------------------------------------------------------------------
 # Dataset generation
-# ---------------------------------------------------------------------------
 
 def _build_dataset(seed: int = 42) -> Dataset:
     """Build 100 questions that each require exactly one tool call."""
@@ -194,9 +190,7 @@ def _build_dataset(seed: int = 42) -> Dataset:
     return Dataset.from_list(rows)
 
 
-# ---------------------------------------------------------------------------
 # Reward function
-# ---------------------------------------------------------------------------
 
 def _normalize(text: str) -> str:
     text = text.strip().lower()
@@ -215,9 +209,7 @@ async def exact_match_reward(completion: str, answer: str, **kwargs) -> float:
     return 1.0 if prediction == expected else 0.0
 
 
-# ---------------------------------------------------------------------------
 # load_environment
-# ---------------------------------------------------------------------------
 
 def load_environment(
     num_examples: int = -1,

@@ -38,9 +38,7 @@ Rules:
 
 CURRENT_YEAR = 2025
 
-# ---------------------------------------------------------------------------
 # Q&A generation — multi-step questions
-# ---------------------------------------------------------------------------
 
 def _build_qa_pairs(corpus: dict, n: int = 400, seed: int = 42) -> Dataset:
     rng = random.Random(seed)
@@ -113,9 +111,7 @@ def _build_qa_pairs(corpus: dict, n: int = 400, seed: int = 42) -> Dataset:
     return builder.build()
 
 
-# ---------------------------------------------------------------------------
 # Reward — deterministic exact match
-# ---------------------------------------------------------------------------
 
 def _normalize(text: str) -> str:
     return " ".join(text.strip().lower().split())
@@ -136,9 +132,7 @@ async def multi_step_reward(completion: str, answer: str, **kwargs) -> float:
     return 0.0
 
 
-# ---------------------------------------------------------------------------
 # load_environment
-# ---------------------------------------------------------------------------
 
 def load_environment(
     num_examples: int = -1,

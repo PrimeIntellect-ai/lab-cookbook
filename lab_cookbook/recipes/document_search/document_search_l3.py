@@ -41,10 +41,8 @@ Your response should:
 - Be 2-4 sentences (concise but substantive)
 """
 
-# ---------------------------------------------------------------------------
 # Reference answers (ground truth for judge)
 # These are short reference analyses that the judge uses as rubric guidance.
-# ---------------------------------------------------------------------------
 
 def _build_qa_pairs(corpus: dict, n: int = 200, seed: int = 42) -> Dataset:
     """Build open-ended analysis questions over the corpus."""
@@ -115,9 +113,7 @@ def _build_qa_pairs(corpus: dict, n: int = 200, seed: int = 42) -> Dataset:
     return builder.build()
 
 
-# ---------------------------------------------------------------------------
 # Judge rubric criteria
-# ---------------------------------------------------------------------------
 
 JUDGE_CRITERIA = """Evaluate the response on these dimensions:
 
@@ -133,9 +129,7 @@ Score from 0 to 10. Return JSON: {"score": <int 0-10>, "reasoning": "<brief>"}
 """
 
 
-# ---------------------------------------------------------------------------
 # load_environment
-# ---------------------------------------------------------------------------
 
 def load_environment(
     num_examples: int = -1,
