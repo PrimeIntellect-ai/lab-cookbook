@@ -1,7 +1,4 @@
 <h1 align="center">Lab Cookbook</h1>
-<div align="center">
-  <img src="https://www.primeintellect.ai/_next/image?url=https%3A%2F%2Fcdn.prod.website-files.com%2F66239f0441b09824acb92c7e%2F698bce9eecae6eba79a01d00_lab-cover.png&w=750&q=75" width="60%" />
-</div>
 
 A practical collection of environment recipes for training and evaluating language models with Prime Lab.
 
