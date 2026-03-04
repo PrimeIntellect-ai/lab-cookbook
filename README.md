@@ -12,7 +12,7 @@
 Prime Cookbook
 </h3>
 
-A practical collection of RL environment recipes for Lab + verifiers.
+<p align="center">A practical collection of RL environment recipes for Lab + verifiers.</p>
 
 ## Installation
 
