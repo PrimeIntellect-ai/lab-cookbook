@@ -1,0 +1,19 @@
+[project]
+name = "recipe-tool-use"
+version = "0.1.2"
+description = "Stateless tool use — ToolEnv with 4 deterministic tools"
+keywords = ["tools", "function-calling", "single-turn"]
+dependencies = ["verifiers>=0.1.10"]
+
+[tool.hatch.build]
+include = ["*.py", "pyproject.toml"]
+
+[tool.setuptools]
+py-modules = ["tool_use", "recipe_tool_use"]
+
+[tool.verifiers.eval]
+num_examples = 100
+rollouts_per_example = 4
+
+[tool.verifiers.environment]
+entrypoint = "recipe_tool_use:load_environment"

@@ -1,0 +1,1 @@
+from document_search_l1 import load_environment

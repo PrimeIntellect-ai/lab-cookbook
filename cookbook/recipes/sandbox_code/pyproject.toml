@@ -1,0 +1,19 @@
+[project]
+name = "recipe-sandbox-code"
+version = "0.1.2"
+description = "Sandboxed code execution — PythonEnv with test-case rewards"
+keywords = ["code", "sandbox", "python-env", "execution"]
+dependencies = ["verifiers>=0.1.10"]
+
+[tool.hatch.build]
+include = ["*.py", "pyproject.toml"]
+
+[tool.setuptools]
+py-modules = ["sandbox_code", "recipe_code_generation"]
+
+[tool.verifiers.eval]
+num_examples = 50
+rollouts_per_example = 4
+
+[tool.verifiers.environment]
+entrypoint = "recipe_code_generation:load_environment"

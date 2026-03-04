@@ -16,3 +16,6 @@ venv/
 *.db
 *.pkl
 *.index
+*outputs/*
+*.prime
+*uv.lock

@@ -170,7 +170,7 @@ Before merging a new recipe, verify the starting reward is in the sweet spot:
 - **Too easy** (> 0.35): Model already solves it — no learning signal. Make the task harder.
 - **Too hard** (< 0.15): Model never gets reward — no learning signal. Add easier examples or simplify.
 
-Run: `prime eval run environments/<name>` and check mean reward in the output.
+Run: `prime eval run recipe-<name>` (or the recipe's local config) and check mean reward in the output.
 
 ### 10. Reward level hierarchy
 
@@ -180,7 +180,7 @@ Run: `prime eval run environments/<name>` and check mean reward in the output.
 | **L2** | Deterministic check | Multi-step verification (code execution, math, structured output) |
 | **L3** | `JudgeRubric` | Open-ended synthesis, analysis, explanation |
 
-For L3, always use `universal_rubric_reward` from `prime_cookbook.skills.verifiers.judge_rubric` — it includes hallucination penalization.
+For L3, use a strict `vf.JudgeRubric` (or equivalent) and explicitly include hallucination/factuality penalization in post-processing.
 
 ### 11. Hallucination penalty
 
@@ -197,11 +197,10 @@ elif not result.get("factually_accurate", True):
 
 ## File Checklist for New Recipes
 
-- [ ] `environments/<name>/<name>.py` — `load_environment()` function
-- [ ] `environments/<name>/pyproject.toml` — entrypoint + `[tool.verifiers.eval]`
-- [ ] `environments/<name>/config.toml` — training config for `prime rl run`
-- [ ] `environments/<name>/README.md` — description, expected eval score, training curve
-- [ ] `docs/recipes/<name>.md` — extended documentation
+- [ ] `cookbook/recipes/<name>/<name>.py` (or `recipe_<name>.py`) — exposes `load_environment()`
+- [ ] `cookbook/recipes/<name>/pyproject.toml` — entrypoint + `[tool.verifiers.eval]`
+- [ ] `cookbook/recipes/<name>/config.toml` — training config for `prime rl run`
+- [ ] `cookbook/recipes/<name>/README.md` — complete documentation (quick start, metrics, design notes)
 - [ ] Entry added to the recipes table in root `README.md`
 
 ---
