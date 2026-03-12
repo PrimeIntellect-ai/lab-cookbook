@@ -14,32 +14,32 @@ Prime Cookbook
 
 <p align="center">A practical collection of RL environment recipes for Lab + verifiers.</p>
 
-## Installation
+## Local development
 
-1. Install Python 3.10+.
-2. Install dependencies:
+For contributing to this repository:
 
 ```bash
 uv sync
 ```
 
-Optional (tests/lint):
+Optional developer dependencies:
 
 ```bash
 uv sync --extra dev
 ```
+
+Environment-specific usage and setup live in each environment folder under `cookbook/recipes/`.
 
 ## Evaluate and train
 
 Typical workflow:
 
 ```bash
-# Evaluate a packaged recipe by id
-prime eval run recipe-math-rl --model gpt-4.1-mini
-
-# Train from a recipe config
-prime rl run cookbook/recipes/math_rl/config.toml
+# Train from an environment config
+prime rl run cookbook/recipes/swe_grep/config.toml
 ```
+
+See each environment README for environment-specific evaluation and training commands.
 
 You define:
 - a dataset (`question` / `prompt`, `answer`, `info`),
@@ -50,22 +50,14 @@ You define:
 
 All recipes live in `cookbook/recipes/`:
 
-1. **[Math RL](cookbook/recipes/math_rl/README.md)**
-2. **[Tool Use](cookbook/recipes/tool_use/README.md)**
-3. **[Word Game](cookbook/recipes/word_game/README.md)**
-4. **[Sandbox Code](cookbook/recipes/sandbox_code/README.md)**
-5. **[Document Search](cookbook/recipes/document_search/README.md)**
-6. **[Multi Env](cookbook/recipes/multi_env/README.md)**
+1. **[Ethics Debate](cookbook/recipes/ethics_debate/README.md)**
+2. **[Patent Search](cookbook/recipes/patent_search/README.md)**
+3. **[SWE Grep](cookbook/recipes/swe_grep/README.md)**
 
-Each recipe folder contains:
-- `README.md`
-- environment implementation (`*.py`)
-- `config.toml`
-- `pyproject.toml`
+Each environment keeps its documentation in its own folder, alongside its implementation and config files.
 
-## Docs
+## Project Docs
 
-- Main docs: [`docs/`](docs/)
 - Contribution guide: [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - Agent standards: [`AGENTS.md`](AGENTS.md)
 
