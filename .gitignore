@@ -18,4 +18,4 @@ venv/
 *.index
 *outputs/*
 *.prime
-*uv.lock
+*uv.locklab-cookbook

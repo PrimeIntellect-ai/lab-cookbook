@@ -1,0 +1,22 @@
+[project]
+name = "swe-grep"
+description = "Just another swe grep environment"
+tags = ["train", "eval"]
+version = "0.3.2"
+requires-python = ">=3.10"
+dependencies = [
+    "chatan>=0.3.0",
+    "tenacity>=9.1.2",
+    "verifiers>=0.1.9.post3",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = ["swe_grep.py", "pyproject.toml", "src"] 
+
+[tool.verifiers.eval]
+num_examples = 5
+rollouts_per_example = 3
