@@ -1,0 +1,24 @@
+[project]
+name = "patent-technical-analysis"
+description = "Technical analysis of patent claims, technical innovations, and differentiations"
+tags = ["patents", "multi-turn", "agentic-search", "rag", "train", "eval", "llm-judge"]
+requires-python = ">=3.11"
+version = "0.1.4"
+dependencies = [
+    "verifiers>=0.1.8",
+    "chromadb",
+    "datasets",
+    "openai",
+    "python-dotenv",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = ["patent_technical_analysis.py", "pyproject.toml"]
+
+[tool.verifiers.eval]
+num_examples = 10
+rollouts_per_example = 3

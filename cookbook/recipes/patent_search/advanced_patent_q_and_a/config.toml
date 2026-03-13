@@ -1,0 +1,10 @@
+model = "Qwen/Qwen3-4B-Instruct-2507"
+max_steps = 200
+batch_size = 128
+rollouts_per_example = 8
+
+[sampling]
+max_tokens = 2048
+
+[[env]]
+id = "primeintellect/advanced-patent-q-and-a"

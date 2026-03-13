@@ -1,0 +1,602 @@
+import asyncio
+import json
+import logging
+import os
+from typing import cast
+
+from dotenv import load_dotenv
+load_dotenv()
+
+import chromadb
+from chromadb.api.types import Embeddable, EmbeddingFunction
+from chromadb.utils import embedding_functions
+from datasets import load_dataset
+from openai import AsyncOpenAI
+
+import verifiers as vf
+from verifiers.rubrics.judge_rubric import JudgeRubric
+
+CHROMA_DB_DIR = ".chroma_db_patents_level3"
+HALLUCINATION_MULTIPLIER = 0.2
+FACTUAL_ERROR_MULTIPLIER = 0.5
+
+logger = logging.getLogger(__name__)
+_chroma_semaphore: asyncio.Semaphore | None = None
+
+
+def _get_chroma_semaphore() -> asyncio.Semaphore:
+    global _chroma_semaphore
+    if _chroma_semaphore is None:
+        _chroma_semaphore = asyncio.Semaphore(100)
+    return _chroma_semaphore
+
+
+def extract_section_by_header(content: str, header: str) -> str:
+    section_marker = "## " + header
+    start_idx = content.find(section_marker)
+    if start_idx == -1:
+        return ""
+    content_after_header = content[start_idx + len(section_marker):]
+    newline_idx = content_after_header.find("\n")
+    if newline_idx != -1:
+        content_after_header = content_after_header[newline_idx + 1:]
+    next_section_idx = content_after_header.find("\n## ")
+    if next_section_idx == -1:
+        section_content = content_after_header
+    else:
+        section_content = content_after_header[:next_section_idx]
+    return section_content.strip()
+
+
+def extract_abstract(content: str) -> str:
+    return extract_section_by_header(content, "Abstract")
+
+
+def extract_claims_text(content: str) -> str:
+    return extract_section_by_header(content, "Claims")
+
+
+def extract_description(content: str) -> str:
+    return extract_section_by_header(content, "Description")
+
+
+def format_date(date_str: str) -> str:
+    if date_str and len(date_str) == 8:
+        return date_str[:4] + "-" + date_str[4:6] + "-" + date_str[6:]
+    return date_str
+
+
+def load_environment(
+    max_turns: int = 10,
+    judge_model: str = "gpt-4.1",
+    judge_base_url: str = "https://api.openai.com/v1",
+    judge_api_key_var: str = "OPENAI_API_KEY",
+    embed_model: str = "text-embedding-3-small",
+    embed_base_url: str = "https://api.openai.com/v1",
+    embed_api_key_var: str = "OPENAI_API_KEY",
+    corpus_dataset: str = "jessicafeiyali/qualcomm-patents",
+    corpus_file: str = "patents_formatted.json",
+    qa_file: str = "patent_qa_level3.jsonl",
+    chroma_db_dir: str = CHROMA_DB_DIR,
+) -> vf.Environment:
+    corpus = load_dataset(corpus_dataset, data_files=corpus_file, split="train")
+    patent_id_to_title: dict[str, str] = {}
+    patent_id_to_content: dict[str, str] = {}
+    patent_id_to_metadata: dict[str, dict] = {}
+    patent_id_to_abstract: dict[str, str] = {}
+    patent_id_to_claims: dict[str, str] = {}
+    patent_id_to_description: dict[str, str] = {}
+
+    for row in corpus:
+        row = cast(dict, row)
+        pid = row["id"]
+        content = row["content"]
+        patent_id_to_title[pid] = row["title"]
+        patent_id_to_content[pid] = content
+        patent_id_to_metadata[pid] = row.get("metadata", {})
+        patent_id_to_abstract[pid] = extract_abstract(content)
+        patent_id_to_claims[pid] = extract_claims_text(content)
+        patent_id_to_description[pid] = extract_description(content)
+
+    _chroma_state: dict = {"collection": None}
+
+    def _get_collection():
+        if _chroma_state["collection"] is None:
+            openai_ef = embedding_functions.OpenAIEmbeddingFunction(
+                model_name=embed_model,
+                api_base=embed_base_url,
+                api_key=os.getenv(embed_api_key_var, "EMPTY"),
+            )
+            client = chromadb.PersistentClient(path=chroma_db_dir)
+            _chroma_state["collection"] = client.get_or_create_collection(
+                name="patent_titles_abstracts_v3",
+                embedding_function=cast(EmbeddingFunction[Embeddable], openai_ef),
+            )
+            _init_chroma(_chroma_state["collection"])
+        return _chroma_state["collection"]
+
+    def _init_chroma(collection) -> None:
+        all_ids = list(patent_id_to_title.keys())
+        existing: set[str] = set()
+        for i in range(0, len(all_ids), 500):
+            batch = all_ids[i : i + 500]
+            got = collection.get(ids=batch)
+            existing.update(got.get("ids", []))
+        missing = [pid for pid in all_ids if pid not in existing]
+        if missing:
+            documents = []
+            metadatas = []
+            for pid in missing:
+                title = str(patent_id_to_title[pid]).strip()
+                abstract = str(patent_id_to_abstract[pid]).strip()
+                combined_text = title + "\n\n" + abstract if abstract else title
+                if not combined_text:
+                    raise ValueError("Empty title and abstract for patent_id " + pid)
+                documents.append(combined_text)
+                metadatas.append({"title": title, "abstract": abstract})
+            bs = 100
+            for i in range(0, len(missing), bs):
+                collection.upsert(
+                    ids=missing[i : i + bs],
+                    documents=documents[i : i + bs],
+                    metadatas=metadatas[i : i + bs],
+                )
+
+    def normalize_id(text: str) -> str:
+        return text.strip().lower().replace(" ", "_")
+
+    async def search_patents(query: str) -> list[dict]:
+        """Search for relevant patents using title and abstract embedding similarity.
+
+        args:
+            query (str): The query to search for.
+
+        returns:
+            list[dict]: A list of dicts with patent_id, title, and abstract.
+        """
+        collection = _get_collection()
+        async with _get_chroma_semaphore():
+            results = await asyncio.to_thread(
+                collection.query, query_texts=[query], n_results=10
+            )
+        if not results:
+            raise ValueError("No results found for query: " + query)
+        if not results["metadatas"]:
+            raise ValueError("No results metadata found for query: " + query)
+        output = []
+        for i in range(len(results["ids"][0])):
+            output.append(
+                {
+                    "patent_id": results["ids"][0][i],
+                    "title": results["metadatas"][0][i]["title"],
+                    "abstract": results["metadatas"][0][i].get("abstract", ""),
+                }
+            )
+        return output
+
+    async def get_metadata(patent_id: str) -> dict:
+        """Get patent metadata.
+
+        args:
+            patent_id (str): The ID of the patent.
+
+        returns:
+            dict: Metadata with title, filing_date, grant_date, claim_count.
+        """
+        if patent_id not in patent_id_to_metadata:
+            raise ValueError("Patent not found: " + patent_id)
+        metadata = patent_id_to_metadata[patent_id]
+        return {
+            "title": patent_id_to_title.get(patent_id, ""),
+            "filing_date": format_date(metadata.get("filing_date", "")),
+            "grant_date": format_date(metadata.get("grant_date", "")),
+            "claim_count": metadata.get("claim_count", 0),
+        }
+
+    async def get_abstract(patent_id: str) -> str:
+        """Get the full abstract text for a patent.
+
+        args:
+            patent_id (str): The ID of the patent.
+
+        returns:
+            str: The full abstract text.
+        """
+        if patent_id not in patent_id_to_abstract:
+            raise ValueError("Patent not found: " + patent_id)
+        return patent_id_to_abstract[patent_id]
+
+    async def get_claims_text(patent_id: str) -> str:
+        """Get the full claims section text for a patent.
+
+        args:
+            patent_id (str): The ID of the patent.
+
+        returns:
+            str: The full claims section text.
+        """
+        if patent_id not in patent_id_to_claims:
+            raise ValueError("Patent not found: " + patent_id)
+        return patent_id_to_claims[patent_id]
+
+    async def get_description(patent_id: str) -> str:
+        """Get the description section for a patent.
+
+        args:
+            patent_id (str): The ID of the patent.
+
+        returns:
+            str: The description section text (may be truncated if very long).
+        """
+        if patent_id not in patent_id_to_description:
+            raise ValueError("Patent not found: " + patent_id)
+        desc = patent_id_to_description[patent_id]
+        if len(desc) > 15000:
+            return desc[:15000] + "\n\n[TRUNCATED - description continues...]"
+        return desc
+
+    async def get_full_content(patent_id: str) -> str:
+        """Get the full content of a patent including all sections.
+
+        args:
+            patent_id (str): The ID of the patent.
+
+        returns:
+            str: The full patent content (may be truncated if very long).
+        """
+        if patent_id not in patent_id_to_content:
+            raise ValueError("Patent not found: " + patent_id)
+        content = patent_id_to_content[patent_id]
+        if len(content) > 20000:
+            return content[:20000] + "\n\n[TRUNCATED - content continues...]"
+        return content
+
+    async def compare_patents(patent_id_1: str, patent_id_2: str) -> dict:
+        """Get side-by-side comparison data for two patents.
+
+        args:
+            patent_id_1 (str): The ID of the first patent.
+            patent_id_2 (str): The ID of the second patent.
+
+        returns:
+            dict: Comparison data with titles, abstracts, filing dates, and claim counts.
+        """
+        if patent_id_1 not in patent_id_to_content:
+            raise ValueError("Patent not found: " + patent_id_1)
+        if patent_id_2 not in patent_id_to_content:
+            raise ValueError("Patent not found: " + patent_id_2)
+
+        meta1 = patent_id_to_metadata.get(patent_id_1, {})
+        meta2 = patent_id_to_metadata.get(patent_id_2, {})
+
+        return {
+            "patent_1": {
+                "id": patent_id_1,
+                "title": patent_id_to_title.get(patent_id_1, ""),
+                "abstract": patent_id_to_abstract.get(patent_id_1, ""),
+                "filing_date": format_date(meta1.get("filing_date", "")),
+                "claim_count": meta1.get("claim_count", 0),
+            },
+            "patent_2": {
+                "id": patent_id_2,
+                "title": patent_id_to_title.get(patent_id_2, ""),
+                "abstract": patent_id_to_abstract.get(patent_id_2, ""),
+                "filing_date": format_date(meta2.get("filing_date", "")),
+                "claim_count": meta2.get("claim_count", 0),
+            },
+        }
+
+    async def view_sections(patent_id: str) -> list[dict]:
+        """View the sections of a patent.
+
+        args:
+            patent_id (str): The ID of the patent to view.
+
+        returns:
+            list[dict]: A list of dicts with section_id and section_name.
+        """
+        content = patent_id_to_content[patent_id]
+        sections = []
+        lines = content.split("\n")
+        for i, line in enumerate(lines):
+            if line.startswith("#"):
+                section_name = line.lstrip("#").strip()
+                section_id = patent_id + ":" + normalize_id(section_name)
+                sections.append(
+                    {
+                        "section_id": section_id,
+                        "section_name": section_name,
+                        "start_line": i,
+                    }
+                )
+
+        if not sections:
+            sections.append(
+                {
+                    "section_id": patent_id + ":full",
+                    "section_name": "Full Patent",
+                    "start_line": 0,
+                }
+            )
+
+        return [
+            {"section_id": s["section_id"], "section_name": s["section_name"]}
+            for s in sections
+        ]
+
+    async def read_section(section_id: str) -> str:
+        """Read a section of a patent.
+
+        args:
+            section_id (str): The ID of the section to read.
+
+        returns:
+            str: The content of the section.
+        """
+        if ":" not in section_id:
+            raise ValueError(
+                "Invalid section_id format. Expected: patent_id:section_name"
+            )
+        parts = section_id.split(":", 1)
+        patent_id = parts[0]
+        section_name_id = parts[1]
+
+        content = patent_id_to_content[patent_id]
+        lines = content.split("\n")
+
+        if section_name_id == "full":
+            return content
+
+        section_start = None
+        section_end = None
+
+        for i, line in enumerate(lines):
+            if line.startswith("#"):
+                current_section = normalize_id(line.lstrip("#").strip())
+                if current_section == section_name_id and section_start is None:
+                    section_start = i
+                elif section_start is not None and section_end is None:
+                    section_end = i
+                    break
+
+        if section_start is not None:
+            if section_end is None:
+                section_end = len(lines)
+            return "\n".join(lines[section_start:section_end])
+        else:
+            raise ValueError("Section not found: " + section_id)
+
+    tools = [
+        search_patents,
+        get_metadata,
+        get_abstract,
+        get_claims_text,
+        get_description,
+        get_full_content,
+        compare_patents,
+        view_sections,
+        read_section,
+    ]
+
+    parser = vf.Parser()
+    dataset = load_dataset(corpus_dataset, data_files=qa_file, split="train")
+
+    def transform_example(example):
+        info_raw = example.get("info", "{}")
+        if isinstance(info_raw, str):
+            info = json.loads(info_raw)
+        else:
+            info = info_raw
+        return {
+            "question": example["question"],
+            "answer": example["answer"],
+            "info": json.dumps(info) if isinstance(info, dict) else info_raw,
+        }
+
+    dataset = dataset.map(transform_example)
+
+    JUDGE_PROMPT = """You are a strict patent analysis grader. Evaluate the response using the checklist below. Err on the side of lower scores. Scores above 0.5 should be incredibly rare.
+
+QUESTION:
+{question}
+
+REFERENCE ANSWER:
+{answer}
+
+SOURCE QUOTES FROM PATENT:
+{source_quotes}
+
+RESPONSE BEING EVALUATED:
+{response}
+
+STEP 1 — KEY POINT COVERAGE
+For each key point, determine if the response COVERS it.
+A key point is COVERED if and only if:
+- The response addresses the same specific technical concept
+- Using different terminology is acceptable if the technical meaning is equivalent
+- The response must include the specific detail, not just reference the general topic area
+- Partial coverage does NOT count and should be given a score of 0
+
+EXAMPLES:
+  Key point: "Uses beam-based spatial multiplexing with rank adaptation"
+  Response says: "The patent uses spatial multiplexing techniques"
+  → covered: false (missing beam-based approach and rank adaptation specifics)
+
+  Key point: "Uses beam-based spatial multiplexing with rank adaptation"
+  Response says: "Employs beam-based MIMO with dynamic rank selection"
+  → covered: true (equivalent technical meaning)
+
+KEY POINTS TO CHECK:
+{key_points_checklist}
+
+STEP 2 — HALLUCINATION CHECK
+A hallucination is a specific technical claim in the response that is:
+- Not supported by the reference answer, source quotes, OR reasonable domain knowledge
+- Invented details such as fabricated patent numbers, claim numbers, dates, or technical specifications
+Do NOT flag as hallucination:
+- Well-known technical background (e.g., "5G NR is a cellular standard")
+- Reasonable inferences from the patent content
+- Accurate details the model may have retrieved from the patent even if not in the source quotes above
+
+Generally, if anything not widely accepted shows up in the answer that is not supported by the reference answer, mark as hallucination
+
+STEP 3 — FACTUAL ERROR CHECK
+A factual error is a statement that directly CONTRADICTS the patent content shown above.
+
+First, write your step-by-step reasoning for each key point, hallucination check, and factual error check.
+Then output your final verdict as a JSON block.
+
+REASONING:
+[Analyze each key point, then hallucinations, then factual errors]
+
+VERDICT:
+{{
+    "key_points": [{{"point": "text", "covered": true or false}}],
+    "hallucination": true or false,
+    "factual_error": true or false
+}}"""
+
+    judge_client = AsyncOpenAI(
+        base_url=judge_base_url, api_key=os.getenv(judge_api_key_var)
+    )
+
+    judge_rubric = JudgeRubric(
+        judge_client=judge_client,
+        judge_model=judge_model,
+        parser=parser,
+        judge_prompt=JUDGE_PROMPT,
+    )
+
+    async def judge_reward_func(
+        prompt,
+        completion,
+        answer,
+        state,
+        info=None,
+        **kwargs,
+    ) -> float:
+        # Get info from parameter (framework passes it from merged dict)
+        if info is None:
+            info = {}
+        if isinstance(info, str):
+            info = json.loads(info)
+
+        logger.error(f"[JUDGE] info keys: {list(info.keys()) if isinstance(info, dict) else type(info)}")
+
+        ground_truth = info.get("ground_truth", {})
+        key_points = ground_truth.get("key_points", [])
+        if not key_points:
+            logger.error(f"[JUDGE] No key_points found in info. Info: {str(info)[:500]}")
+            return 0.0
+
+        key_points_checklist = ""
+        for i, kp in enumerate(key_points):
+            key_points_checklist += str(i + 1) + ". " + str(kp) + "\n"
+
+        source_quotes = ground_truth.get("source_quotes", [])
+        source_quotes_text = "\n".join("- " + str(sq) for sq in source_quotes) if source_quotes else "N/A"
+
+        # Extract text from completion (list of messages for ToolEnv)
+        if isinstance(completion, str):
+            completion_text = completion
+        elif isinstance(completion, list):
+            # Get last assistant message content
+            assistant_msgs = [m for m in completion if isinstance(m, dict) and m.get("role") == "assistant"]
+            completion_text = assistant_msgs[-1].get("content", "") if assistant_msgs else ""
+        else:
+            completion_text = str(completion)
+
+        # Extract question from prompt
+        if isinstance(prompt, str):
+            prompt_text = prompt
+        elif isinstance(prompt, list):
+            user_msgs = [m for m in prompt if isinstance(m, dict) and m.get("role") == "user"]
+            prompt_text = user_msgs[-1].get("content", "") if user_msgs else ""
+        else:
+            prompt_text = str(prompt) if prompt else ""
+
+        formatted_prompt = JUDGE_PROMPT.format(
+            question=prompt_text,
+            answer=answer,
+            source_quotes=source_quotes_text,
+            response=completion_text,
+            key_points_checklist=key_points_checklist,
+        )
+
+        # Direct API call via closure (like writing_judge pattern)
+        try:
+            judge_response_obj = await judge_client.chat.completions.create(
+                model=judge_model,
+                messages=[{"role": "user", "content": formatted_prompt}],
+                temperature=0.0,
+                max_tokens=2048,
+            )
+            response_text = judge_response_obj.choices[0].message.content.strip()
+            logger.error(f"[JUDGE] Response (first 200 chars): {response_text[:200]}")
+        except Exception as e:
+            logger.error(f"[JUDGE] LLM call failed: {e}")
+            return 0.0
+
+        # Robust JSON extraction
+        json_start = response_text.find("{")
+        json_end = response_text.rfind("}") + 1
+        if json_start == -1 or json_end == 0:
+            logger.error("[JUDGE] No JSON block found in judge response")
+            return 0.0
+        json_text = response_text[json_start:json_end]
+
+        try:
+            evaluation = json.loads(json_text)
+        except json.JSONDecodeError as e:
+            logger.error(f"[JUDGE] JSON parse failed: {e}")
+            return 0.0
+
+        kp_results = evaluation.get("key_points", [])
+        covered_count = sum(1 for kp in kp_results if kp.get("covered", False))
+        total = len(key_points)
+        score = covered_count / total
+
+        if evaluation.get("hallucination", False):
+            score = score * HALLUCINATION_MULTIPLIER
+        if evaluation.get("factual_error", False):
+            score = score * FACTUAL_ERROR_MULTIPLIER
+
+        final_score = max(0.0, min(1.0, score))
+        logger.error(f"[JUDGE] Score: {final_score} (covered={covered_count}/{total})")
+        return final_score
+
+    system_prompt = """You are an expert patent analyst with access to a corpus of patents in the wireless communications domain.
+
+Your task is to answer questions about these patents accurately and comprehensively.
+
+AVAILABLE TOOLS:
+- search_patents(query): Find relevant patents by semantic search on titles and abstracts
+- get_metadata(patent_id): Get filing date, grant date, and claim count
+- get_abstract(patent_id): Get the full abstract text
+- get_claims_text(patent_id): Get the full claims section
+- get_description(patent_id): Get the description section
+- get_full_content(patent_id): Get complete patent content
+- compare_patents(patent_id_1, patent_id_2): Get side-by-side comparison data
+- view_sections(patent_id): List all sections in a patent
+- read_section(section_id): Read a specific section
+
+RESPONSE GUIDELINES:
+1. Always retrieve the relevant patent content before answering
+2. Base your answers strictly on the patent content - do not hallucinate
+3. For technical summaries, be concise (2-3 sentences)
+4. For claim analysis, quote relevant claim language
+5. For comparison questions, address both patents fairly
+6. If information is not available, say so clearly"""
+
+    judge_rubric.add_reward_func(judge_reward_func, weight=1.0)
+
+    vf_env = vf.ToolEnv(
+        dataset=dataset,
+        system_prompt=system_prompt,
+        parser=parser,
+        rubric=judge_rubric,
+        tools=tools,
+        max_turns=max_turns,
+    )
+
+    return vf_env

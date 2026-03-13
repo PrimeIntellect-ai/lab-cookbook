@@ -1,0 +1,13 @@
+model = "Qwen/Qwen3-4B-Instruct-2507"
+max_steps = 100
+
+batch_size = 256
+rollouts_per_example = 16
+learning_rate = 0.00001
+oversampling_factor = 2
+
+[sampling]
+max_tokens = 1024
+
+[[env]]
+id = "prime/swe-grep"
