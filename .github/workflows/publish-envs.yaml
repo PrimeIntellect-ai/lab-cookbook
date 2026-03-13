@@ -82,7 +82,7 @@ jobs:
         run: |
           echo "Publishing $ENV_ID v$VERSION from cookbook/recipes/$ENV_ID"
           set +e
-          output=$(prime env push -p "cookbook/recipes/$ENV_ID" 2>&1)
+          output=$(prime env push -p "cookbook/recipes/$ENV_ID" --auto-bump 2>&1)
           exit_code=$?
           echo "$output"
           set -e
