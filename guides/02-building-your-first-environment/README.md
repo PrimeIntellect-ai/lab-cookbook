@@ -1,8 +1,10 @@
 # Building Your First Environment
 
-Build a local reverse-text environment and evaluate it with Lab.
+Build a local environment and evaluate it with Lab.
 
-Reverse-text asks a model to reverse a string character by character. It is small enough to understand in one file, but still useful for training because partial progress is measurable: a model can get some reward for producing a mostly-correct reversal before it learns the task perfectly.
+Start with a tiny string transformation task: give a model a piece of text, ask it to return the characters in reverse order, and score how close the answer is. It is small enough to understand in one file, but still useful for training because partial progress is measurable.
+
+You will build this as `reverse-text`. You can also inspect the finished Hub environment at [`primeintellect/reverse-text`](https://app.primeintellect.ai/dashboard/environments/primeintellect/reverse-text).
 
 ## Create the Environment
 
@@ -15,8 +17,6 @@ prime env init reverse-text
 This creates `environments/reverse_text/`. Open `environments/reverse_text/reverse_text.py` and replace the starter implementation with a Taskset-based environment:
 
 ```python
-from __future__ import annotations
-
 from difflib import SequenceMatcher
 from typing import Any
 
