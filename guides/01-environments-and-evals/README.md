@@ -31,20 +31,19 @@ Open the Lab viewer to inspect eval results:
 prime lab view --evals
 ```
 
-## What to Inspect
+## Read the Rollouts
 
-Start with individual rollouts. The aggregate score tells you whether the model did well; the rollouts tell you why.
+Open a few individual rollouts before focusing on the aggregate score. Each rollout shows one model attempt, including the prompt, completion, score, and any task data captured by the environment.
 
-Look for:
+As you read, check whether:
 
-- the prompt sent to the model
-- the model completion
-- the reward or metric value
-- whether repeated rollouts for the same task behave differently
-- examples where the model failed for a clear reason
-- examples where the scoring rule seems too strict, too loose, or ambiguous
+- the model understood the task
+- repeated rollouts for the same task behave differently
+- failures have an obvious cause
+- the score matches your judgment
+- any task needs clearer data, constraints, or scoring
 
-This is the basic eval loop: evaluate a model, inspect rollouts, and decide whether the task, prompt, model, or metric needs to change.
+This is the basic eval loop: evaluate a model, read the rollouts, and decide whether the task, prompt, model, or metric needs to change.
 
 ## Next
 
