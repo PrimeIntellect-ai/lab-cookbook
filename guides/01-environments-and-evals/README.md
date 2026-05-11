@@ -47,6 +47,37 @@ As you read, check whether:
 
 This is the basic eval loop: evaluate a model, read the rollouts, and decide whether the task, prompt, model, or metric needs to change.
 
+## Run a Small Suite
+
+Once you care about more than one environment, move the eval settings into a config file. This keeps the model, sampling settings, and environment arguments together.
+
+Create `configs/eval/first-suite.toml`:
+
+```toml
+model = "openai/gpt-5-nano"
+save_results = true
+
+[[eval]]
+env_id = "primeintellect/gsm8k"
+num_examples = 20
+rollouts_per_example = 2
+sampling_args = { max_tokens = 1024 }
+
+[[eval]]
+env_id = "primeintellect/wordle"
+num_examples = 20
+rollouts_per_example = 1
+sampling_args = { max_tokens = 1024, temperature = 0.7 }
+```
+
+Run the suite:
+
+```bash
+prime eval run configs/eval/first-suite.toml
+```
+
+Use this pattern when you want to compare model behavior across environments, compare a base model to a trained adapter, or re-run the same checks after changing a prompt or config.
+
 ## Next
 
 In [Building Your First Environment](../02-building-your-first-environment/README.md), you will build a small environment yourself and use evals to check whether it is ready for training.

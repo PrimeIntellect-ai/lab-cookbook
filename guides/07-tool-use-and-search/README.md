@@ -133,4 +133,4 @@ During training, watch both reward and trajectories. A good run should show the 
 
 ## Next
 
-In [Code and Sandboxes](../08-code-and-sandboxes/README.md), you will work with environments where the model writes code and the environment checks behavior by running it.
+In [Multimodal Environments](../08-multimodal-environments/README.md), you will work with environments that include image inputs and multimodal scoring.

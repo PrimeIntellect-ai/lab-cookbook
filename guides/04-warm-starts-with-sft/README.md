@@ -101,4 +101,4 @@ This keeps the environment fixed while changing the starting policy: SFT teaches
 
 ## Next
 
-The following guides move from single-environment training into prompt optimization, eval suites, and more specialized agent environments.
+In [Prompt Optimization](../05-prompt-optimization/README.md), you will improve an environment prompt without changing model weights.
