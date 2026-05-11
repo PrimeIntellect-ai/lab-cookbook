@@ -39,12 +39,12 @@ See the current Hosted Training models with:
 prime train models
 ```
 
-For a first RL run, choose a model family that matches the task and the amount of exploration you want:
+Hosted Training currently supports these model families:
 
-- **gpt-oss**: `openai/gpt-oss-20b` and `openai/gpt-oss-120b`. Good default reasoning models for environments where the model needs to infer a strategy from reward.
-- **Qwen 3.5 / 3.6**: small dense models, mid-size MoE models, and larger MoE models. Good when you want a range of sizes with the same thinking-mode control.
-- **Nemotron 3**: `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16` and `nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16`. Good for reasoning-heavy experiments with larger active models.
-- **Llama 3.2 Instruct**: small instruct baselines. Useful for fast checks and simple environments.
+- **gpt-oss**: `openai/gpt-oss-20b`, `openai/gpt-oss-120b`
+- **Qwen 3.5 / 3.6**: dense and MoE models across several sizes
+- **Nemotron 3**: `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16`, `nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16`
+- **Llama 3.2 Instruct**: `meta-llama/Llama-3.2-1B-Instruct`, `meta-llama/Llama-3.2-3B-Instruct`
 
 Reasoning controls go directly under `[sampling]`:
 
