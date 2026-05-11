@@ -54,7 +54,7 @@ This gives the model a natural retrieval path: search broadly, choose a page, in
 
 ## The Taskset Shape
 
-The `wiki-search` implementation follows the v1 Taskset pattern. The Taskset is the place where tasks, tools, prompts, and rewards come together.
+The `wiki-search` implementation follows the Taskset pattern. The Taskset is the place where tasks, tools, prompts, and rewards come together.
 
 Conceptually, it looks like this:
 
@@ -69,10 +69,6 @@ def load_taskset(...):
         toolsets=[load_toolset(...)],
         rewards=[judge_reward_factory(...)],
     )
-
-
-def load_v1_environment(...) -> vf.Env:
-    return vf.Env(taskset=load_taskset(...))
 ```
 
 The source yields task rows with a user prompt, answer, example ID, and turn limit. The toolset exposes the search tools and binds them to a loaded Wikipedia index. The reward checks the model's final answer against the reference answer.
