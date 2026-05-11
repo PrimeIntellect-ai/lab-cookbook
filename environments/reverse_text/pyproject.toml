@@ -1,0 +1,23 @@
+[project]
+name = "reverse-text"
+version = "0.1.0"
+description = "Reverse text character by character."
+requires-python = ">=3.11"
+dependencies = [
+    "verifiers",
+    "datasets",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = ["reverse_text.py", "pyproject.toml"]
+
+[project.entry-points."verifiers.environments"]
+reverse-text = "reverse_text:load_environment"
+
+[tool.verifiers.eval]
+num_examples = 20
+rollouts_per_example = 2
