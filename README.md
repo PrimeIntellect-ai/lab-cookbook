@@ -18,5 +18,5 @@ Create, evaluate, train and deploy your own agents with Prime Intellect Lab.
 8. [Tool Use and Search](guides/07-tool-use-and-search/README.md)
 9. [Multimodal Environments](guides/08-multimodal-environments/README.md)
 10. [Browser Environments](guides/09-browser-environments/README.md)
-11. [Agent Frameworks](guides/10-agent-frameworks/README.md)
+11. [Custom Harnesses](guides/10-custom-harnesses/README.md)
 12. [Advanced Tasksets and Harnesses](guides/11-advanced-tasksets-and-harnesses/README.md)

@@ -18,5 +18,5 @@ Start with setup if you are new to Lab. Jump to a later guide if you already kno
 | 07 | [Tool Use and Search](07-tool-use-and-search/README.md) | Build environments with tools and retrieval. |
 | 08 | [Multimodal Environments](08-multimodal-environments/README.md) | Work with image inputs and multimodal scoring. |
 | 09 | [Browser Environments](09-browser-environments/README.md) | Build environments for browser tasks. |
-| 10 | [Agent Frameworks](10-agent-frameworks/README.md) | Use frameworks such as DSPy, LangChain, and OpenAI Agents in Lab. |
+| 10 | [Custom Harnesses](10-custom-harnesses/README.md) | Run third-party agent libraries through the program pattern. |
 | 11 | [Advanced Tasksets and Harnesses](11-advanced-tasksets-and-harnesses/README.md) | Go deeper on reusable tasksets, custom harnesses, sandboxes, and nested agent workflows. |
