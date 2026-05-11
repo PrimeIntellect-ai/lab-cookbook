@@ -74,6 +74,31 @@ For an SFT warm start, inspect both the generated demonstrations and the trained
 
 After SFT, evaluate the adapter against the same environment. If it improves baseline behavior without breaking the reward contract, use the checkpoint as the starting point for an RL run.
 
+## Continue with RL
+
+RL uses the same config shape. To train on top of an existing LoRA, set `model` to the adapter you want to start from and omit `loss`, since RL is the default.
+
+Create `configs/rl/wordle-from-sft.toml`:
+
+```toml
+model = "openai/gpt-oss-20b:my-sft-lora-distilled-from-oss-120b-distill"
+
+[sampling]
+max_tokens = 512
+reasoning_effort = "medium"
+
+[[env]]
+id = "primeintellect/wordle"
+```
+
+Then launch RL from that adapter:
+
+```bash
+prime train configs/rl/wordle-from-sft.toml
+```
+
+This keeps the environment fixed while changing the starting policy: SFT teaches the model what good behavior looks like, and RL optimizes that behavior against the environment reward.
+
 ## Next
 
 The following guides move from single-environment training into prompt optimization, eval suites, and more specialized agent environments.
