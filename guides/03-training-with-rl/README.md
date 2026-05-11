@@ -42,7 +42,7 @@ prime train models
 Hosted Training currently supports these model families:
 
 - **gpt-oss**: reasoning MoE models with effort control.
-- **Qwen 3.5 / 3.6**: dense and MoE models; Qwen 3.5 models are natively multimodal.
+- **Qwen 3.5 / 3.6**: dense and MoE models; Qwen 3.5 and 3.6 models are natively multimodal.
 - **Nemotron 3**: hybrid reasoning MoE models.
 - **Llama 3.2 Instruct**: dense instruct models.
 
