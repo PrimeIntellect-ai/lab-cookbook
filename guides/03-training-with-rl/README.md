@@ -41,10 +41,10 @@ prime train models
 
 Hosted Training currently supports these model families:
 
-- **gpt-oss**: `openai/gpt-oss-20b`, `openai/gpt-oss-120b`
-- **Qwen 3.5 / 3.6**: dense and MoE models across several sizes
-- **Nemotron 3**: `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16`, `nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16`
-- **Llama 3.2 Instruct**: `meta-llama/Llama-3.2-1B-Instruct`, `meta-llama/Llama-3.2-3B-Instruct`
+- **gpt-oss**: reasoning MoE models with effort control.
+- **Qwen 3.5 / 3.6**: dense and MoE models; Qwen 3.5 models are natively multimodal.
+- **Nemotron 3**: hybrid reasoning MoE models.
+- **Llama 3.2 Instruct**: dense instruct models.
 
 Reasoning controls go directly under `[sampling]`:
 
