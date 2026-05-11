@@ -34,6 +34,22 @@ Run GEPA against the same environment and model:
 prime gepa run primeintellect/wordle -m openai/gpt-5.5
 ```
 
+For a reusable run, create `configs/gepa/wordle.toml`:
+
+```toml
+model = "openai/gpt-5.5"
+save_to_environment = true
+
+[[env]]
+id = "primeintellect/wordle"
+```
+
+Then run:
+
+```bash
+prime gepa run configs/gepa/wordle.toml
+```
+
 GEPA evaluates prompt candidates against environment feedback and writes artifacts to a results directory:
 
 ```text
@@ -46,7 +62,7 @@ The most important artifact is:
 /path/to/results/system_prompt.txt
 ```
 
-That file contains the optimized system prompt.
+That file contains the optimized system prompt. With `save_to_environment = true`, GEPA also saves the prompt into the environment's `prompts/` folder when the environment is available locally.
 
 ## Evaluate the Optimized Prompt
 
@@ -61,7 +77,7 @@ env_id = "primeintellect/wordle"
 num_examples = 20
 rollouts_per_example = 1
 sampling_args = { max_tokens = 1024, temperature = 0.7 }
-env_args = { path_to_system_prompt = "/path/to/results/system_prompt.txt" }
+env_args = { path_to_system_prompt = "environments/wordle/prompts/system_prompt.txt" }
 ```
 
 Run the eval:
