@@ -31,6 +31,41 @@ Look for two things before launching training:
 
 If the model gets every example right, there is little to learn. If every score is zero and the rollouts look unrelated to the task, fix the environment or prompt before training.
 
+## Choose a Training Model
+
+See the current Hosted Training models with:
+
+```bash
+prime train models
+```
+
+For a first RL run, choose a model family that matches the task and the amount of exploration you want:
+
+- **gpt-oss**: `openai/gpt-oss-20b` and `openai/gpt-oss-120b`. Good default reasoning models for environments where the model needs to infer a strategy from reward.
+- **Qwen 3.5 / 3.6**: small dense models, mid-size MoE models, and larger MoE models. Good when you want a range of sizes with the same thinking-mode control.
+- **Nemotron 3**: `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16` and `nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16`. Good for reasoning-heavy experiments with larger active models.
+- **Llama 3.2 Instruct**: small instruct baselines. Useful for fast checks and simple environments.
+
+Reasoning controls go directly under `[sampling]`:
+
+```toml
+[sampling]
+max_tokens = 512
+reasoning_effort = "medium" # gpt-oss: low, medium, high
+```
+
+For `gpt-oss`, `reasoning_effort` can be `"low"`, `"medium"`, or `"high"`. The default is `"medium"`.
+
+For Nemotron 3 and Qwen 3.5 / 3.6, use `enable_thinking`:
+
+```toml
+[sampling]
+max_tokens = 512
+enable_thinking = true # Nemotron 3 and Qwen 3.5 / 3.6
+```
+
+The default is `true`. Set it to `false` when you want shorter, more direct responses or want to compare thinking and non-thinking rollouts.
+
 ## Write a Training Config
 
 Create `configs/rl/reverse-text.toml`:
@@ -44,6 +79,7 @@ rollouts_per_example = 8
 
 [sampling]
 max_tokens = 512
+reasoning_effort = "medium"
 temperature = 0.7
 
 [[env]]
@@ -56,7 +92,7 @@ The main fields are:
 - `max_steps`: how long the run should train before stopping.
 - `batch_size`: the number of rollout samples consumed per training step.
 - `rollouts_per_example`: how many attempts to sample for the same task.
-- `[sampling]`: generation settings used during rollout collection.
+- `[sampling]`: generation settings used during rollout collection, including reasoning controls.
 - `[[env]]`: the environment or environments used for training.
 
 For a first run, keep the config small. Bigger batches, more rollouts, validation, evals, W&B, and checkpoint policies can come later once the basic learning loop is working.
