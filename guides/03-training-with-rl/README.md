@@ -1,24 +1,98 @@
 # Training with RL
 
-Status: TODO
+Launch a Hosted Training run with an environment.
 
-## Goal
+RL is useful once an environment has a reward signal you trust. The model samples multiple rollouts for each task, the environment scores those rollouts, and the trainer updates the model toward higher-reward behavior.
 
-Launch a Hosted Training run from a minimal Lab config.
+For the first run, use the Hub version of the reverse-text environment. If you built a local version in the previous guide, this keeps the training path stable while you are still editing local code.
 
-## Reader Outcome
+## Check the Baseline
 
-TODO: The reader can read a training config, launch a run, stream logs, inspect rollouts, and identify whether the run is learning.
+Run a small eval before training:
 
-## TODO
+```bash
+prime eval run primeintellect/reverse-text \
+  -m openai/gpt-5-nano \
+  -n 10 \
+  -r 2 \
+  -t 512
+```
 
-- Use the current `prime train` command surface.
-- Keep the TOML minimal.
-- Explain `model`, `max_steps`, `batch_size`, `rollouts_per_example`, `[sampling]`, and `[[env]]`.
-- Include a small pre-flight checklist from eval results.
-- Show how to inspect logs, metrics, rollouts, checkpoints, and adapters.
-- Link to the current model table rather than duplicating prices.
+Open the eval results:
 
-## Public Docs Notes
+```bash
+prime lab view --evals
+```
 
-TODO: This should supplant the current `public-docs/guides/rl-training.mdx` page.
+Look for two things before launching training:
+
+- the reward is not already perfect
+- the rollouts show fixable mistakes, not broken prompts or broken scoring
+
+If the model gets every example right, there is little to learn. If every score is zero and the rollouts look unrelated to the task, fix the environment or prompt before training.
+
+## Write a Training Config
+
+Create `configs/rl/reverse-text.toml`:
+
+```toml
+model = "openai/gpt-oss-20b"
+max_steps = 100
+
+batch_size = 128
+rollouts_per_example = 8
+
+[sampling]
+max_tokens = 512
+temperature = 0.7
+
+[[env]]
+id = "primeintellect/reverse-text"
+```
+
+The main fields are:
+
+- `model`: the base model to train.
+- `max_steps`: how long the run should train before stopping.
+- `batch_size`: the number of rollout samples consumed per training step.
+- `rollouts_per_example`: how many attempts to sample for the same task.
+- `[sampling]`: generation settings used during rollout collection.
+- `[[env]]`: the environment or environments used for training.
+
+For a first run, keep the config small. Bigger batches, more rollouts, validation, evals, W&B, and checkpoint policies can come later once the basic learning loop is working.
+
+## Launch Training
+
+Start the run:
+
+```bash
+prime train configs/rl/reverse-text.toml
+```
+
+The command prints a run ID and the log command for the new Hosted Training run. Follow logs with:
+
+```bash
+prime train logs <run_id> -f
+```
+
+Open the Lab viewer to follow training:
+
+```bash
+prime lab view --training
+```
+
+## Decide Whether It Is Learning
+
+Early in the run, watch for:
+
+- reward moving upward over time
+- rollout samples becoming more consistent
+- completions following the expected answer format
+- no repeated environment errors in the logs
+- no obvious reward bug where bad completions receive high scores
+
+For reverse-text, the first "aha" is usually visible in rollouts before it is obvious from aggregate metrics: the model starts reversing more characters in the right order, then exact matches become more common.
+
+## Next
+
+In [Warm Starts with SFT](../04-warm-starts-with-sft/README.md), you will use SFT to give a model a stronger starting policy before RL.
