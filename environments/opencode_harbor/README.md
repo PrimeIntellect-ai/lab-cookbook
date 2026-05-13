@@ -35,20 +35,23 @@ Notes:
 
 | Arg | Type | Default | Description |
 | --- | ---- | ------- | ----------- |
-| `tasks` | str | bundled `tasks/` | Local Harbor task directory or dataset directory. |
-| `task_names` | list[str] | `null` | Explicit Harbor task names to run. |
-| `dataset` | str | `null` | `terminal-bench-sample` or `terminal-bench` task selection. |
+Taskset settings live under `env.taskset` (all fields of `vf.HarborTasksetConfig`):
 
-OpenCode settings belong under the v1 harness config:
+```toml
+[env.taskset]
+tasks = "./environments/opencode_harbor/tasks"   # defaults to bundled tasks/
+task_names = ["regex-log", "qemu-startup"]       # or import opencode_harbor.TERMINAL_BENCH_SAMPLE_TASKS
+```
+
+Harness settings live under `env.harness`:
 
 ```toml
 [env.harness]
 max_turns = 4
 disabled_tools = ["webfetch", "question"]
-agent_workdir = "/app"
 ```
 
-By default, this environment uses `vf.OpenCode` with only `webfetch` and
+By default this environment uses `vf.OpenCode` with only `webfetch` and
 `question` disabled. Set `env.harness.disabled_tools` to override that list.
 
 ### Metrics
