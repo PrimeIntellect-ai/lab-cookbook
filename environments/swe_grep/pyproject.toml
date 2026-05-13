@@ -1,13 +1,13 @@
 [project]
 name = "swe-grep"
 description = "Just another swe grep environment"
-tags = ["train", "eval"]
+tags = ["train", "eval", "v1", "taskset", "harness"]
 version = "0.3.2"
 requires-python = ">=3.10"
 dependencies = [
     "chatan>=0.3.0",
     "tenacity>=9.1.2",
-    "verifiers>=0.1.9.post3",
+    "verifiers>=0.1.14",
 ]
 
 [build-system]
@@ -16,6 +16,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build]
 include = ["swe_grep.py", "pyproject.toml", "src"] 
+
+[project.entry-points."verifiers.environments"]
+swe-grep = "swe_grep:load_environment"
 
 [tool.verifiers.eval]
 num_examples = 5

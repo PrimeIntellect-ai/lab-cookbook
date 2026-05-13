@@ -2,9 +2,9 @@
 name = "ethics-debate"
 version = "0.1.0"
 description = "Multi-agent ethics debate: arguer vs critic with LLM judge"
-tags = ["ethics", "multi-agent", "debate", "llm-judge", "train", "eval"]
+tags = ["ethics", "multi-agent", "debate", "llm-judge", "train", "eval", "v1", "taskset", "harness"]
 dependencies = [
-    "verifiers>=0.1.11.dev0",
+    "verifiers>=0.1.14",
     "datasets",
     "openai",
 ]
@@ -15,6 +15,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build]
 include = ["ethics_debate.py", "README.md"]
+
+[project.entry-points."verifiers.environments"]
+ethics-debate = "ethics_debate:load_environment"
 
 [tool.verifiers.eval]
 num_examples = 3

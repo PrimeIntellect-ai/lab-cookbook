@@ -31,38 +31,24 @@ The README presents this as a scaffold rather than a final canonical recipe.
 
 ## Environment structure
 
-The cookbook introduces a generic `MultiAgentEnv`.
+The environment is implemented as a v1 `Taskset` plus the default `Harness`.
 
-It subclasses `StatefulToolEnv` to reuse Verifiers’ tool-calling and multi-turn rollout infrastructure, though a similar pattern could also be built directly on `MultiTurnEnv`.
+The taskset owns:
+
+- dataset loading from `ergotts/ethics_questions`
+- the arguer/critic role prompts
+- a `user` function that schedules the next role after each model turn
+- the LLM judge reward for the final argument
+
+The default `vf.Harness` runs the endpoint-backed multi-turn loop. No custom harness subclass is needed because the role alternation can be expressed as taskset-owned user messages and rollout state.
 
 Relevant docs:
 
-- Stateful tool environments: https://docs.primeintellect.ai/verifiers/environments#stateful-tool-environments
-- Custom multi-turn environments: https://docs.primeintellect.ai/verifiers/environments#custom-multi-turn-environments
+- Tasksets and harnesses: https://docs.primeintellect.ai/verifiers/byo-harness
 
-## Generic multi-agent pattern
+## Debate flow
 
-`MultiAgentEnv` is designed around a round-robin multi-agent orchestration loop.
-
-At a high level, you need to define:
-
-- the set of actors or roles
-- the scheduling logic for who speaks next
-- the handoff format used to move information between actors through shared state
-
-The key methods are:
-
-- `get_all_actors`: map each `actor_id` to its system prompt
-- `get_initial_actor_id`: choose the first actor in the rollout
-- `get_next_actor_id`: choose who acts next
-- `get_handoff_tag`: define how each actor packages its output
-- `apply_handoff`: update shared state after each turn
-
-This makes the environment reusable beyond ethics debate. The same scaffold could support planner/executor, proposer/verifier, or researcher/reviewer patterns.
-
-## EthicsDebateEnv
-
-`EthicsDebateEnv` is the concrete specialization of `MultiAgentEnv` for ethical argument refinement.
+The taskset uses the default harness loop to alternate roles.
 
 The intended workflow is:
 
@@ -74,61 +60,44 @@ The intended workflow is:
 
 ### Actor definitions
 
-The two actors are defined with distinct system prompts:
+The two roles are defined with distinct role instructions:
 
 ```python
-def get_all_actors(self, state: State) -> dict[str, str]:
-    return {
-        ARGUER: (
-            "You are arguing an ethics question. "
-            "Present a clear position with reasoning. "
-            "When critiqued, address the weaknesses and strengthen your argument."
-        ),
-        CRITIC: (
-            "You are critiquing an ethical argument. "
-            "Identify gaps, logical fallacies, and missing perspectives. "
-            "Be specific and constructive."
-        ),
-    }
+ARGUER_PROMPT = (
+    "You are arguing an ethics question. "
+    "Present a clear position with reasoning. "
+    "When critiqued, address the weaknesses and strengthen your argument."
+)
+
+CRITIC_PROMPT = (
+    "You are critiquing an ethical argument. "
+    "Identify gaps, logical fallacies, and missing perspectives. "
+    "Be specific and constructive."
+)
 ```
 
-Even though the roles differ, they currently share the same underlying policy. The difference comes from prompting and state.
+Even though the roles differ, they share the same underlying policy. The difference comes from prompting and taskset state.
 
 ### Scheduling logic
 
-The rollout alternates between arguer and critic:
+The rollout alternates between arguer and critic in the taskset `user` function:
 
 ```python
-def get_initial_actor_id(self, actors: dict[str, str], state: State) -> str:
-    return ARGUER
-
-def get_next_actor_id(self, state: State) -> str:
-    return CRITIC if state["trajectory_id"] == ARGUER else ARGUER
+async def debate_user(task, state, transcript):
+    actor = state.get("debate_actor", ARGUER)
+    handoff = parse_handoff(actor, last_assistant_text(transcript))
+    ...
 ```
 
 This is the simplest multi-agent schedule possible, which makes it a good starting scaffold.
 
 ### Handoffs and shared state
 
-Each actor emits a role-specific handoff payload, and the environment stores it in shared state:
+Each actor emits a role-specific XML handoff, and the user function stores it in shared state:
 
 ```python
-def get_handoff_tag(self, actor_id: str, state: State) -> str:
-    return "argument" if actor_id == ARGUER else "critique"
-
-async def apply_handoff(
-    self, actor_id: str, handoff: dict[str, Any], state: State
-) -> str | None:
-    if actor_id == ARGUER:
-        state["current_argument"] = handoff["argument"]
-        # Final arguer turn: all prior rounds complete
-        if len(state["handoff_history"]) == 2 * self.num_rounds:
-            state["final_argument"] = handoff["argument"]
-            state["final_env_response"] = "Debate complete."
-            return state["final_env_response"]
-    else:
-        state["current_critique"] = handoff["critique"]
-    return None
+def handoff_tag(actor: str) -> str:
+    return "argument" if actor == ARGUER else "critique"
 ```
 
 This keeps the environment logic explicit and easy to extend.

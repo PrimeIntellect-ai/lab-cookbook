@@ -705,7 +705,7 @@ tags = ["single-turn", "math", "train", "eval"]
 version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
-    "verifiers>=0.1.8",
+    "verifiers>=0.1.14",
 ]
 
 [build-system]
@@ -733,7 +733,7 @@ All packages your environment needs must be declared in the `dependencies` array
 
 ```toml
 dependencies = [
-    "verifiers>=0.1.8",
+    "verifiers>=0.1.14",
     "chromadb",
     "nltk>=3.9.2",
 ]
