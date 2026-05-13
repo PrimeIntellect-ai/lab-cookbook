@@ -11,6 +11,8 @@ from chromadb.api.types import Embeddable, EmbeddingFunction
 from chromadb.utils import embedding_functions
 from datasets import load_dataset
 from openai import AsyncOpenAI
+from pydantic import model_validator
+from typing_extensions import Self
 from verifiers import Parser, ensure_keys
 
 CHROMA_DB_DIR = ".chroma_db"
@@ -54,6 +56,11 @@ class WikiSearchTasksetConfig(vf.TasksetConfig):
     corpus_dataset: str = "willcb/rare-wiki-pages"
     corpus_split: str = "train"
     chroma_db_dir: str = CHROMA_DB_DIR
+
+    @model_validator(mode="after")
+    def _ensure_required_keys(self) -> Self:
+        ensure_keys([self.judge_api_key_var, self.embed_api_key_var])
+        return self
 
 
 parser = Parser()
@@ -99,7 +106,6 @@ def init_chroma(collection, page_id_to_title: dict[str, str]) -> None:
 
 
 def load_wiki(config: WikiSearchTasksetConfig) -> dict[str, object]:
-    ensure_keys([config.embed_api_key_var])
     page_id_to_title: dict[str, str] = {}
     page_id_to_content: dict[str, str] = {}
     corpus = load_dataset(config.corpus_dataset, split=config.corpus_split)
@@ -214,35 +220,41 @@ def source(config: WikiSearchTasksetConfig):
     return _iter
 
 
-def judge_reward_factory(config: WikiSearchTasksetConfig):
-    ensure_keys([config.judge_api_key_var])
-    judge_client = AsyncOpenAI(
-        api_key=os.environ[config.judge_api_key_var],
-        base_url=config.judge_base_url,
+@vf.update
+async def score_with_judge(
+    task: vf.Task,
+    state: vf.State,
+    judge: AsyncOpenAI,
+    judge_model: str,
+) -> None:
+    response = await judge.chat.completions.create(
+        model=judge_model,
+        messages=[
+            {
+                "role": "user",
+                "content": JUDGE_PROMPT.format(
+                    question=task["question"],
+                    answer=task["answer"],
+                    response=parser.parse_answer(state["completion"]) or "",
+                ),
+            }
+        ],
     )
+    text = response.choices[0].message.content or ""
+    state["judge_score"] = 1.0 if "yes" in text.lower() else 0.0
 
-    @vf.reward(weight=1.0)
-    async def judge_reward(task: vf.Task, state: vf.State) -> float:
-        response = await judge_client.chat.completions.create(
-            model=config.judge_model,
-            messages=[
-                {
-                    "role": "user",
-                    "content": JUDGE_PROMPT.format(
-                        question=task["question"],
-                        answer=task["answer"],
-                        response=parser.parse_answer(state["completion"]) or "",
-                    ),
-                }
-            ],
-        )
-        text = response.choices[0].message.content or ""
-        return 1.0 if "yes" in text.lower() else 0.0
 
-    return judge_reward
+@vf.reward(weight=1.0)
+async def judge_reward(task: vf.Task, state: vf.State) -> float:
+    del task
+    return float(state.get("judge_score", 0.0))
 
 
 def load_toolset(config: vf.ToolsetConfig, taskset_config: WikiSearchTasksetConfig) -> vf.Toolset:
+    judge_client = AsyncOpenAI(
+        api_key=os.environ[taskset_config.judge_api_key_var],
+        base_url=taskset_config.judge_base_url,
+    )
     return vf.Toolset(
         tools=[search_pages, view_sections, read_section],
         objects={"wiki": lambda: load_wiki(taskset_config)},
@@ -250,7 +262,10 @@ def load_toolset(config: vf.ToolsetConfig, taskset_config: WikiSearchTasksetConf
             "search_pages.wiki": "objects.wiki",
             "view_sections.wiki": "objects.wiki",
             "read_section.wiki": "objects.wiki",
+            "score_with_judge.judge": judge_client,
+            "score_with_judge.judge_model": lambda: taskset_config.judge_model,
         },
+        updates=[score_with_judge],
         config=config,
     )
 
@@ -261,7 +276,7 @@ def load_taskset(config: vf.TasksetConfig) -> vf.Taskset:
         source=source(taskset_config),
         system_prompt=SYSTEM_PROMPT,
         toolsets=[load_toolset(vf.ToolsetConfig(), taskset_config)],
-        rewards=[judge_reward_factory(taskset_config)],
+        rewards=[judge_reward],
         config=taskset_config,
     )
 

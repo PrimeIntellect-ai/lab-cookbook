@@ -34,11 +34,13 @@ The index is built lazily — the corpus + collection load runs the first time a
 
 A single judge reward (weight `1.0`): a `gpt-4.1-mini` yes/no on whether the final response is correct and coherent given the ground-truth answer. Incoherent responses score 0 even if the answer is buried inside them.
 
+The judge call lives in a `@vf.update` handler (`score_with_judge`) that receives the `AsyncOpenAI` client and model name through the same `Toolset.bindings` mechanism the tools use. The reward function (`judge_reward`) just reads `state["judge_score"]` — no factory, no closure-captured client.
+
 ## Required environment variables
 
 - `OPENAI_API_KEY` — used by both the judge and the embedding model. Override with `judge_api_key_var` / `embed_api_key_var` if you point either component at another provider.
 
-Keys are validated via `vf.ensure_keys(...)` when the taskset and the wiki index load.
+Keys are validated by a Pydantic `model_validator` on `WikiSearchTasksetConfig`, so missing env vars fail fast at config construction time.
 
 ## Quickstart
 
