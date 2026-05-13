@@ -6,7 +6,11 @@
   </picture>
 </p>
 
-Create, evaluate, train and deploy your own agents with Prime Intellect Lab.
+<h3 align="center">
+Lab Cookbook
+</h3>
+
+<p align="center">Create, evaluate, train and deploy your own agents with Prime Intellect Lab.</p>
 
 1. [Setup](guides/00-setup/README.md)
 2. [Environments and Evals](guides/01-environments-and-evals/README.md)
