@@ -6,71 +6,17 @@
   </picture>
 </p>
 
----
+Create, evaluate, train and deploy your own agents with Prime Intellect Lab.
 
-<h3 align="center">
-Prime Cookbook
-</h3>
-
-<p align="center">A practical collection of RL environment recipes for Lab + verifiers.</p>
-
-## Local development
-
-For contributing to this repository:
-
-```bash
-uv sync
-```
-
-Optional developer dependencies:
-
-```bash
-uv sync --extra dev
-```
-
-Environment-specific usage and setup live in each environment folder under `cookbook/recipes/`.
-
-## Evaluate and train
-
-Typical workflow:
-
-```bash
-# Train from an environment config
-prime rl run cookbook/recipes/swe_grep/config.toml
-```
-
-See each environment README for environment-specific evaluation and training commands.
-
-You define:
-- a dataset (`question` / `prompt`, `answer`, `info`),
-- an environment (`SingleTurnEnv`, `ToolEnv`, `StatefulToolEnv`, `PythonEnv`, `EnvGroup`),
-- a rubric (deterministic and/or judge-based rewards).
-
-## Recipes
-
-All recipes live in `cookbook/recipes/`:
-
-1. **[Ethics Debate](cookbook/recipes/ethics_debate/README.md)**
-2. **[Patent Search](cookbook/recipes/patent_search/README.md)**
-3. **[SWE Grep](cookbook/recipes/swe_grep/README.md)**
-
-Each environment keeps its documentation in its own folder, alongside its implementation and config files.
-
-## Project Docs
-
-- Contribution guide: [`CONTRIBUTING.md`](CONTRIBUTING.md)
-- Agent standards: [`AGENTS.md`](AGENTS.md)
-
-Prime Lab: [primeintellect.ai/blog/lab](https://www.primeintellect.ai/blog/lab)
-
-## Contributing
-
-PRs are welcome for:
-- new recipe environments,
-- better reward/rubric design,
-- evaluation/training workflows,
-- docs and reproducibility improvements.
-
-## License
-
-MIT
+1. [Setup](guides/00-setup/README.md)
+2. [Environments and Evals](guides/01-environments-and-evals/README.md)
+3. [Building Your First Environment](guides/02-building-your-first-environment/README.md)
+4. [Training with RL](guides/03-training-with-rl/README.md)
+5. [Warm Starts with SFT](guides/04-warm-starts-with-sft/README.md)
+6. [Prompt Optimization](guides/05-prompt-optimization/README.md)
+7. [Coding Agents and Sandboxes](guides/06-coding-agents-and-sandboxes/README.md)
+8. [Tool Use and Search](guides/07-tool-use-and-search/README.md)
+9. [Multimodal Environments](guides/08-multimodal-environments/README.md)
+10. [Browser Environments](guides/09-browser-environments/README.md)
+11. [Custom Harnesses](guides/10-custom-harnesses/README.md)
+12. [Advanced Tasksets and Harnesses](guides/11-advanced-tasksets-and-harnesses/README.md)
