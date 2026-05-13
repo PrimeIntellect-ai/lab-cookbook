@@ -2,328 +2,266 @@ from __future__ import annotations
 
 import asyncio
 import os
-import re
-from collections.abc import Iterable, Mapping
-from typing import Any
+from collections.abc import Mapping
+from typing import cast
 
-import httpx
+import chromadb
 import verifiers.v1 as vf
+from chromadb.api.types import Embeddable, EmbeddingFunction
+from chromadb.utils import embedding_functions
 from datasets import load_dataset
 from openai import AsyncOpenAI
 from verifiers import Parser, ensure_keys
 
-DATASET_NAME = "hotpot_qa"
-DATASET_CONFIG = "distractor"
-WIKI_API_URL = "https://en.wikipedia.org/w/api.php"
+CHROMA_DB_DIR = ".chroma_db"
 
-SYSTEM_PROMPT = """You are a research assistant that answers questions using Wikipedia.
+SYSTEM_PROMPT = "Use the provided Wikipedia search tools to help answer questions."
 
-You have access to tools that search and read Wikipedia pages. Most questions need
-evidence from MULTIPLE pages, so you should make several parallel tool calls per turn
-to gather facts efficiently.
-
-Work in this order:
-1. Plan the entities and relations the question is about.
-2. Issue parallel `search_wikipedia` calls for each entity.
-3. Read the most promising pages with `read_page`.
-4. Synthesize the evidence and produce a short final answer.
-
-Format your final response exactly like this:
-Sources:
-- <page title 1>
-- <page title 2>
-Answer: <concise answer>
-"""
-
-JUDGE_PROMPT = """Given a ground truth answer and a response, determine if the response is correct.
+JUDGE_PROMPT = """Given a ground truth answer and a response, determine if the response is both correct and coherent.
 
 Question:
+```
 {question}
+```
 
 Ground truth answer:
+```
 {answer}
+```
 
 Response:
+```
 {response}
+```
 
-Respond either 'yes' or 'no' only.
+Respond either "yes" or "no" only.
+
+If a response contains incoherent text, respond with "no" even if the correct answer is also present.
 """
 
 
 class WikiSearchTasksetConfig(vf.TasksetConfig):
-    dataset_name: str = DATASET_NAME
-    dataset_config: str = DATASET_CONFIG
-    train_split: str = "train"
-    eval_split: str = "validation"
-    max_train_examples: int = 1000
-    max_eval_examples: int = 200
-    max_turns: int = 4
-    system_prompt: str | None = SYSTEM_PROMPT
+    dataset_name: str = "willcb/wiki-trivia-questions-v4"
+    dataset_split: str = "train"
+    max_examples: int | None = None
+    max_turns: int = 10
     judge_model: str = "gpt-4.1-mini"
     judge_base_url: str = "https://api.openai.com/v1"
     judge_api_key_var: str = "OPENAI_API_KEY"
-    wiki_api_url: str = WIKI_API_URL
-    wiki_user_agent: str = (
-        "lab-cookbook-wiki-search (https://github.com/PrimeIntellect-ai/lab-cookbook)"
-    )
-    wiki_request_timeout_seconds: float = 30.0
-
-
-_http_client_lock = asyncio.Lock()
-_http_clients: dict[tuple[str, float], httpx.AsyncClient] = {}
-
-
-async def _get_http_client(user_agent: str, timeout: float) -> httpx.AsyncClient:
-    key = (user_agent, timeout)
-    async with _http_client_lock:
-        client = _http_clients.get(key)
-        if client is None or client.is_closed:
-            client = httpx.AsyncClient(
-                timeout=httpx.Timeout(timeout, connect=10.0),
-                headers={"User-Agent": user_agent},
-            )
-            _http_clients[key] = client
-        return client
+    embed_model: str = "text-embedding-3-small"
+    embed_base_url: str = "https://api.openai.com/v1"
+    embed_api_key_var: str = "OPENAI_API_KEY"
+    corpus_dataset: str = "willcb/rare-wiki-pages"
+    corpus_split: str = "train"
+    chroma_db_dir: str = CHROMA_DB_DIR
 
 
 parser = Parser()
 
+_chroma_semaphore: asyncio.Semaphore | None = None
 
-def _supporting_titles(row: Mapping[str, Any]) -> list[str]:
-    supporting = row.get("supporting_facts")
-    titles: Iterable[Any]
-    if isinstance(supporting, Mapping):
-        titles = supporting.get("title") or []
-    elif isinstance(supporting, list):
-        titles = [entry.get("title") for entry in supporting if isinstance(entry, Mapping)]
-    else:
-        titles = []
-    seen: set[str] = set()
-    output: list[str] = []
-    for title in titles:
-        title_str = str(title).strip() if title is not None else ""
-        if title_str and title_str not in seen:
-            seen.add(title_str)
-            output.append(title_str)
+
+def get_chroma_semaphore() -> asyncio.Semaphore:
+    global _chroma_semaphore
+    if _chroma_semaphore is None:
+        _chroma_semaphore = asyncio.Semaphore(100)
+    return _chroma_semaphore
+
+
+def normalize_id(text: str) -> str:
+    return text.strip().lower().replace(" ", "_")
+
+
+def init_chroma(collection, page_id_to_title: dict[str, str]) -> None:
+    all_ids = list(page_id_to_title)
+    existing: set[str] = set()
+    for i in range(0, len(all_ids), 500):
+        batch = all_ids[i : i + 500]
+        got = collection.get(ids=batch)
+        existing.update(got.get("ids", []))
+    missing = [page_id for page_id in all_ids if page_id not in existing]
+    if not missing:
+        return
+    documents: list[str] = []
+    metadatas: list[dict[str, str]] = []
+    for page_id in missing:
+        title = str(page_id_to_title[page_id]).strip()
+        if not title:
+            raise ValueError(f"Empty title for page_id {page_id}")
+        documents.append(title)
+        metadatas.append({"title": title})
+    for i in range(0, len(missing), 100):
+        collection.upsert(
+            ids=missing[i : i + 100],
+            documents=documents[i : i + 100],
+            metadatas=metadatas[i : i + 100],
+        )
+
+
+def load_wiki(config: WikiSearchTasksetConfig) -> dict[str, object]:
+    ensure_keys([config.embed_api_key_var])
+    page_id_to_title: dict[str, str] = {}
+    page_id_to_content: dict[str, str] = {}
+    corpus = load_dataset(config.corpus_dataset, split=config.corpus_split)
+    for raw_row in corpus:
+        row = cast(Mapping[str, object], raw_row)
+        page_id = str(row["id"])
+        page_id_to_title[page_id] = str(row["title"])
+        page_id_to_content[page_id] = str(row["content"])
+
+    openai_ef = embedding_functions.OpenAIEmbeddingFunction(
+        model_name=config.embed_model,
+        api_base=config.embed_base_url,
+        api_key=os.getenv(config.embed_api_key_var, "EMPTY"),
+    )
+    client = chromadb.PersistentClient(path=config.chroma_db_dir)
+    collection = client.get_or_create_collection(
+        name="wiki_titles",
+        embedding_function=cast(EmbeddingFunction[Embeddable], openai_ef),
+    )
+    init_chroma(collection, page_id_to_title)
+    return {
+        "collection": collection,
+        "page_id_to_title": page_id_to_title,
+        "page_id_to_content": page_id_to_content,
+    }
+
+
+async def search_pages(query: str, wiki: dict[str, object]) -> list[dict[str, str]]:
+    """Search for top 10 relevant articles using title embedding similarity."""
+    collection = cast(chromadb.Collection, wiki["collection"])
+    async with get_chroma_semaphore():
+        results = await asyncio.to_thread(
+            collection.query, query_texts=[query], n_results=10
+        )
+    if not results or not results["metadatas"]:
+        raise ValueError(f"No results found for query: {query}")
+    output: list[dict[str, str]] = []
+    for i in range(len(results["ids"][0])):
+        output.append(
+            {
+                "page_id": results["ids"][0][i],
+                "title": results["metadatas"][0][i]["title"],
+            }
+        )
     return output
 
 
-def _rows(dataset: Iterable[Mapping[str, Any]], max_turns: int, limit: int | None):
-    count = 0
-    for row in dataset:
-        if limit is not None and count >= limit:
-            break
-        question = str(row.get("question") or "").strip()
-        answer = str(row.get("answer") or "").strip()
-        if not question or not answer:
-            continue
-        titles = _supporting_titles(row)
-        yield {
-            "example_id": row.get("id") or row.get("example_id") or count,
-            "question": question,
-            "answer": answer,
-            "supporting_titles": titles,
-            "prompt": [{"role": "user", "content": question}],
-            "max_turns": max_turns,
-        }
-        count += 1
-
-
-def _make_tools(config: WikiSearchTasksetConfig):
-    user_agent = config.wiki_user_agent
-    timeout = config.wiki_request_timeout_seconds
-    api_url = config.wiki_api_url
-
-    async def search_wikipedia(query: str, limit: int = 5) -> str:
-        """Search Wikipedia for pages matching a query.
-
-        Args:
-            query: Search terms (entity names, phrases, etc.).
-            limit: Maximum number of results to return, capped at 10.
-
-        Returns:
-            A numbered list of "Title — snippet" entries, or a no-results message.
-        """
-        limit = max(1, min(int(limit), 10))
-        client = await _get_http_client(user_agent, timeout)
-        params = {
-            "action": "query",
-            "list": "search",
-            "srsearch": query,
-            "srlimit": limit,
-            "format": "json",
-            "formatversion": "2",
-        }
-        response = await client.get(api_url, params=params)
-        response.raise_for_status()
-        hits = response.json().get("query", {}).get("search") or []
-        if not hits:
-            return f"No Wikipedia results for {query!r}."
-        lines: list[str] = []
-        for index, hit in enumerate(hits, start=1):
-            title = str(hit.get("title") or "").strip()
-            snippet = re.sub(r"<[^>]+>", "", str(hit.get("snippet") or "")).strip()
-            if len(snippet) > 240:
-                snippet = snippet[:240] + "..."
-            lines.append(f"{index}. {title} — {snippet}")
-        return "\n".join(lines)
-
-    async def read_page(title: str, max_chars: int = 4000) -> str:
-        """Read the plain-text extract of a Wikipedia page.
-
-        Args:
-            title: Page title as it appears on Wikipedia.
-            max_chars: Maximum number of characters to return, capped at 8000.
-
-        Returns:
-            The page extract, truncated to max_chars, or an error message.
-        """
-        max_chars = max(200, min(int(max_chars), 8000))
-        client = await _get_http_client(user_agent, timeout)
-        params = {
-            "action": "query",
-            "prop": "extracts",
-            "titles": title,
-            "explaintext": "1",
-            "redirects": "1",
-            "format": "json",
-            "formatversion": "2",
-        }
-        response = await client.get(api_url, params=params)
-        response.raise_for_status()
-        pages = response.json().get("query", {}).get("pages") or []
-        if not pages:
-            return f"No page found for {title!r}."
-        page = pages[0]
-        if page.get("missing"):
-            return f"No page found for {title!r}."
-        canonical_title = str(page.get("title") or title)
-        extract = str(page.get("extract") or "").strip()
-        if not extract:
-            return f"Page {canonical_title!r} has no plain-text extract."
-        if len(extract) > max_chars:
-            return (
-                f"{canonical_title}\n\n{extract[:max_chars]}\n\n"
-                "[truncated — call read_page again with a larger max_chars "
-                "or refine your search]"
+async def view_sections(page_id: str, wiki: dict[str, object]) -> list[dict[str, str]]:
+    """View the sections of a page."""
+    page_id_to_content = cast(dict[str, str], wiki["page_id_to_content"])
+    content = page_id_to_content[page_id]
+    sections: list[dict[str, str]] = []
+    for line in content.split("\n"):
+        if line.startswith("#"):
+            section_name = line.lstrip("#").strip()
+            sections.append(
+                {
+                    "section_id": f"{page_id}:{normalize_id(section_name)}",
+                    "section_name": section_name,
+                }
             )
-        return f"{canonical_title}\n\n{extract}"
+    if not sections:
+        sections.append(
+            {
+                "section_id": f"{page_id}:full",
+                "section_name": "Full Page",
+            }
+        )
+    return sections
 
-    return [search_wikipedia, read_page]
+
+async def read_section(section_id: str, wiki: dict[str, object]) -> str:
+    """Read a section of a page."""
+    if ":" not in section_id:
+        raise ValueError("Invalid section_id format. Expected: page_id:section_name")
+    page_id, section_name_id = section_id.split(":", 1)
+    page_id_to_content = cast(dict[str, str], wiki["page_id_to_content"])
+    content = page_id_to_content[page_id]
+    if section_name_id == "full":
+        return content
+    lines = content.split("\n")
+    section_start: int | None = None
+    section_end: int | None = None
+    for i, line in enumerate(lines):
+        if not line.startswith("#"):
+            continue
+        current_section = normalize_id(line.lstrip("#").strip())
+        if current_section == section_name_id and section_start is None:
+            section_start = i
+        elif section_start is not None and section_end is None:
+            section_end = i
+            break
+    if section_start is None:
+        raise ValueError(f"Section not found: {section_id}")
+    return "\n".join(lines[section_start : section_end or len(lines)])
 
 
-def _judge_reward_factory(
-    judge_model: str,
-    judge_base_url: str,
-    judge_api_key_var: str,
-):
-    ensure_keys([judge_api_key_var])
+def source(config: WikiSearchTasksetConfig):
+    def _iter():
+        dataset = load_dataset(config.dataset_name, split=config.dataset_split)
+        for index, raw_row in enumerate(dataset):
+            if config.max_examples is not None and index >= config.max_examples:
+                break
+            row = cast(Mapping[str, object], raw_row)
+            yield {
+                **dict(row),
+                "example_id": index,
+                "max_turns": config.max_turns,
+                "prompt": [{"role": "user", "content": str(row["question"])}],
+            }
+
+    return _iter
+
+
+def judge_reward_factory(config: WikiSearchTasksetConfig):
+    ensure_keys([config.judge_api_key_var])
     judge_client = AsyncOpenAI(
-        api_key=os.environ[judge_api_key_var],
-        base_url=judge_base_url,
+        api_key=os.environ[config.judge_api_key_var],
+        base_url=config.judge_base_url,
     )
 
-    async def yes_no_judge(question: str, answer: str, response: str) -> bool:
-        judge_response = await judge_client.chat.completions.create(
-            model=judge_model,
+    @vf.reward(weight=1.0)
+    async def judge_reward(task: vf.Task, state: vf.State) -> float:
+        response = await judge_client.chat.completions.create(
+            model=config.judge_model,
             messages=[
                 {
                     "role": "user",
                     "content": JUDGE_PROMPT.format(
-                        question=question, answer=answer, response=response
+                        question=task["question"],
+                        answer=task["answer"],
+                        response=parser.parse_answer(state["completion"]) or "",
                     ),
                 }
             ],
         )
-        text = judge_response.choices[0].message.content or ""
-        return "yes" in text.lower()
+        text = response.choices[0].message.content or ""
+        return 1.0 if "yes" in text.lower() else 0.0
 
-    @vf.reward(weight=0.6)
-    async def correct_answer(task: vf.Task, state: vf.State) -> float:
-        response = parser.parse_answer(state["completion"]) or ""
-        is_correct = await yes_no_judge(
-            str(task["question"]), str(task["answer"]), response
-        )
-        state["_is_correct"] = is_correct
-        return 1.0 if is_correct else 0.0
-
-    return [correct_answer]
+    return judge_reward
 
 
-@vf.reward(weight=0.3)
-async def cited_titles(task: vf.Task, state: vf.State) -> float:
-    titles = task.get("supporting_titles") or []
-    if not titles:
-        return 0.0
-    response = (parser.parse_answer(state["completion"]) or "").lower()
-    matches = sum(1 for title in titles if str(title).strip().lower() in response)
-    return matches / len(titles)
-
-
-@vf.reward(weight=0.1)
-async def parallel_tool_calls(task: vf.Task, state: vf.State) -> float:
-    del task
-    completion = state["completion"]
-    if not isinstance(completion, list):
-        return 0.0
-    counts = [
-        len(msg["tool_calls"])
-        for msg in completion
-        if isinstance(msg, dict)
-        and msg.get("role") == "assistant"
-        and isinstance(msg.get("tool_calls"), list)
-        and msg["tool_calls"]
-    ]
-    if not counts:
-        return 0.0
-    return min(sum(counts) / len(counts) / 3.0, 1.0)
+def load_toolset(config: vf.ToolsetConfig, taskset_config: WikiSearchTasksetConfig) -> vf.Toolset:
+    return vf.Toolset(
+        tools=[search_pages, view_sections, read_section],
+        objects={"wiki": lambda: load_wiki(taskset_config)},
+        bindings={
+            "search_pages.wiki": "objects.wiki",
+            "view_sections.wiki": "objects.wiki",
+            "read_section.wiki": "objects.wiki",
+        },
+        config=config,
+    )
 
 
 def load_taskset(config: vf.TasksetConfig) -> vf.Taskset:
     taskset_config = WikiSearchTasksetConfig.from_config(config)
-    cache: dict[str, Any] = {}
-
-    def _load() -> dict[str, Any]:
-        if "train" not in cache:
-            cache["train"] = load_dataset(
-                taskset_config.dataset_name,
-                taskset_config.dataset_config,
-                split=taskset_config.train_split,
-            )
-            cache["eval"] = load_dataset(
-                taskset_config.dataset_name,
-                taskset_config.dataset_config,
-                split=taskset_config.eval_split,
-            )
-        return cache
-
-    toolset = vf.Toolset(
-        tools=_make_tools(taskset_config),
-        scope="rollout",
-    )
-
     return vf.Taskset(
-        source=lambda: _rows(
-            _load()["train"],
-            taskset_config.max_turns,
-            taskset_config.max_train_examples,
-        ),
-        eval_source=lambda: _rows(
-            _load()["eval"],
-            taskset_config.max_turns,
-            taskset_config.max_eval_examples,
-        ),
-        system_prompt=taskset_config.system_prompt,
-        toolsets=[toolset],
-        rewards=[
-            *_judge_reward_factory(
-                taskset_config.judge_model,
-                taskset_config.judge_base_url,
-                taskset_config.judge_api_key_var,
-            ),
-            cited_titles,
-            parallel_tool_calls,
-        ],
+        source=source(taskset_config),
+        system_prompt=SYSTEM_PROMPT,
+        toolsets=[load_toolset(vf.ToolsetConfig(), taskset_config)],
+        rewards=[judge_reward_factory(taskset_config)],
         config=taskset_config,
     )
 

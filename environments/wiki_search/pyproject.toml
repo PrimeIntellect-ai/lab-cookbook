@@ -1,13 +1,13 @@
 [project]
 name = "wiki-search"
-description = "Multi-hop Wikipedia retrieval QA with parallel search tools"
-tags = ["train", "eval", "v1", "taskset", "harness", "wikipedia", "rag"]
+description = "Agentic RAG over a small Wikipedia corpus indexed with ChromaDB"
+tags = ["train", "eval", "v1", "taskset", "harness", "wikipedia", "rag", "embeddings", "llm-judge"]
 version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
     "verifiers>=0.1.14",
+    "chromadb",
     "datasets>=2.18.0",
-    "httpx>=0.27.0",
     "openai>=1.40.0",
 ]
 

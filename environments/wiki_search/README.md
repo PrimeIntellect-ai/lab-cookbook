@@ -1,78 +1,54 @@
 # wiki-search
 
-A multi-hop Wikipedia retrieval QA environment built on the verifiers v1 `Taskset` + `Harness` pattern.
+Agentic Wikipedia QA on a curated corpus, built on the verifiers v1 `Taskset` + `Harness` pattern.
 
-The agent is given a HotpotQA-style question that usually requires combining facts from **multiple** Wikipedia articles. It can issue parallel `search_wikipedia` and `read_page` calls, then must return a short final answer citing the source pages it used.
+The agent is given a trivia question and answers it by navigating a small Wikipedia corpus through three tools: embedding-based title search, section listing, and section reading. The corpus is loaded into a local ChromaDB index — **no live Wikipedia API calls**.
 
-## Why this environment exists
-
-Wikipedia QA is a classic open-domain retrieval task. Multi-hop questions like _"Which film directed by the screenwriter of `Memento` was released in 2001?"_ require the agent to:
-
-1. identify the entities involved,
-2. search for them in parallel,
-3. read enough of each page to verify the claim,
-4. synthesize the answer.
-
-This environment rewards correctness, source attribution, and efficient search.
+This is a v1 port of the canonical `wiki_search` environment in the `verifiers` repo.
 
 ## Environment overview
 
-The environment is implemented in `wiki_search.py` as a v1 `Taskset` plus the default endpoint-backed `Harness`.
+The stack:
 
-The stack is:
-
-- `WikiSearchTasksetConfig`: dataset, judge, prompt, and Wikipedia API defaults
-- `vf.Taskset`: exposes train/eval rows, the toolset, and reward signals
-- `vf.Toolset`: ships rollout-scoped Wikipedia search/read tools (no sandbox)
+- `WikiSearchTasksetConfig`: dataset, judge, embedding, and corpus defaults
+- `vf.Taskset`: prompt rows from `willcb/wiki-trivia-questions-v4`, plus the toolset and judge reward
+- `vf.Toolset`: ships the three Wikipedia tools and lazily builds the shared ChromaDB index via `objects`/`bindings`
 - `vf.Harness`: runs the default endpoint-backed tool loop
 
-See the verifiers docs for more on tasksets and harnesses:
-https://docs.primeintellect.ai/verifiers/byo-harness
+The shared corpus (`wiki` dict containing the Chroma collection and `page_id → title` / `page_id → content` maps) is injected into each tool through `Toolset.bindings` rather than module-level globals or closures.
 
 ## Tools exposed to the model
 
-Two tools, both async HTTP calls against `https://en.wikipedia.org/w/api.php`:
+- `search_pages(query)` — top-10 article candidates via title-embedding similarity over the ChromaDB index. Returns `[{page_id, title}, ...]`.
+- `view_sections(page_id)` — parses Markdown-style `#` headings in the page content and returns the available `{section_id, section_name}` entries. Falls back to a single `:full` section if the page has no headings.
+- `read_section(section_id)` — returns the slice of the page content for `section_id` (or the full page if `section_id` ends in `:full`).
 
-- `search_wikipedia(query, limit=5)` — Wikipedia search; returns a numbered list of titles with snippets
-- `read_page(title, max_chars=4000)` — plain-text extract of a single page, redirects followed, truncated to `max_chars`
+## Datasets
 
-The toolset is `scope="rollout"`, but it owns no sandbox state — the tools simply hit Wikipedia directly through a module-level `httpx.AsyncClient`.
+- **Questions**: `willcb/wiki-trivia-questions-v4` (HF, `train` split)
+- **Corpus**: `willcb/rare-wiki-pages` (HF, `train` split), indexed into a persistent ChromaDB collection (`wiki_titles`) under `.chroma_db` on first run.
 
-## Dataset
-
-The default dataset is `hotpot_qa` (`distractor` config). Each row provides:
-
-- `question` — the multi-hop question (kept verbatim as the user prompt)
-- `answer` — the reference answer used by the judge
-- `supporting_facts.title` — the Wikipedia article titles required to answer
-
-Defaults cap to `max_train_examples=1000` and `max_eval_examples=200` so evals stay quick. Swap dataset or limits via env args.
+The index is built lazily — the corpus + collection load runs the first time a rollout needs the tools, which allows multiple env instances to share work without colliding at construction time.
 
 ## Reward design
 
-Three rewards combine into the rollout score:
-
-- **`correct_answer`** (weight `0.6`) — `gpt-4.1-mini` judge yes/no on whether the response answers the question
-- **`cited_titles`** (weight `0.3`) — fraction of the gold supporting titles that appear in the response text
-- **`parallel_tool_calls`** (weight `0.1`) — encourages issuing multiple tool calls per turn, capped at ~3
-
-The system prompt asks for a fixed `Sources:` / `Answer:` shape so `cited_titles` can string-match against the titles the agent claims it used.
+A single judge reward (weight `1.0`): a `gpt-4.1-mini` yes/no on whether the final response is correct and coherent given the ground-truth answer. Incoherent responses score 0 even if the answer is buried inside them.
 
 ## Required environment variables
 
-- `OPENAI_API_KEY` — used by the judge model (`gpt-4.1-mini` by default)
+- `OPENAI_API_KEY` — used by both the judge and the embedding model. Override with `judge_api_key_var` / `embed_api_key_var` if you point either component at another provider.
 
-Validate via `vf.ensure_keys(...)` is run at taskset construction time.
+Keys are validated via `vf.ensure_keys(...)` when the taskset and the wiki index load.
 
 ## Quickstart
 
-Install from the worktree:
+Install the environment:
 
 ```bash
 prime env install wiki-search
 ```
 
-Run an eval with the defaults:
+Run an eval with defaults:
 
 ```bash
 prime eval run wiki-search
@@ -86,35 +62,36 @@ prime eval run wiki-search \
   -n 20 -r 3
 ```
 
+The first run downloads the corpus and builds the Chroma index; subsequent runs reuse `.chroma_db`.
+
 ## Environment arguments
 
-All fields are top-level on `WikiSearchTasksetConfig` and can be overridden through the v1 config pipeline (TOML or `-a` JSON for fields under `taskset.*`).
+All fields live on `WikiSearchTasksetConfig` and can be overridden through the v1 config pipeline (TOML or `-a` JSON for fields under `taskset.*`).
 
 | Arg | Type | Default | Description |
 | --- | ---- | ------- | ----------- |
-| `dataset_name` | str | `"hotpot_qa"` | HF dataset id |
-| `dataset_config` | str | `"distractor"` | HF dataset config |
-| `train_split` | str | `"train"` | Split used as training source |
-| `eval_split` | str | `"validation"` | Split used as eval source |
-| `max_train_examples` | int | `1000` | Cap on rows yielded from train split |
-| `max_eval_examples` | int | `200` | Cap on rows yielded from eval split |
-| `max_turns` | int | `4` | Per-rollout turn cap |
+| `dataset_name` | str | `"willcb/wiki-trivia-questions-v4"` | HF dataset of trivia Q&A rows |
+| `dataset_split` | str | `"train"` | Split used as the prompt source |
+| `max_examples` | int? | `None` | Optional cap on rows yielded |
+| `max_turns` | int | `10` | Per-rollout turn cap |
 | `judge_model` | str | `"gpt-4.1-mini"` | Judge model id |
 | `judge_base_url` | str | OpenAI v1 | Judge endpoint base URL |
 | `judge_api_key_var` | str | `"OPENAI_API_KEY"` | Env var holding the judge API key |
-| `wiki_api_url` | str | `https://en.wikipedia.org/w/api.php` | MediaWiki API endpoint |
-| `wiki_user_agent` | str | (cookbook UA) | Sent on Wikipedia requests |
-| `wiki_request_timeout_seconds` | float | `30.0` | httpx timeout per request |
+| `embed_model` | str | `"text-embedding-3-small"` | Title-embedding model |
+| `embed_base_url` | str | OpenAI v1 | Embedding provider base URL |
+| `embed_api_key_var` | str | `"OPENAI_API_KEY"` | Env var holding the embedding API key |
+| `corpus_dataset` | str | `"willcb/rare-wiki-pages"` | HF dataset of Wikipedia pages |
+| `corpus_split` | str | `"train"` | Corpus split |
+| `chroma_db_dir` | str | `.chroma_db` | Path to the persistent ChromaDB store |
 
 ## Files
 
-- `wiki_search.py` — environment, tools, prompt, dataset loading, rewards
+- `wiki_search.py` — environment, tools, prompt, dataset and corpus loading, judge reward
 - `pyproject.toml` — package metadata and dependencies
 - `README.md` — this file
 
 ## Notes and limitations
 
-- The `cited_titles` reward is a cheap substring match against gold titles. It rewards listing titles in the response, which the system prompt prescribes, but does not verify the page was actually consulted.
-- Reward stability depends on judge stability — switch `judge_model` to a stronger judge for less noisy scores.
-- The tools call the live Wikipedia API, so evals are subject to its rate limits. Wikipedia asks for a meaningful `User-Agent`; the default identifies the lab-cookbook recipe.
-- The default Hugging Face `hotpot_qa` dataset is gated/heavy; the first load downloads the full split before the cap is applied.
+- Judge stability dominates reward noise — point `judge_model` at a stronger judge for cleaner scores.
+- The Chroma index only embeds page **titles**, not bodies, so `search_pages` returns candidate titles by name similarity. The agent is expected to drill in with `view_sections` / `read_section` to actually verify content.
+- The first run pays the cost of downloading the corpus and embedding every title; subsequent runs reuse the persistent store at `chroma_db_dir`.
