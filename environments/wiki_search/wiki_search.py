@@ -220,6 +220,13 @@ def source(config: WikiSearchTasksetConfig):
     return _iter
 
 
+# TODO(verifiers#1362): collapse this update+reward pair into a single
+# @vf.reward once PR 1362 lands. Rewards currently can't receive Toolset
+# binding injection (`_toolset_binding_targets` only registers tool/stop/
+# setup/update/cleanup callables), so the judge client has to be bound to
+# an @vf.update that stages `judge_score` into state for a trivial reward
+# reader. When 1362 merges, delete `score_with_judge`, move the body into
+# `judge_reward`, and bind `judge` + `judge_model` directly to it.
 @vf.update
 async def score_with_judge(
     task: vf.Task,
