@@ -1,0 +1,26 @@
+[project]
+name = "wiki-search"
+description = "Agentic RAG over a small Wikipedia corpus indexed with ChromaDB"
+tags = ["train", "eval", "v1", "taskset", "harness", "wikipedia", "rag", "embeddings", "llm-judge"]
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "verifiers>=0.1.14",
+    "chromadb",
+    "datasets>=2.18.0",
+    "openai>=1.40.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = ["wiki_search.py", "pyproject.toml"]
+
+[project.entry-points."verifiers.environments"]
+wiki-search = "wiki_search:load_environment"
+
+[tool.verifiers.eval]
+num_examples = 5
+rollouts_per_example = 3
