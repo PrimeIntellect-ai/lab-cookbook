@@ -54,7 +54,7 @@ Inspect:
 - whether the final answer format matches the reward
 - whether the reward failure is a framework issue, answer issue, or scoring issue
 
-In source, the package is `langchain_deep_agents_env`. It builds a LangChain chat model from `state.get_endpoint_config(api="chat")`, creates a Deep Agent, runs it on the task, and writes the final output back into Lab state.
+The source package is `langchain_deep_agents_env`. It builds a LangChain chat model from `state.get_endpoint_config(api="chat")`, creates a Deep Agent, runs it on the task, and writes the final output back into Lab state.
 
 ## DSPy
 
@@ -70,7 +70,7 @@ prime eval run primeintellect/dspy-rlm \
   -t 2048
 ```
 
-In source, the package is `dspy_rlm`. The program creates a DSPy LM from the Lab endpoint config, runs the DSPy module, stores the answer in state, and lets the Taskset reward score the result.
+The source package is `dspy_rlm`. The program creates a DSPy LM from the Lab endpoint config, runs the DSPy module, stores the answer in state, and lets the Taskset reward score the result.
 
 For a more domain-specific DSPy example, use `dspy-flights`, whose source package is `dspy_flights`.
 

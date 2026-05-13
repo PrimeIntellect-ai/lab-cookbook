@@ -22,27 +22,27 @@ Authenticate with Prime:
 prime login
 ```
 
-You can also continue without logging in immediately, but many Lab workflows require an authenticated Prime account.
+You can skip this step for now, but most Lab workflows require an authenticated Prime account.
 
 ## Create a Workspace
 
-Lab development takes place inside a workspace folder, which can contain multiple environments and configs for your project.
+Lab development takes place inside a workspace folder, which can hold multiple environments and configs for your project.
 
-First, select a folder as your workspace:
+First, create a folder to use as your workspace:
 
 ```bash
 mkdir -p ~/lab
 cd ~/lab
 ```
 
-Then, set up your workspace for development with agents:
+Then set up the workspace and choose which coding agents to configure:
 
 ```bash
 # options: amp, claude, codex, cursor, droid, hermes, letta, opencode, pi
 prime lab setup --agents codex,claude
 ```
 
-This prepares your workspace for Lab development by adding project structure, example configs, and agent guidance for environment workflows and best practices.
+This adds project structure, example configs, and agent guidance covering environment workflows and best practices.
 
 You can also run `prime lab setup` without flags to configure coding agents interactively.
 
@@ -54,14 +54,14 @@ prime lab sync
 
 ## Workspace Layout
 
-After setup, your workspace is organized around a few recurring pieces:
+After setup, your workspace contains a few key pieces:
 
-- `configs/` contains example configs for evaluation, training, and related workflows.
+- `configs/` holds example configs for evaluation, training, and related workflows.
 - `environments/` is where your local environment packages live.
-- `AGENTS.md` (and/or `CLAUDE.md`) gives coding agents guidance on how to best navigate Lab.
+- `AGENTS.md` (and/or `CLAUDE.md`) tells coding agents how to navigate Lab.
 - `.prime/` stores Lab metadata and other local assets.
 
-Most day-to-day work happens in `configs/` and `environments/`; the other files keep Lab and your coding agents aligned around the workspace.
+Most day-to-day work happens in `configs/` and `environments/`; the other files keep Lab and your coding agents in sync with the workspace.
 
 ## Check the CLI
 

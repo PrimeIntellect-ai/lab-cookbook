@@ -2,13 +2,13 @@
 
 In Lab, evals are environments.
 
-An environment packages the work you want a model or agent to do. It samples tasks, produces rollouts, and computes metrics from the result. The same environment can be used for benchmarking models and prompts, generating synthetic data, optimizing harnesses, and training with RL or other algorithms.
+An environment packages the work you want a model or agent to do. It samples tasks, produces rollouts, and computes metrics from the results. The same environment can be used for benchmarking models and prompts, generating synthetic data, optimizing harnesses, and training with RL or other algorithms.
 
 Environments can live locally in your workspace or on the Environments Hub. This guide uses [`primeintellect/gsm8k`](https://app.primeintellect.ai/dashboard/environments/primeintellect/gsm8k), a Hub environment.
 
 Later guides also use [`primeintellect/wordle`](https://app.primeintellect.ai/dashboard/environments/primeintellect/wordle), a game environment with clear task state and simple success criteria.
 
-We'll focus on the two pieces you need first: tasks and metrics. In GSM8K, the tasks are math questions with expected final answers. The metric checks whether each rollout reaches the right answer, and that score can be weighted as a reward for optimization later.
+We'll focus on the two pieces you need first: tasks and metrics. In GSM8K, the tasks are math questions with expected final answers. The metric checks whether each rollout reaches the right answer, and that same score can serve as a reward signal during later optimization.
 
 Tools, sandboxes, browser sessions, user simulators, and custom harnesses make environments more powerful, but they are not part of this first eval.
 
@@ -49,7 +49,7 @@ This is the basic eval loop: evaluate a model, read the rollouts, and decide whe
 
 ## Run a Small Suite
 
-Once you care about more than one environment, move the eval settings into a config file. This keeps the model, sampling settings, and environment arguments together.
+Once you want to run more than one environment in a single pass, move the eval settings into a config file. This keeps the model, sampling settings, and environment arguments together.
 
 Create `configs/eval/first-suite.toml`:
 

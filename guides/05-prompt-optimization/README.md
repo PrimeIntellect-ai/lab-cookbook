@@ -4,7 +4,7 @@ Use GEPA to improve an environment prompt before changing model weights.
 
 RL changes the model. GEPA changes the prompt. It is useful when the environment already has a meaningful scoring signal, but the model behavior depends heavily on the system prompt, tool instructions, output format, or task strategy.
 
-This guide uses [`primeintellect/wordle`](https://app.primeintellect.ai/dashboard/environments/primeintellect/wordle), because its behavior is easy to inspect: the model sees game state, chooses guesses, and gets scored by whether it solves the puzzle.
+This guide uses [`primeintellect/wordle`](https://app.primeintellect.ai/dashboard/environments/primeintellect/wordle), because its behavior is easy to inspect: the model sees game state, chooses guesses, and is scored on whether it solves the puzzle.
 
 ## Check the Baseline
 
@@ -92,7 +92,7 @@ Then compare the baseline and GEPA runs:
 prime lab view --evals
 ```
 
-Keep the model, sample count, rollout count, and sampling settings fixed while comparing prompts. The only intended change is the system prompt loaded through `path_to_system_prompt`.
+Keep the model, sample count, rollout count, and sampling settings fixed while comparing prompts. The only thing that should differ between runs is the system prompt loaded through `path_to_system_prompt`.
 
 ## Decide Whether to Keep It
 

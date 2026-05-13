@@ -2,7 +2,7 @@
 
 Build a local environment and evaluate it with Lab.
 
-The task is simple to state and surprisingly hard to solve: given a piece of text, return the characters in reverse order. Even capable models drop characters or reverse word-by-word, and accuracy falls sharply without chain-of-thought. The payoff is a clean continuous reward — longest-common-subsequence between the model's answer and the true reversal — that is robust to reward hacking and learns quickly under RL.
+The task is simple to state and surprisingly hard to solve: given a piece of text, return the characters in reverse order. Even capable models drop characters or reverse word-by-word, and accuracy falls sharply without chain-of-thought. The payoff is a clean continuous reward — longest-common-subsequence between the model's answer and the true reversal — that is robust to reward hacking and trains quickly under RL.
 
 You will build this as `reverse-text`. You can also inspect the finished Hub environment at [`primeintellect/reverse-text`](https://app.primeintellect.ai/dashboard/environments/primeintellect/reverse-text).
 
@@ -18,7 +18,7 @@ This creates `environments/reverse_text/` with a starter `reverse_text.py` and `
 
 ## Define Your Tasks
 
-The first thing an environment needs is some tasks to attempt. Here, we'll use [`PrimeIntellect/Reverse-Text-RL`](https://huggingface.co/datasets/PrimeIntellect/Reverse-Text-RL). Each row gives you a piece of text:
+The first thing an environment needs is some tasks for the model to attempt. Here, we'll use [`PrimeIntellect/Reverse-Text-RL`](https://huggingface.co/datasets/PrimeIntellect/Reverse-Text-RL). Each row gives you a piece of text:
 
 ```python
 {"prompt": "The quick brown fox jumps over the lazy dog."}
@@ -57,7 +57,7 @@ SYSTEM_PROMPT = (
 )
 ```
 
-A reward is an `async` function decorated with `@vf.reward`. It receives the immutable `task`, as well as the `state` produced by the rollout, and returns a float. Pull the tagged answer out of the model's reply and score it against the true reversal using a longest-common-subsequence ratio so partial answers get partial credit:
+A reward is an `async` function decorated with `@vf.reward`. It receives the immutable `task` and the `state` produced by the rollout, and returns a float. Pull the tagged answer out of the model's reply and score it against the true reversal with a longest-common-subsequence ratio, so partial answers get partial credit:
 
 ```python
 from difflib import SequenceMatcher
@@ -76,7 +76,7 @@ If either tag is missing, the splits fall through to the raw completion.
 
 ## Wire It Together
 
-Two `load_*` functions tie the pieces together. `load_taskset` packages the source, system prompt, and reward. `load_environment` wraps the taskset in `vf.Env`, which is what evals and trainers actually call:
+Two `load_*` functions tie the pieces together. `load_taskset` packages the source, system prompt, and reward. `load_environment` wraps the taskset in `vf.Env`, which is what evals and trainers load:
 
 ```python
 def load_taskset(config: vf.TasksetConfig) -> vf.Taskset:
@@ -156,6 +156,6 @@ Reverse-text has a clear task, a deterministic answer, and a graded reward. That
 
 - the task is easy to generate at scale
 - failures are easy to inspect
-- partial credit gives the model a learning signal before it solves the task
+- partial credit gives the model a learning signal even before it fully solves the task
 
 The next guide uses this same environment to launch an RL run and watch reward improve.

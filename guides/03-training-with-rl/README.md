@@ -4,7 +4,7 @@ Launch a Hosted Training run with an environment.
 
 RL is useful once an environment has a reward signal you trust. The model samples multiple rollouts for each task, the environment scores those rollouts, and the trainer updates the model toward higher-reward behavior.
 
-For the first run, use the Hub version of the reverse-text environment. If you built a local version in the previous guide, this keeps the training path stable while you are still editing local code.
+For the first run, use the Hub version of the reverse-text environment. If you built a local version in the previous guide, using the Hub copy keeps training stable while you keep iterating on your local copy.
 
 ## Check the Baseline
 
@@ -105,7 +105,7 @@ Start the run:
 prime train configs/rl/reverse-text.toml
 ```
 
-The command prints a run ID and the log command for the new Hosted Training run. Follow logs with:
+The command prints a run ID along with the command for streaming logs from the new Hosted Training run. Follow logs with:
 
 ```bash
 prime train logs <run_id> -f

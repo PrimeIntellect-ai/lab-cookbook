@@ -2,7 +2,7 @@
 
 Build an environment where the model has to search before it answers.
 
-In the first environments, each task gives the model everything it needs in the prompt. Search environments add another layer: the task asks a question, and the environment gives the model tools for finding evidence in a corpus.
+In the earlier guides, each task gives the model everything it needs in the prompt. Search environments add another layer: the task asks a question, and the environment gives the model tools for finding evidence in a corpus.
 
 This guide uses [primeintellect/wiki-search](https://app.primeintellect.ai/dashboard/environments/primeintellect/wiki-search), a Wikipedia search environment on the Environments Hub. The model gets a trivia question, searches a small Wikipedia corpus, reads relevant sections, and answers from the evidence it finds.
 
@@ -54,7 +54,7 @@ This gives the model a natural retrieval path: search broadly, choose a page, in
 
 ## The Taskset Shape
 
-The `wiki-search` implementation follows the Taskset pattern. The Taskset is the place where tasks, tools, prompts, and rewards come together.
+The `wiki-search` implementation follows the Taskset pattern. The Taskset is where tasks, tools, prompts, and rewards come together.
 
 Conceptually, it looks like this:
 

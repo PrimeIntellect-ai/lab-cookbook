@@ -4,7 +4,7 @@ Evaluate code-producing agents in isolated runtimes.
 
 Coding environments need more than text comparison. The environment should let the model inspect or write code, execute commands safely, collect logs, and score the result from actual behavior.
 
-This guide starts with [`primeintellect/math-python`](https://app.primeintellect.ai/dashboard/environments/primeintellect/math-python), a lightweight Python-tool environment. Then it moves to [`primeintellect/opencode-harbor`](https://app.primeintellect.ai/dashboard/environments/primeintellect/opencode-harbor), a full CLI-agent environment that runs OpenCode on Harbor tasks.
+This guide starts with [`primeintellect/math-python`](https://app.primeintellect.ai/dashboard/environments/primeintellect/math-python), a lightweight Python-tool environment, then moves to [`primeintellect/opencode-harbor`](https://app.primeintellect.ai/dashboard/environments/primeintellect/opencode-harbor), a full CLI-agent environment that runs OpenCode on Harbor tasks.
 
 ## Warm Up with Math Python
 
