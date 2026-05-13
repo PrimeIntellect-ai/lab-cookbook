@@ -10,7 +10,7 @@ import httpx
 import verifiers.v1 as vf
 from datasets import load_dataset
 from openai import AsyncOpenAI
-from verifiers import ensure_keys
+from verifiers import Parser, ensure_keys
 
 DATASET_NAME = "hotpot_qa"
 DATASET_CONFIG = "distractor"
@@ -86,28 +86,7 @@ async def _get_http_client(user_agent: str, timeout: float) -> httpx.AsyncClient
         return client
 
 
-def completion_text(state: Mapping[str, object]) -> str:
-    completion = state.get("completion") or []
-    if not isinstance(completion, list):
-        return str(completion)
-    for message in reversed(completion):
-        if isinstance(message, Mapping) and message.get("role") == "assistant":
-            return str(message.get("content") or "")
-    return ""
-
-
-def tool_calls_per_turn(state: Mapping[str, object]) -> list[int]:
-    completion = state.get("completion") or []
-    if not isinstance(completion, list):
-        return []
-    counts: list[int] = []
-    for message in completion:
-        if not isinstance(message, Mapping) or message.get("role") != "assistant":
-            continue
-        tool_calls = message.get("tool_calls") or []
-        if isinstance(tool_calls, list) and tool_calls:
-            counts.append(len(tool_calls))
-    return counts
+parser = Parser()
 
 
 def _supporting_titles(row: Mapping[str, Any]) -> list[str]:
@@ -261,8 +240,9 @@ def _judge_reward_factory(
 
     @vf.reward(weight=0.6)
     async def correct_answer(task: vf.Task, state: vf.State) -> float:
+        response = parser.parse_answer(state["completion"]) or ""
         is_correct = await yes_no_judge(
-            str(task["question"]), str(task["answer"]), completion_text(state)
+            str(task["question"]), str(task["answer"]), response
         )
         state["_is_correct"] = is_correct
         return 1.0 if is_correct else 0.0
@@ -275,19 +255,28 @@ async def cited_titles(task: vf.Task, state: vf.State) -> float:
     titles = task.get("supporting_titles") or []
     if not titles:
         return 0.0
-    response = completion_text(state).lower()
+    response = (parser.parse_answer(state["completion"]) or "").lower()
     matches = sum(1 for title in titles if str(title).strip().lower() in response)
     return matches / len(titles)
 
 
 @vf.reward(weight=0.1)
 async def parallel_tool_calls(task: vf.Task, state: vf.State) -> float:
-    _ = task
-    counts = tool_calls_per_turn(state)
+    del task
+    completion = state["completion"]
+    if not isinstance(completion, list):
+        return 0.0
+    counts = [
+        len(msg["tool_calls"])
+        for msg in completion
+        if isinstance(msg, dict)
+        and msg.get("role") == "assistant"
+        and isinstance(msg.get("tool_calls"), list)
+        and msg["tool_calls"]
+    ]
     if not counts:
         return 0.0
-    avg_per_turn = sum(counts) / len(counts)
-    return min(avg_per_turn / 3.0, 1.0)
+    return min(sum(counts) / len(counts) / 3.0, 1.0)
 
 
 def load_taskset(config: vf.TasksetConfig) -> vf.Taskset:

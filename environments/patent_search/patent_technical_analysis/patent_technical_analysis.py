@@ -11,7 +11,7 @@ import verifiers.v1 as vf
 from datasets import load_dataset
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
-from verifiers import ensure_keys
+from verifiers import Parser, ensure_keys
 
 os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
 
@@ -172,14 +172,7 @@ def normalize_id(text: str) -> str:
     return text.strip().lower().replace(" ", "_")
 
 
-def completion_text(state: Mapping[str, object]) -> str:
-    completion = state.get("completion") or []
-    if not isinstance(completion, list):
-        return str(completion)
-    for message in reversed(completion):
-        if isinstance(message, Mapping) and message.get("role") == "assistant":
-            return str(message.get("content") or "")
-    return ""
+parser = Parser()
 
 
 class PatentCorpus:
@@ -494,7 +487,7 @@ def judge_reward_factory(config: PatentTechnicalTasksetConfig):
             question=task["question"],
             answer=task["answer"],
             source_quotes=source_quotes_text,
-            response=completion_text(state),
+            response=parser.parse_answer(state["completion"]) or "",
             key_points_checklist=key_points_checklist,
         )
         try:

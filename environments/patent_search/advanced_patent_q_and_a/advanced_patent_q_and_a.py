@@ -10,7 +10,7 @@ import verifiers.v1 as vf
 from datasets import load_dataset
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
-from verifiers import ensure_keys
+from verifiers import Parser, ensure_keys
 
 os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
 
@@ -66,14 +66,7 @@ def chroma_semaphore() -> asyncio.Semaphore:
     return _chroma_semaphore
 
 
-def completion_text(state: Mapping[str, object]) -> str:
-    completion = state.get("completion") or []
-    if not isinstance(completion, list):
-        return str(completion)
-    for message in reversed(completion):
-        if isinstance(message, Mapping) and message.get("role") == "assistant":
-            return str(message.get("content") or "")
-    return ""
+parser = Parser()
 
 
 def normalize_id(text: str) -> str:
@@ -311,7 +304,7 @@ def judge_reward_factory(config: AdvancedPatentTasksetConfig):
                     "content": JUDGE_PROMPT.format(
                         question=task["question"],
                         answer=task["answer"],
-                        response=completion_text(state),
+                        response=parser.parse_answer(state["completion"]) or "",
                     ),
                 }
             ],

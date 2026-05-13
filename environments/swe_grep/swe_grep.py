@@ -8,10 +8,9 @@ from typing import Any
 import verifiers.v1 as vf
 from datasets import Dataset, load_dataset
 from openai import AsyncOpenAI
-from verifiers import ensure_keys
+from verifiers import Parser, ensure_keys
 
 DATASET_NAME = "cdreetz/swe-grep-v2"
-REQUIRE_TOOL_CALLS_FOR_REWARD = False
 
 SYSTEM_PROMPT = """You are a helpful assistant that can answer questions and help with tasks.
 Use the provided tools to search through the codebase to best answer user queries.
@@ -60,40 +59,7 @@ class SweGrepTasksetConfig(vf.TasksetConfig):
     sandbox_setup_timeout_seconds: int = 600
 
 
-def completion_text(state: Mapping[str, object]) -> str:
-    completion = state.get("completion") or []
-    if not isinstance(completion, list):
-        return str(completion)
-    for message in reversed(completion):
-        if isinstance(message, Mapping) and message.get("role") == "assistant":
-            return str(message.get("content") or "")
-    return ""
-
-
-def made_tool_calls(state: Mapping[str, object]) -> bool:
-    completion = state.get("completion") or []
-    if not isinstance(completion, list):
-        return False
-    return any(
-        isinstance(message, Mapping)
-        and message.get("role") == "assistant"
-        and bool(message.get("tool_calls"))
-        for message in completion
-    )
-
-
-def tool_calls_per_turn(state: Mapping[str, object]) -> list[int]:
-    completion = state.get("completion") or []
-    if not isinstance(completion, list):
-        return []
-    counts: list[int] = []
-    for message in completion:
-        if not isinstance(message, Mapping) or message.get("role") != "assistant":
-            continue
-        tool_calls = message.get("tool_calls") or []
-        if isinstance(tool_calls, list) and tool_calls:
-            counts.append(len(tool_calls))
-    return counts
+parser = Parser()
 
 
 def convert_dataset(train_ratio: float, dataset_name: str) -> tuple[Dataset, Dataset]:
@@ -246,11 +212,9 @@ def judge_reward_factory(
 
     @vf.reward(weight=0.4)
     async def correct_answer(task: vf.Task, state: vf.State) -> float:
-        if REQUIRE_TOOL_CALLS_FOR_REWARD and not made_tool_calls(state):
-            state["_is_correct"] = False
-            return 0.0
+        response = parser.parse_answer(state["completion"]) or ""
         is_correct = await yes_no_judge(
-            str(task["question"]), str(task["answer"]), completion_text(state)
+            str(task["question"]), str(task["answer"]), response
         )
         state["_is_correct"] = is_correct
         return 1.0 if is_correct else 0.0
@@ -261,9 +225,7 @@ def judge_reward_factory(
         file_path_2 = task.get("file_path_2")
         if not file_path_1:
             return 0.0
-        if REQUIRE_TOOL_CALLS_FOR_REWARD and not made_tool_calls(state):
-            return 0.0
-        response = completion_text(state)
+        response = parser.parse_answer(state["completion"]) or ""
         found_1 = await yes_no_judge(
             "Does the response reference this file path?", str(file_path_1), response
         )
@@ -288,8 +250,18 @@ def judge_reward_factory(
 
 @vf.reward(weight=0.2)
 async def parallel_tool_calls(task: vf.Task, state: vf.State) -> float:
-    _ = task
-    counts = tool_calls_per_turn(state)
+    del task
+    completion = state["completion"]
+    if not isinstance(completion, list):
+        return 0.0
+    counts = [
+        len(msg["tool_calls"])
+        for msg in completion
+        if isinstance(msg, dict)
+        and msg.get("role") == "assistant"
+        and isinstance(msg.get("tool_calls"), list)
+        and msg["tool_calls"]
+    ]
     if not counts:
         return 0.0
     return min((sum(counts) / len(counts)) / 8.0, 1.0)
@@ -300,14 +272,12 @@ async def efficiency_bonus_for_correct(
     tasks: list[vf.Task],
     states: list[vf.State],
 ) -> list[float]:
-    _ = tasks
+    del tasks
     rewards = [0.0] * len(states)
     correct_indices = [
         index
         for index, state in enumerate(states)
-        if state.get("_found_file_1", False)
-        and state.get("_found_file_2", False)
-        and (not REQUIRE_TOOL_CALLS_FOR_REWARD or made_tool_calls(state))
+        if state.get("_found_file_1", False) and state.get("_found_file_2", False)
     ]
     if not correct_indices:
         return rewards
