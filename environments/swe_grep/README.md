@@ -85,7 +85,8 @@ This recipe uses v1 reward signals owned by the taskset:
 
 A few notable design choices:
 
-- correctness is judged semantically, not by exact string match
+- answer correctness is judged semantically by an LLM judge, run once per rollout as an `@vf.update` and read by the reward
+- file-path coverage is a cheap substring check against the agent's final message (the system prompt forces a `Files:`/`Answer:` shape, so the paths appear verbatim)
 - multi-file tasks are supported via `file_path` and `file_path_2`
 - the environment explicitly encourages parallelism
 - the default system prompt constrains the agent to **2 turns**, increasing pressure to search well
@@ -131,8 +132,6 @@ env = load_environment()
 ## Files
 
 - `swe_grep.py`: environment, tools, prompt, dataset loading, and rewards
-- `src/create_dataset.py`: dataset generation pipeline
-- `src/sandbox_metrics.py`: historical sandbox execution helpers
 
 ## Notes and limitations
 

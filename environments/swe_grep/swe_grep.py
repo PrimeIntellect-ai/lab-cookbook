@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import os
 import shlex
-from collections.abc import Iterable, Mapping
-from typing import Any
+from collections.abc import Mapping
+from typing import Protocol, cast
 
 import verifiers.v1 as vf
 from datasets import Dataset, load_dataset
 from openai import AsyncOpenAI
-from verifiers import Parser, ensure_keys
-
-DATASET_NAME = "cdreetz/swe-grep-v2"
+from pydantic import model_validator
+from typing_extensions import Self
+from verifiers import ensure_keys
 
 SYSTEM_PROMPT = """You are a helpful assistant that can answer questions and help with tasks.
 Use the provided tools to search through the codebase to best answer user queries.
@@ -46,45 +46,26 @@ Respond either 'yes' or 'no' only.
 
 
 class SweGrepTasksetConfig(vf.TasksetConfig):
-    dataset_name: str = DATASET_NAME
+    dataset_name: str = "cdreetz/swe-grep-v2"
     train_ratio: float = 0.9
     max_turns: int = 2
-    system_prompt: str | None = SYSTEM_PROMPT
     judge_model: str = "gpt-4.1-mini"
     judge_base_url: str = "https://api.openai.com/v1"
     judge_api_key_var: str = "OPENAI_API_KEY"
-    sandbox_image: str = "python:3.11-slim"
-    sandbox_timeout_minutes: int = 60
-    sandbox_command_timeout_seconds: int = 60
-    sandbox_setup_timeout_seconds: int = 600
+    repo_url: str = "https://github.com/microsoft/vscode.git"
+    repo_path: str = "vscode"
+
+    @model_validator(mode="after")
+    def _ensure_required_keys(self) -> Self:
+        ensure_keys([self.judge_api_key_var])
+        return self
 
 
-parser = Parser()
+class _Sandbox(Protocol):
+    async def execute(self, command: str) -> object: ...
 
 
-def convert_dataset(train_ratio: float, dataset_name: str) -> tuple[Dataset, Dataset]:
-    dataset = load_dataset(dataset_name, split="train")
-    dataset = dataset.filter(lambda row: row["check"] == "Yes")
-    dataset = dataset.rename_columns({"user_query": "question", "ground_truth": "answer"})
-    cols_to_remove = [name for name in ("file_chunk", "check") if name in dataset.column_names]
-    if cols_to_remove:
-        dataset = dataset.remove_columns(cols_to_remove)
-    split = dataset.train_test_split(test_size=1 - train_ratio, seed=42)
-    return split["train"], split["test"]
-
-
-def rows(dataset: Iterable[Mapping[str, object]], max_turns: int):
-    for index, row in enumerate(dataset):
-        question = str(row["question"])
-        yield {
-            **dict(row),
-            "example_id": index,
-            "prompt": [{"role": "user", "content": question}],
-            "max_turns": max_turns,
-        }
-
-
-async def run_sandbox_command(sandbox: Any, command: str) -> tuple[bool, str]:
+async def _run(sandbox: _Sandbox, command: str) -> tuple[bool, str]:
     result = await sandbox.execute(command)
     stdout = str(getattr(result, "stdout", "") or "")
     stderr = str(getattr(result, "stderr", "") or "")
@@ -95,7 +76,7 @@ async def run_sandbox_command(sandbox: Any, command: str) -> tuple[bool, str]:
 
 async def grep_tool(
     pattern: str,
-    sandbox: Any,
+    sandbox: _Sandbox,
     path: str = "vscode",
     file_pattern: str = "",
     context_lines: int = 2,
@@ -124,7 +105,7 @@ async def grep_tool(
         f"rg {' '.join(flags)} {shlex.quote(pattern)} {shlex.quote(path)} "
         f"2>&1 | head -{max_lines + 1}"
     )
-    success, output = await run_sandbox_command(sandbox, command)
+    success, output = await _run(sandbox, command)
     if not success:
         return f"Error: {output[:100]}"
     if not output.strip():
@@ -139,13 +120,13 @@ async def grep_tool(
     return output
 
 
-async def list_files(path: str, sandbox: Any) -> str:
+async def list_files(path: str, sandbox: _Sandbox) -> str:
     """List files and directories at a path.
 
     Args:
         path: Directory path to list contents of.
     """
-    success, output = await run_sandbox_command(sandbox, f"ls -la {shlex.quote(path)}")
+    success, output = await _run(sandbox, f"ls -la {shlex.quote(path)}")
     if not success:
         return f"Error: {output[:100]}"
     return output.strip() or "Empty directory"
@@ -153,7 +134,7 @@ async def list_files(path: str, sandbox: Any) -> str:
 
 async def read_file(
     file_path: str,
-    sandbox: Any,
+    sandbox: _Sandbox,
     start_line: int = 1,
     num_lines: int = 100,
 ) -> str:
@@ -167,7 +148,7 @@ async def read_file(
     num_lines = min(num_lines, 50)
     end_line = start_line + num_lines - 1
     command = f"sed -n '{start_line},{end_line + 1}p' {shlex.quote(file_path)}"
-    success, output = await run_sandbox_command(sandbox, command)
+    success, output = await _run(sandbox, command)
     if not success:
         return f"Error: {output[:100]}"
     if not output.strip():
@@ -182,70 +163,65 @@ async def read_file(
     return f"Lines {start_line}-{end_line} of {file_path}:\n{output}"
 
 
-def judge_reward_factory(
+def _final_text(state: vf.State) -> str:
+    completion = state["completion"]
+    if not isinstance(completion, list) or not completion:
+        return ""
+    last = completion[-1]
+    if isinstance(last, dict):
+        return str(last.get("content", "") or "")
+    return ""
+
+
+@vf.update
+async def score_with_judge(
+    task: vf.Task,
+    state: vf.State,
+    judge: AsyncOpenAI,
     judge_model: str,
-    judge_base_url: str,
-    judge_api_key_var: str,
-):
-    ensure_keys([judge_api_key_var])
-    judge_client = AsyncOpenAI(
-        api_key=os.environ[judge_api_key_var],
-        base_url=judge_base_url,
+) -> None:
+    response = await judge.chat.completions.create(
+        model=judge_model,
+        messages=[
+            {
+                "role": "user",
+                "content": JUDGE_PROMPT.format(
+                    question=task["question"],
+                    answer=task["answer"],
+                    response=_final_text(state),
+                ),
+            }
+        ],
     )
+    text = response.choices[0].message.content or ""
+    state["judge_score"] = 1.0 if "yes" in text.lower() else 0.0
 
-    async def yes_no_judge(question: str, answer: str, response: str) -> bool:
-        judge_response = await judge_client.chat.completions.create(
-            model=judge_model,
-            messages=[
-                {
-                    "role": "user",
-                    "content": JUDGE_PROMPT.format(
-                        question=question,
-                        answer=answer,
-                        response=response,
-                    ),
-                }
-            ],
-        )
-        text = judge_response.choices[0].message.content or ""
-        return "yes" in text.lower()
 
-    @vf.reward(weight=0.4)
-    async def correct_answer(task: vf.Task, state: vf.State) -> float:
-        response = parser.parse_answer(state["completion"]) or ""
-        is_correct = await yes_no_judge(
-            str(task["question"]), str(task["answer"]), response
-        )
-        state["_is_correct"] = is_correct
-        return 1.0 if is_correct else 0.0
+@vf.reward(weight=0.4)
+async def correct_answer(task: vf.Task, state: vf.State) -> float:
+    del task
+    return float(state.get("judge_score", 0.0))
 
-    @vf.reward(weight=0.4)
-    async def correct_file_paths(task: vf.Task, state: vf.State) -> float:
-        file_path_1 = task.get("file_path")
-        file_path_2 = task.get("file_path_2")
-        if not file_path_1:
-            return 0.0
-        response = parser.parse_answer(state["completion"]) or ""
-        found_1 = await yes_no_judge(
-            "Does the response reference this file path?", str(file_path_1), response
-        )
-        state["_found_file_1"] = found_1
-        if not file_path_2:
-            state["_found_file_2"] = True
-            state["_is_single_file"] = True
-            return 1.0 if found_1 else 0.0
-        found_2 = await yes_no_judge(
-            "Does the response reference this file path?", str(file_path_2), response
-        )
-        state["_found_file_2"] = found_2
-        state["_is_single_file"] = False
-        if found_1 and found_2:
-            return 1.0
-        if found_1 or found_2:
-            return 0.3
+
+@vf.reward(weight=0.4)
+async def correct_file_paths(task: vf.Task, state: vf.State) -> float:
+    file_1 = task.get("file_path")
+    file_2 = task.get("file_path_2")
+    if not file_1:
         return 0.0
-
-    return [correct_answer, correct_file_paths]
+    response = _final_text(state)
+    found_1 = str(file_1) in response
+    state["_found_file_1"] = found_1
+    if not file_2:
+        state["_found_file_2"] = True
+        return 1.0 if found_1 else 0.0
+    found_2 = str(file_2) in response
+    state["_found_file_2"] = found_2
+    if found_1 and found_2:
+        return 1.0
+    if found_1 or found_2:
+        return 0.3
+    return 0.0
 
 
 @vf.reward(weight=0.2)
@@ -269,8 +245,7 @@ async def parallel_tool_calls(task: vf.Task, state: vf.State) -> float:
 
 @vf.reward(weight=0.0, stage="group")
 async def efficiency_bonus_for_correct(
-    tasks: list[vf.Task],
-    states: list[vf.State],
+    tasks: list[vf.Task], states: list[vf.State]
 ) -> list[float]:
     del tasks
     rewards = [0.0] * len(states)
@@ -288,132 +263,92 @@ async def efficiency_bonus_for_correct(
     return rewards
 
 
+def _load_splits(config: SweGrepTasksetConfig) -> tuple[Dataset, Dataset]:
+    dataset = load_dataset(config.dataset_name, split="train")
+    dataset = dataset.filter(lambda row: row["check"] == "Yes")
+    dataset = dataset.rename_columns({"user_query": "question", "ground_truth": "answer"})
+    drop = [name for name in ("file_chunk", "check") if name in dataset.column_names]
+    if drop:
+        dataset = dataset.remove_columns(drop)
+    split = dataset.train_test_split(test_size=1 - config.train_ratio, seed=42)
+    return split["train"], split["test"]
+
+
+def _source(config: SweGrepTasksetConfig, split: str):
+    cache: dict[str, Dataset] = {}
+
+    def _iter():
+        if not cache:
+            train, test = _load_splits(config)
+            cache["train"] = train
+            cache["test"] = test
+        for index, raw_row in enumerate(cache[split]):
+            row = cast(Mapping[str, object], raw_row)
+            question = str(row["question"])
+            yield {
+                **dict(row),
+                "example_id": index,
+                "prompt": [{"role": "user", "content": question}],
+                "max_turns": config.max_turns,
+            }
+
+    return _iter
+
+
 def load_toolset(
-    config: vf.ToolsetConfig | Mapping[str, object] | None = None,
-    sandbox_image: str = "python:3.11-slim",
-    sandbox_timeout_minutes: int = 60,
-    sandbox_command_timeout_seconds: int = 60,
-    sandbox_setup_timeout_seconds: int = 600,
+    config: vf.ToolsetConfig, taskset_config: SweGrepTasksetConfig
 ) -> vf.Toolset:
+    judge_client = AsyncOpenAI(
+        api_key=os.environ[taskset_config.judge_api_key_var],
+        base_url=taskset_config.judge_base_url,
+    )
+    sandbox = vf.SandboxConfig(
+        image="python:3.11-slim",
+        scope="rollout",
+        network_access=True,
+        timeout_minutes=60,
+        command_timeout=60,
+        setup_timeout=600,
+        setup_commands=[
+            "apt-get update && apt-get install -y git ripgrep",
+            f"git clone --depth 1 {taskset_config.repo_url} {taskset_config.repo_path}",
+            f"test -d {taskset_config.repo_path}",
+        ],
+    )
     return vf.Toolset(
         tools=[grep_tool, list_files, read_file],
-        sandbox={
-            "image": sandbox_image,
-            "scope": "rollout",
-            "network_access": True,
-            "timeout_minutes": sandbox_timeout_minutes,
-            "command_timeout": sandbox_command_timeout_seconds,
-            "setup_timeout": sandbox_setup_timeout_seconds,
-            "setup_commands": [
-                "apt-get update && apt-get install -y git ripgrep",
-                "git clone --depth 1 https://github.com/microsoft/vscode.git",
-                "test -d vscode",
-            ],
+        sandbox=sandbox,
+        bindings={
+            "score_with_judge.judge": judge_client,
+            "score_with_judge.judge_model": lambda: taskset_config.judge_model,
         },
+        updates=[score_with_judge],
         config=config,
     )
 
 
-def load_taskset(
-    config: vf.TasksetConfig | Mapping[str, object] | None = None,
-    dataset_name: str | None = None,
-    train_ratio: float | None = None,
-    max_turns: int | None = None,
-    system_prompt: str | None = None,
-    judge_model: str | None = None,
-    judge_base_url: str | None = None,
-    judge_api_key_var: str | None = None,
-    sandbox_image: str | None = None,
-    sandbox_timeout_minutes: int | None = None,
-    sandbox_command_timeout_seconds: int | None = None,
-    sandbox_setup_timeout_seconds: int | None = None,
-) -> vf.Taskset:
-    taskset_config = SweGrepTasksetConfig.from_config(
-        config,
-        dataset_name=dataset_name,
-        train_ratio=train_ratio,
-        max_turns=max_turns,
-        system_prompt=system_prompt,
-        judge_model=judge_model,
-        judge_base_url=judge_base_url,
-        judge_api_key_var=judge_api_key_var,
-        sandbox_image=sandbox_image,
-        sandbox_timeout_minutes=sandbox_timeout_minutes,
-        sandbox_command_timeout_seconds=sandbox_command_timeout_seconds,
-        sandbox_setup_timeout_seconds=sandbox_setup_timeout_seconds,
-    )
-    dataset_cache: dict[str, Dataset] = {}
-
-    def split(name: str) -> Dataset:
-        if not dataset_cache:
-            train, test = convert_dataset(
-                taskset_config.train_ratio,
-                taskset_config.dataset_name,
-            )
-            dataset_cache["train"] = train
-            dataset_cache["test"] = test
-        return dataset_cache[name]
-
+def load_taskset(config: vf.TasksetConfig) -> vf.Taskset:
+    taskset_config = SweGrepTasksetConfig.from_config(config)
     return vf.Taskset(
-        source=lambda: rows(split("train"), taskset_config.max_turns),
-        eval_source=lambda: rows(split("test"), taskset_config.max_turns),
-        system_prompt=taskset_config.system_prompt,
-        toolsets=[
-            load_toolset(
-                sandbox_image=taskset_config.sandbox_image,
-                sandbox_timeout_minutes=taskset_config.sandbox_timeout_minutes,
-                sandbox_command_timeout_seconds=taskset_config.sandbox_command_timeout_seconds,
-                sandbox_setup_timeout_seconds=taskset_config.sandbox_setup_timeout_seconds,
-            )
-        ],
+        source=_source(taskset_config, "train"),
+        eval_source=_source(taskset_config, "test"),
+        system_prompt=SYSTEM_PROMPT,
+        toolsets=[load_toolset(vf.ToolsetConfig(), taskset_config)],
         rewards=[
-            *judge_reward_factory(
-                taskset_config.judge_model,
-                taskset_config.judge_base_url,
-                taskset_config.judge_api_key_var,
-            ),
+            correct_answer,
+            correct_file_paths,
             parallel_tool_calls,
+            efficiency_bonus_for_correct,
         ],
         config=taskset_config,
     )
 
 
-def load_harness(
-    config: vf.HarnessConfig | Mapping[str, object] | None = None,
-) -> vf.Harness:
+def load_harness(config: vf.HarnessConfig) -> vf.Harness:
     return vf.Harness(config=config)
 
 
-def load_environment(
-    config: vf.EnvConfig | Mapping[str, object] | None = None,
-    dataset_name: str | None = None,
-    train_ratio: float | None = None,
-    max_turns: int | None = None,
-    system_prompt: str | None = None,
-    judge_model: str | None = None,
-    judge_base_url: str | None = None,
-    judge_api_key_var: str | None = None,
-    sandbox_image: str | None = None,
-    sandbox_timeout_minutes: int | None = None,
-    sandbox_command_timeout_seconds: int | None = None,
-    sandbox_setup_timeout_seconds: int | None = None,
-) -> vf.Env:
-    config = vf.EnvConfig.from_config(
-        config,
-        taskset=SweGrepTasksetConfig.from_config(
-            dataset_name=dataset_name,
-            train_ratio=train_ratio,
-            max_turns=max_turns,
-            system_prompt=system_prompt,
-            judge_model=judge_model,
-            judge_base_url=judge_base_url,
-            judge_api_key_var=judge_api_key_var,
-            sandbox_image=sandbox_image,
-            sandbox_timeout_minutes=sandbox_timeout_minutes,
-            sandbox_command_timeout_seconds=sandbox_command_timeout_seconds,
-            sandbox_setup_timeout_seconds=sandbox_setup_timeout_seconds,
-        ),
-    )
+def load_environment(config: vf.EnvConfig) -> vf.Env:
     return vf.Env(
         taskset=load_taskset(config=config.taskset),
         harness=load_harness(config=config.harness),

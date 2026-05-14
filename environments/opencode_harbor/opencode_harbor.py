@@ -7,23 +7,13 @@ from pydantic import Field
 
 TASKS_DIR = Path(__file__).parent / "tasks"
 
-TERMINAL_BENCH_SAMPLE_TASKS = [
-    "build-cython-ext",
-    "chess-best-move",
-    "configure-git-webserver",
-    "fix-code-vulnerability",
-    "log-summary-date-ranges",
-    "polyglot-c-py",
-    "qemu-alpine-ssh",
-    "qemu-startup",
-    "regex-log",
-    "sqlite-with-gcov",
-]
+# OpenCode harness default; surfaced here so we only forward max_turns
+# to OpenCode when the user explicitly overrides it via HarnessConfig.
+OPENCODE_DEFAULT_MAX_TURNS = 4
 
 
 class OpenCodeHarnessConfig(vf.HarnessConfig):
     disabled_tools: list[str] = Field(default_factory=lambda: ["webfetch", "question"])
-    max_turns: int = 4
 
 
 def load_taskset(config: vf.TasksetConfig) -> vf.HarborTaskset:
@@ -36,9 +26,14 @@ def load_taskset(config: vf.TasksetConfig) -> vf.HarborTaskset:
 
 def load_harness(config: vf.HarnessConfig) -> vf.OpenCode:
     harness_config = OpenCodeHarnessConfig.from_config(config)
+    max_turns = (
+        harness_config.max_turns
+        if "max_turns" in harness_config.model_fields_set
+        else OPENCODE_DEFAULT_MAX_TURNS
+    )
     return vf.OpenCode(
         disabled_tools=harness_config.disabled_tools,
-        max_turns=harness_config.max_turns,
+        max_turns=max_turns,
         config=harness_config,
     )
 
