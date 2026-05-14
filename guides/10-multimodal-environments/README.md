@@ -281,32 +281,33 @@ Assistant content is *usually* a string, but some providers return it as a list 
 
 `extract_boxed_answer(..., strict=True)` returns the contents of the *last* `\boxed{}` in the text, or `""` if there isn't one. Strict mode is important: it collapses "wrong answer" and "no commit" into the same 0.0 reward, which matches what the system prompt asked the model to produce. A more granular reward could break that out into a separate metric — see the [Rewards guide](../03-rewards/README.md) for the pattern.
 
-## Loaders
+## Loader
+
+`mode`, `num_rows`, and `seed` are env-specific knobs, so they live on a `TasksetConfig` subclass. `load_environment` takes only `config: vf.EnvConfig`, builds the typed config with the subclass constructor, and inlines the taskset construction:
 
 ```python
-def load_taskset(config, mode="multi", num_rows=12, seed=0):
-    if mode not in ("single", "multi"):
-        raise ValueError(f"mode must be 'single' or 'multi'; got {mode!r}")
-    return vf.Taskset(
-        source=source(mode, num_rows, seed),
-        system_prompt=SYSTEM_PROMPT,
-        rewards=[solved],
-        user=shape_detective_user if mode == "multi" else None,
-        config=config,
-    )
+class ShapeDetectiveTasksetConfig(vf.TasksetConfig):
+    mode: Mode = "multi"
+    num_rows: int = 12
+    seed: int = 0
 
 
-def load_environment(config, mode="multi", num_rows=12, seed=0):
+def load_environment(config: vf.EnvConfig) -> vf.Env:
+    cfg = ShapeDetectiveTasksetConfig(config.taskset)
     return vf.Env(
-        taskset=load_taskset(config=config.taskset, mode=mode, num_rows=num_rows, seed=seed)
+        taskset=vf.Taskset(
+            source=source(cfg.mode, cfg.num_rows, cfg.seed),
+            system_prompt=SYSTEM_PROMPT,
+            rewards=[solved],
+            user=shape_detective_user if cfg.mode == "multi" else None,
+            config=cfg,
+        )
     )
 ```
 
-Both loaders take `config` as their first argument — `vf.TasksetConfig` for the Taskset, `vf.EnvConfig` for the Env. Annotating the type lets the verifiers CLI coerce a raw dict (e.g. from `prime eval run -c some_config.toml`) into the right Pydantic shape automatically.
+`ShapeDetectiveTasksetConfig(config.taskset)` is the Pydantic-style subclass constructor — it accepts the loosely-typed `config.taskset` (a `BaseModel`, a raw mapping, or `None`) and returns a strict, typed object. The runtime CLI value flows through the same way: `prime eval run -x '{"mode": "single"}'` populates the field on `config.taskset` and the subclass picks it up.
 
-`source(mode, num_rows, seed)` returns the `build()` closure, which `vf.Taskset` calls on first iteration. The extra `mode` / `num_rows` / `seed` kwargs are accepted positionally on the loaders and surface through `prime eval run -x '{"mode": "single"}'`. They could also be threaded through a config subclass; for a small env like this, kwargs are simpler.
-
-The runtime `mode` validation duplicates the static `Literal["single", "multi"]` type annotation, but the type checker only catches mistakes inside the codebase — the CLI passes raw strings at runtime, and a typo there should fail loudly rather than silently fall through to "multi".
+`source(cfg.mode, cfg.num_rows, cfg.seed)` returns the `build()` closure, which `vf.Taskset` calls on first iteration. The `Literal["single", "multi"]` annotation on `mode` is enforced by Pydantic at construction, so no separate runtime check is needed.
 
 ## Pick a Model
 
@@ -381,7 +382,7 @@ A few v1 details that came up while building `shape_detective` aren't obvious fr
 - **User-callback signature is duck-typed.** The runtime calls the callback with `maybe_call_with_named_args(fn, task=task, state=state, ...)`, so any subset of `(task, state, transcript)` works. **Suggested doc fix:** name the supported parameters in the Tasksets/User section so authors don't have to read `runtime.py` to learn which arguments are injected.
 - **Custom `info` round-trips through `info["task"]`.** `Taskset._dataset_row` serializes the whole task into the dataset row's `info["task"]` field, and `to_task` deserializes it on the other side — which is why custom fields placed in `info` survive even though the Dataset's `info` column is overwritten. **Suggested doc fix:** document that `info["task"]` is a reserved key (and that user-defined fields inside `info` survive serialization because of the round-trip).
 - **`state["completion"]` is `list[dict]`, not `list[Message]`.** The harness writes dumped dicts (`message.model_dump(exclude_none=True)`) into completion at the end of each turn. Reward functions and user callbacks can index it directly. **Suggested doc fix:** clarify the runtime type of `state["completion"]` vs. `state["trajectory"]` in the State reference.
-- **Custom kwargs vs. a Config subclass.** `vf.utils.env_utils.load_environment` accepts both `config` (Pydantic-coerced) and arbitrary `**env_args` (forwarded as kwargs). Small envs can take loader kwargs directly (`mode`, `seed`); larger ones should subclass `EnvConfig`/`TasksetConfig` to add typed fields. **Suggested doc fix:** include a one-paragraph "when to use kwargs vs. subclass a Config" guideline in the Developing Environments section.
+- **Config subclasses are the only way to expose tunables.** `load_environment` takes one argument — `config: vf.EnvConfig`. Anything configurable goes on a `*TasksetConfig` (or `*HarnessConfig`) subclass and is accessed via the subclass constructor (`SubclassConfig(config.taskset)`), so the CLI's `-x '{...}'` and TOML `-c config.toml` both flow through the same typed surface. Avoid adding `**kwargs` or extra positional args to `load_environment`.
 
 ## Next
 

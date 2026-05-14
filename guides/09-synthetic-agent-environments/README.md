@@ -97,7 +97,7 @@ Two design choices keep the environment honest:
 - **Budget the oracle.** `check_window` is the agent's view of the oracle. Bound the number of calls per rollout (the TUI shows the budget as `Score-check budget`) so the agent cannot brute-force the search space. The remaining budget should be visible in every tool result.
 - **Surface remaining turns.** Tool results include the remaining turn count. The agent learns to plan instead of exploring exhaustively.
 
-This is the [`StatefulToolEnv`](../07-tool-use-and-search/README.md) pattern from the previous guide, with one extra requirement: the per-rollout state owns the generated world, not just a session handle into an external one.
+This is the same Toolset pattern from [Tool Use and Search](../07-tool-use-and-search/README.md), with one extra requirement: the per-rollout state owns the generated world, not just a session handle into an external one. Wire tools that need per-rollout context through `state` rather than module globals; the v1 `vf.Toolset` runs each tool with `task` and `state` in scope.
 
 ## Designing the Reward
 
@@ -146,7 +146,7 @@ Degrees of freedom:
 - Types of constraints
 - Tightness of constraints
 
-Use the StatefulToolEnv pattern, and in-memory data structures for the calendar + attendee information. The agent should have tools for things like:
+Use the v1 `vf.Taskset` + `vf.Toolset` pattern with per-rollout state for the calendar + attendee information. The agent should have tools for things like:
 
 - Checking attendee calendars
 - Viewing attendee constraints
@@ -165,7 +165,7 @@ Let me know when you're happy with your implementation.
 
 The prompt is doing a few specific things worth copying when you write your own:
 
-- it names the env class pattern (`StatefulToolEnv`) so the agent does not invent its own
+- it names the env pattern (`vf.Taskset` + `vf.Toolset` with per-rollout state) so the agent does not invent its own
 - it lists hard vs. soft constraints separately, which forces the scoring design to follow
 - it asks for an oracle and a random-baseline check, which yields the solvability guarantees
 - it requests a visualizer, which doubles as a debugging tool during development
