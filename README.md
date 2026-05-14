@@ -26,4 +26,5 @@ Lab Cookbook
 12. [Browser Environments](guides/11-browser-environments/README.md)
 13. [Custom Harnesses](guides/12-custom-harnesses/README.md)
 14. [Advanced Tasksets and Harnesses](guides/13-advanced-tasksets-and-harnesses/README.md)
-15. [Advanced Lab Configuration](guides/14-advanced-lab-configuration/README.md)
+
+For platform reference (accounts, secrets, Hub workflows, hosted runs, inference deployments), see [Lab Configuration](reference/lab-configuration.md).

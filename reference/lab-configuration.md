@@ -1,8 +1,8 @@
-# Advanced Lab Configuration
+# Lab Configuration
 
 A reference tour of the platform machinery that surrounds environments, evals, and training: accounts, teams, secrets, Hub workflows, hosted runs, and inference deployments.
 
-Earlier guides keep the surface small so the learning loop stays fast. This guide is the opposite: short sections covering each piece of Lab plumbing you eventually need, with pointers into the public docs for full reference.
+The guides keep the surface small so the learning loop stays fast. This page is the opposite: short sections covering each piece of Lab plumbing you eventually need, with pointers into the public docs for full reference.
 
 ## Accounts, Teams, and Billing
 
@@ -44,7 +44,7 @@ key = "PRIME_API_KEY"
 type = "openai_chat_completions"
 ```
 
-Run `prime lab sync` after editing to refresh agent guidance. Add new aliases here when bringing in a third-party provider; export the corresponding `*_API_KEY` in your shell before running anything that resolves to it.
+Add new aliases here when bringing in a third-party provider, and export the corresponding `*_API_KEY` in your shell before running anything that resolves to it. The CLI reads `endpoints.toml` directly — no `prime lab sync` step is needed.
 
 ## Environment Variables and Secrets
 
@@ -104,7 +104,7 @@ Reference: [Hosted Evaluations](https://docs.primeintellect.ai/tutorials-environ
 
 ## Training Config Reference
 
-[Training with RL](../03-training-with-rl/README.md) covers the minimal TOML. The pieces below are the ones you reach for once a basic run learns:
+[Training with RL](../guides/03-training-with-rl/README.md) covers the minimal TOML. The pieces below are the ones you reach for once a basic run learns:
 
 ```toml
 [buffer]
@@ -170,6 +170,19 @@ For team workloads, scope a request to a team without switching CLI context by s
 
 References: [Inference Overview](https://docs.primeintellect.ai/inference/overview), [Usage](https://docs.primeintellect.ai/inference/usage), [Adapter Deployments](https://docs.primeintellect.ai/inference/adapter-deployments), [Team Accounts](https://docs.primeintellect.ai/inference/team-accounts).
 
+## Workspace Health: `sync` and `doctor`
+
+Two workspace-level commands cover the "is my setup still right?" loop:
+
+```bash
+prime lab sync       # pull upstream Lab skills + agent guidance into this workspace
+prime lab doctor     # validate the workspace; print active account, team, CLI version
+```
+
+`sync` refreshes `.prime/skills/` and the local agent docs (`AGENTS.md`, `CLAUDE.md`, `environments/AGENTS.md`) from the version of Lab the CLI ships. Reach for it after `prime upgrade`, or when the bundled skills or guidance feel out of date — not after editing your own files in `configs/`. Use `--skip-docs` to refresh skills without touching agent docs, or `--skip-agent` to refresh shared Lab assets without configuring coding-agent skill roots.
+
+Run `doctor` first when a hosted run misbehaves — it surfaces the most common causes (wrong team context, missing API key, outdated CLI) before you start digging into env code.
+
 ## Where to Look Next
 
 | Topic | Public docs |
@@ -180,5 +193,3 @@ References: [Inference Overview](https://docs.primeintellect.ai/inference/overvi
 | Training models, pricing, recovery | [/hosted-training](https://docs.primeintellect.ai/hosted-training/getting-started) |
 | Inference API | [/inference](https://docs.primeintellect.ai/inference/overview) |
 | API surface | [/API/api-references](https://docs.primeintellect.ai/API/api-references) |
-
-When in doubt, `prime lab doctor` validates your workspace and prints the active account, team, and CLI version — start there before debugging hosted runs.

@@ -1,9 +1,10 @@
 # Reference
 
-Reusable details that support the guides.
+Short, cookbook-scoped summaries of the most important platform surface, with links out to the full [public docs](https://docs.primeintellect.ai) for depth. Use these when you need to look something up while working through the [guides](../guides/README.md).
 
 ## Pages
 
+- [Lab Configuration](lab-configuration.md) — accounts, teams, secrets, Hub workflows, hosted runs, inference deployments.
 - [Repository Structure](repo-structure.md)
 - [Public Docs Updates](public-docs-updates.md)
 - [Lab Product Updates](lab-product-updates.md)
