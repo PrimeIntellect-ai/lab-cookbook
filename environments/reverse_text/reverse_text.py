@@ -36,5 +36,4 @@ def load_environment(config: vf.EnvConfig) -> vf.Env:
             rewards=[lcs_reward],
             config=config.taskset,
         ),
-        harness=vf.Harness(config=config.harness),
     )

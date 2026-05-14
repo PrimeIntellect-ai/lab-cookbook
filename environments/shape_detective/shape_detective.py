@@ -237,14 +237,18 @@ class ShapeDetectiveTasksetConfig(vf.TasksetConfig):
     seed: int = 0
 
 
+class ShapeDetectiveTaskset(vf.Taskset):
+    config_type = ShapeDetectiveTasksetConfig
+
+    def __init__(self, *, config: vf.TasksetConfig | None = None, **kwargs: object) -> None:
+        cfg = ShapeDetectiveTasksetConfig.from_config(config)
+        kwargs.setdefault("source", source(cfg.mode, cfg.num_rows, cfg.seed))
+        kwargs.setdefault("system_prompt", SYSTEM_PROMPT)
+        kwargs.setdefault("rewards", [solved])
+        if cfg.mode == "multi":
+            kwargs.setdefault("user", shape_detective_user)
+        super().__init__(config=cfg, **kwargs)
+
+
 def load_environment(config: vf.EnvConfig) -> vf.Env:
-    cfg = ShapeDetectiveTasksetConfig(config.taskset)
-    return vf.Env(
-        taskset=vf.Taskset(
-            source=source(cfg.mode, cfg.num_rows, cfg.seed),
-            system_prompt=SYSTEM_PROMPT,
-            rewards=[solved],
-            user=shape_detective_user if cfg.mode == "multi" else None,
-            config=cfg,
-        )
-    )
+    return vf.Env(taskset=ShapeDetectiveTaskset(config=config.taskset))

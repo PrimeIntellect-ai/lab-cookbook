@@ -2,16 +2,16 @@ import asyncio
 import json
 import logging
 import os
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
 
+import chromadb
 import verifiers.v1 as vf
+from chromadb.api.types import Embeddable, EmbeddingFunction
+from chromadb.utils import embedding_functions
 from datasets import load_dataset
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 from verifiers import ensure_keys
-
-if TYPE_CHECKING:
-    from chromadb.api.models.Collection import Collection
 
 os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
 
@@ -23,9 +23,6 @@ HALLUCINATION_MULTIPLIER = 0.2
 FACTUAL_ERROR_MULTIPLIER = 0.5
 
 logger = logging.getLogger(__name__)
-# Module-scope semaphore: chromadb client is sync; cap concurrent thread-offloaded
-# queries so a burst of rollouts can't exhaust the default executor.
-_chroma_semaphore: asyncio.Semaphore | None = None
 
 SYSTEM_PROMPT = """You are an expert patent analyst with access to a corpus of patents in the wireless communications domain.
 
@@ -122,7 +119,16 @@ class PatentTechnicalTasksetConfig(vf.TasksetConfig):
     chroma_db_dir: str = CHROMA_DB_DIR
 
 
-def chroma_semaphore() -> asyncio.Semaphore:
+class PatentTechnicalTaskset(vf.Taskset):
+    config_type = PatentTechnicalTasksetConfig
+
+
+# Module-scope semaphore: chromadb client is sync; cap concurrent thread-offloaded
+# queries so a burst of rollouts can't exhaust the default executor.
+_chroma_semaphore: asyncio.Semaphore | None = None
+
+
+def get_chroma_semaphore() -> asyncio.Semaphore:
     global _chroma_semaphore
     if _chroma_semaphore is None:
         _chroma_semaphore = asyncio.Semaphore(100)
@@ -169,266 +175,245 @@ def normalize_id(text: str) -> str:
     return text.strip().lower().replace(" ", "_")
 
 
-class PatentCorpus:
-    def __init__(self, config: PatentTechnicalTasksetConfig):
-        self.config = config
-        self.patent_id_to_title: dict[str, str] = {}
-        self.patent_id_to_content: dict[str, str] = {}
-        self.patent_id_to_metadata: dict[str, dict[str, str]] = {}
-        self.patent_id_to_abstract: dict[str, str] = {}
-        self.patent_id_to_claims: dict[str, str] = {}
-        self.patent_id_to_description: dict[str, str] = {}
-        # chromadb.Collection has no public type stub; narrowed lazily.
-        self.collection: "Collection | None" = None
-        self.loaded = False
-
-    def load(self) -> None:
-        if self.loaded:
-            return
-        corpus = load_dataset(
-            self.config.corpus_dataset,
-            data_files=self.config.corpus_file,
-            split="train",
+def init_chroma(
+    collection: chromadb.Collection,
+    patent_id_to_title: dict[str, str],
+    patent_id_to_abstract: dict[str, str],
+) -> None:
+    all_ids = list(patent_id_to_title)
+    existing: set[str] = set()
+    for index in range(0, len(all_ids), 500):
+        batch = all_ids[index : index + 500]
+        got = collection.get(ids=batch)
+        existing.update(got.get("ids", []))
+    missing = [patent_id for patent_id in all_ids if patent_id not in existing]
+    if not missing:
+        return
+    documents: list[str] = []
+    metadatas: list[dict[str, str]] = []
+    for patent_id in missing:
+        title = patent_id_to_title[patent_id].strip()
+        abstract = patent_id_to_abstract[patent_id].strip()
+        combined_text = title + "\n\n" + abstract if abstract else title
+        if not combined_text:
+            raise ValueError("Empty title and abstract for patent_id " + patent_id)
+        documents.append(combined_text)
+        metadatas.append({"title": title, "abstract": abstract})
+    for index in range(0, len(missing), 100):
+        collection.upsert(
+            ids=missing[index : index + 100],
+            documents=documents[index : index + 100],
+            metadatas=metadatas[index : index + 100],
         )
-        for row in corpus:
-            patent_id = str(row["id"])
-            content = str(row["content"])
-            self.patent_id_to_title[patent_id] = str(row["title"])
-            self.patent_id_to_content[patent_id] = content
-            metadata = row.get("metadata") or {}
-            self.patent_id_to_metadata[patent_id] = {
-                str(key): str(value) for key, value in metadata.items()
+
+
+@dataclass(frozen=True)
+class PatentIndex:
+    collection: chromadb.Collection
+    patent_id_to_title: dict[str, str]
+    patent_id_to_content: dict[str, str]
+    patent_id_to_metadata: dict[str, dict[str, str]]
+    patent_id_to_abstract: dict[str, str]
+    patent_id_to_claims: dict[str, str]
+    patent_id_to_description: dict[str, str]
+
+
+def load_patents(config: PatentTechnicalTasksetConfig) -> PatentIndex:
+    patent_id_to_title: dict[str, str] = {}
+    patent_id_to_content: dict[str, str] = {}
+    patent_id_to_metadata: dict[str, dict[str, str]] = {}
+    patent_id_to_abstract: dict[str, str] = {}
+    patent_id_to_claims: dict[str, str] = {}
+    patent_id_to_description: dict[str, str] = {}
+    corpus = load_dataset(
+        config.corpus_dataset,
+        data_files=config.corpus_file,
+        split="train",
+    )
+    for raw_row in corpus:
+        if not isinstance(raw_row, dict):
+            raise TypeError("Corpus rows must be dicts.")
+        patent_id = str(raw_row["id"])
+        content = str(raw_row["content"])
+        patent_id_to_title[patent_id] = str(raw_row["title"])
+        patent_id_to_content[patent_id] = content
+        metadata = raw_row.get("metadata") or {}
+        patent_id_to_metadata[patent_id] = {
+            str(key): str(value) for key, value in metadata.items()
+        }
+        patent_id_to_abstract[patent_id] = extract_abstract(content)
+        patent_id_to_claims[patent_id] = extract_claims_text(content)
+        patent_id_to_description[patent_id] = extract_description(content)
+
+    openai_ef = embedding_functions.OpenAIEmbeddingFunction(
+        model_name=config.embed_model,
+        api_base=config.embed_base_url,
+        api_key=os.getenv(config.embed_api_key_var, "EMPTY"),
+    )
+    embedding_fn: EmbeddingFunction[Embeddable] = openai_ef
+    client = chromadb.PersistentClient(path=config.chroma_db_dir)
+    collection = client.get_or_create_collection(
+        name="patent_titles_abstracts_v3",
+        embedding_function=embedding_fn,
+    )
+    init_chroma(collection, patent_id_to_title, patent_id_to_abstract)
+    return PatentIndex(
+        collection=collection,
+        patent_id_to_title=patent_id_to_title,
+        patent_id_to_content=patent_id_to_content,
+        patent_id_to_metadata=patent_id_to_metadata,
+        patent_id_to_abstract=patent_id_to_abstract,
+        patent_id_to_claims=patent_id_to_claims,
+        patent_id_to_description=patent_id_to_description,
+    )
+
+
+# Module-scope patent index handle: the chroma collection + dictionaries are an
+# expensive shared resource that must be built exactly once per process. A
+# process-level handle is the only way to assert that invariant across the
+# tool closures (see environments/AGENTS.md "Rare exception").
+_patents_singleton: PatentIndex | None = None
+
+
+def _get_patents(config: PatentTechnicalTasksetConfig) -> PatentIndex:
+    global _patents_singleton
+    if _patents_singleton is None:
+        _patents_singleton = load_patents(config)
+    return _patents_singleton
+
+
+async def _search_patents(query: str, patents: PatentIndex) -> list[dict[str, str]]:
+    async with get_chroma_semaphore():
+        results = await asyncio.to_thread(
+            patents.collection.query, query_texts=[query], n_results=10
+        )
+    if not results or not results["metadatas"]:
+        raise ValueError("No results found for query: " + query)
+    output: list[dict[str, str]] = []
+    for index in range(len(results["ids"][0])):
+        output.append(
+            {
+                "patent_id": results["ids"][0][index],
+                "title": results["metadatas"][0][index]["title"],
+                "abstract": results["metadatas"][0][index].get("abstract", ""),
             }
-            self.patent_id_to_abstract[patent_id] = extract_abstract(content)
-            self.patent_id_to_claims[patent_id] = extract_claims_text(content)
-            self.patent_id_to_description[patent_id] = extract_description(content)
-        self.loaded = True
+        )
+    return output
 
-    def get_collection(self) -> "Collection":
-        self.load()
-        if self.collection is None:
-            import chromadb
-            from chromadb.utils import embedding_functions
 
-            openai_ef = embedding_functions.OpenAIEmbeddingFunction(
-                model_name=self.config.embed_model,
-                api_base=self.config.embed_base_url,
-                api_key=os.environ[self.config.embed_api_key_var],
-            )
-            client = chromadb.PersistentClient(path=self.config.chroma_db_dir)
-            self.collection = client.get_or_create_collection(
-                name="patent_titles_abstracts_v3",
-                embedding_function=openai_ef,
-            )
-            self.init_chroma()
-        return self.collection
+async def _get_metadata(patent_id: str, patents: PatentIndex) -> dict[str, str]:
+    if patent_id not in patents.patent_id_to_metadata:
+        raise ValueError("Patent not found: " + patent_id)
+    metadata = patents.patent_id_to_metadata[patent_id]
+    return {
+        "title": patents.patent_id_to_title.get(patent_id, ""),
+        "filing_date": format_date(metadata.get("filing_date", "")),
+        "grant_date": format_date(metadata.get("grant_date", "")),
+        "claim_count": metadata.get("claim_count", "0"),
+    }
 
-    def init_chroma(self) -> None:
-        assert self.collection is not None
-        all_ids = list(self.patent_id_to_title.keys())
-        existing: set[str] = set()
-        for index in range(0, len(all_ids), 500):
-            batch = all_ids[index : index + 500]
-            got = self.collection.get(ids=batch)
-            existing.update(got.get("ids", []))
-        missing = [patent_id for patent_id in all_ids if patent_id not in existing]
-        if not missing:
-            return
-        documents: list[str] = []
-        metadatas: list[dict[str, str]] = []
-        for patent_id in missing:
-            title = self.patent_id_to_title[patent_id].strip()
-            abstract = self.patent_id_to_abstract[patent_id].strip()
-            combined_text = title + "\n\n" + abstract if abstract else title
-            if not combined_text:
-                raise ValueError("Empty title and abstract for patent_id " + patent_id)
-            documents.append(combined_text)
-            metadatas.append({"title": title, "abstract": abstract})
-        batch_size = 100
-        for index in range(0, len(missing), batch_size):
-            self.collection.upsert(
-                ids=missing[index : index + batch_size],
-                documents=documents[index : index + batch_size],
-                metadatas=metadatas[index : index + batch_size],
-            )
 
-    async def search_patents(self, query: str) -> list[dict[str, str]]:
-        """Search for relevant patents using title and abstract embedding similarity.
+async def _get_abstract(patent_id: str, patents: PatentIndex) -> str:
+    if patent_id not in patents.patent_id_to_abstract:
+        raise ValueError("Patent not found: " + patent_id)
+    return patents.patent_id_to_abstract[patent_id]
 
-        Args:
-            query: The query to search for.
-        """
-        collection = self.get_collection()
-        async with chroma_semaphore():
-            results = await asyncio.to_thread(collection.query, query_texts=[query], n_results=10)
-        if not results or not results["metadatas"]:
-            raise ValueError("No results found for query: " + query)
-        output: list[dict[str, str]] = []
-        for index in range(len(results["ids"][0])):
-            output.append(
-                {
-                    "patent_id": results["ids"][0][index],
-                    "title": results["metadatas"][0][index]["title"],
-                    "abstract": results["metadatas"][0][index].get("abstract", ""),
-                }
-            )
-        return output
 
-    async def get_metadata(self, patent_id: str) -> dict[str, str]:
-        """Get patent metadata.
+async def _get_claims_text(patent_id: str, patents: PatentIndex) -> str:
+    if patent_id not in patents.patent_id_to_claims:
+        raise ValueError("Patent not found: " + patent_id)
+    return patents.patent_id_to_claims[patent_id]
 
-        Args:
-            patent_id: The ID of the patent.
-        """
-        self.load()
-        if patent_id not in self.patent_id_to_metadata:
-            raise ValueError("Patent not found: " + patent_id)
-        metadata = self.patent_id_to_metadata[patent_id]
-        return {
-            "title": self.patent_id_to_title.get(patent_id, ""),
-            "filing_date": format_date(metadata.get("filing_date", "")),
-            "grant_date": format_date(metadata.get("grant_date", "")),
-            "claim_count": metadata.get("claim_count", "0"),
-        }
 
-    async def get_abstract(self, patent_id: str) -> str:
-        """Get the full abstract text for a patent.
+async def _get_description(patent_id: str, patents: PatentIndex) -> str:
+    if patent_id not in patents.patent_id_to_description:
+        raise ValueError("Patent not found: " + patent_id)
+    description = patents.patent_id_to_description[patent_id]
+    if len(description) > 15000:
+        return description[:15000] + "\n\n[TRUNCATED - description continues...]"
+    return description
 
-        Args:
-            patent_id: The ID of the patent.
-        """
-        self.load()
-        if patent_id not in self.patent_id_to_abstract:
-            raise ValueError("Patent not found: " + patent_id)
-        return self.patent_id_to_abstract[patent_id]
 
-    async def get_claims_text(self, patent_id: str) -> str:
-        """Get the full claims section text for a patent.
+async def _get_full_content(patent_id: str, patents: PatentIndex) -> str:
+    if patent_id not in patents.patent_id_to_content:
+        raise ValueError("Patent not found: " + patent_id)
+    content = patents.patent_id_to_content[patent_id]
+    if len(content) > 20000:
+        return content[:20000] + "\n\n[TRUNCATED - content continues...]"
+    return content
 
-        Args:
-            patent_id: The ID of the patent.
-        """
-        self.load()
-        if patent_id not in self.patent_id_to_claims:
-            raise ValueError("Patent not found: " + patent_id)
-        return self.patent_id_to_claims[patent_id]
 
-    async def get_description(self, patent_id: str) -> str:
-        """Get the description section for a patent.
+async def _compare_patents(
+    patent_id_1: str, patent_id_2: str, patents: PatentIndex
+) -> dict[str, dict[str, str]]:
+    if patent_id_1 not in patents.patent_id_to_content:
+        raise ValueError("Patent not found: " + patent_id_1)
+    if patent_id_2 not in patents.patent_id_to_content:
+        raise ValueError("Patent not found: " + patent_id_2)
+    meta1 = patents.patent_id_to_metadata.get(patent_id_1, {})
+    meta2 = patents.patent_id_to_metadata.get(patent_id_2, {})
+    return {
+        "patent_1": {
+            "id": patent_id_1,
+            "title": patents.patent_id_to_title.get(patent_id_1, ""),
+            "abstract": patents.patent_id_to_abstract.get(patent_id_1, ""),
+            "filing_date": format_date(meta1.get("filing_date", "")),
+            "claim_count": meta1.get("claim_count", "0"),
+        },
+        "patent_2": {
+            "id": patent_id_2,
+            "title": patents.patent_id_to_title.get(patent_id_2, ""),
+            "abstract": patents.patent_id_to_abstract.get(patent_id_2, ""),
+            "filing_date": format_date(meta2.get("filing_date", "")),
+            "claim_count": meta2.get("claim_count", "0"),
+        },
+    }
 
-        Args:
-            patent_id: The ID of the patent.
-        """
-        self.load()
-        if patent_id not in self.patent_id_to_description:
-            raise ValueError("Patent not found: " + patent_id)
-        description = self.patent_id_to_description[patent_id]
-        if len(description) > 15000:
-            return description[:15000] + "\n\n[TRUNCATED - description continues...]"
-        return description
 
-    async def get_full_content(self, patent_id: str) -> str:
-        """Get the full content of a patent including all sections.
-
-        Args:
-            patent_id: The ID of the patent.
-        """
-        self.load()
-        if patent_id not in self.patent_id_to_content:
-            raise ValueError("Patent not found: " + patent_id)
-        content = self.patent_id_to_content[patent_id]
-        if len(content) > 20000:
-            return content[:20000] + "\n\n[TRUNCATED - content continues...]"
-        return content
-
-    async def compare_patents(
-        self, patent_id_1: str, patent_id_2: str
-    ) -> dict[str, dict[str, str]]:
-        """Get side-by-side comparison data for two patents.
-
-        Args:
-            patent_id_1: The ID of the first patent.
-            patent_id_2: The ID of the second patent.
-        """
-        self.load()
-        if patent_id_1 not in self.patent_id_to_content:
-            raise ValueError("Patent not found: " + patent_id_1)
-        if patent_id_2 not in self.patent_id_to_content:
-            raise ValueError("Patent not found: " + patent_id_2)
-        meta1 = self.patent_id_to_metadata.get(patent_id_1, {})
-        meta2 = self.patent_id_to_metadata.get(patent_id_2, {})
-        return {
-            "patent_1": {
-                "id": patent_id_1,
-                "title": self.patent_id_to_title.get(patent_id_1, ""),
-                "abstract": self.patent_id_to_abstract.get(patent_id_1, ""),
-                "filing_date": format_date(meta1.get("filing_date", "")),
-                "claim_count": meta1.get("claim_count", "0"),
-            },
-            "patent_2": {
-                "id": patent_id_2,
-                "title": self.patent_id_to_title.get(patent_id_2, ""),
-                "abstract": self.patent_id_to_abstract.get(patent_id_2, ""),
-                "filing_date": format_date(meta2.get("filing_date", "")),
-                "claim_count": meta2.get("claim_count", "0"),
-            },
-        }
-
-    async def view_sections(self, patent_id: str) -> list[dict[str, str]]:
-        """View the sections of a patent.
-
-        Args:
-            patent_id: The ID of the patent to view.
-        """
-        self.load()
-        content = self.patent_id_to_content[patent_id]
-        sections: list[dict[str, str]] = []
-        for line in content.split("\n"):
-            if line.startswith("#"):
-                section_name = line.lstrip("#").strip()
-                sections.append(
-                    {
-                        "section_id": patent_id + ":" + normalize_id(section_name),
-                        "section_name": section_name,
-                    }
-                )
-        if not sections:
+async def _view_sections(patent_id: str, patents: PatentIndex) -> list[dict[str, str]]:
+    content = patents.patent_id_to_content[patent_id]
+    sections: list[dict[str, str]] = []
+    for line in content.split("\n"):
+        if line.startswith("#"):
+            section_name = line.lstrip("#").strip()
             sections.append(
                 {
-                    "section_id": patent_id + ":full",
-                    "section_name": "Full Patent",
+                    "section_id": patent_id + ":" + normalize_id(section_name),
+                    "section_name": section_name,
                 }
             )
-        return sections
+    if not sections:
+        sections.append(
+            {
+                "section_id": patent_id + ":full",
+                "section_name": "Full Patent",
+            }
+        )
+    return sections
 
-    async def read_section(self, section_id: str) -> str:
-        """Read a section of a patent.
 
-        Args:
-            section_id: The ID of the section to read.
-        """
-        self.load()
-        if ":" not in section_id:
-            raise ValueError("Invalid section_id format. Expected: patent_id:section_name")
-        patent_id, section_name_id = section_id.split(":", 1)
-        content = self.patent_id_to_content[patent_id]
-        lines = content.split("\n")
-        if section_name_id == "full":
-            return content
-        section_start: int | None = None
-        section_end: int | None = None
-        for index, line in enumerate(lines):
-            if not line.startswith("#"):
-                continue
-            current_section = normalize_id(line.lstrip("#").strip())
-            if current_section == section_name_id and section_start is None:
-                section_start = index
-            elif section_start is not None and section_end is None:
-                section_end = index
-                break
-        if section_start is None:
-            raise ValueError("Section not found: " + section_id)
-        return "\n".join(lines[section_start : section_end or len(lines)])
+async def _read_section(section_id: str, patents: PatentIndex) -> str:
+    if ":" not in section_id:
+        raise ValueError("Invalid section_id format. Expected: patent_id:section_name")
+    patent_id, section_name_id = section_id.split(":", 1)
+    content = patents.patent_id_to_content[patent_id]
+    if section_name_id == "full":
+        return content
+    lines = content.split("\n")
+    section_start: int | None = None
+    section_end: int | None = None
+    for index, line in enumerate(lines):
+        if not line.startswith("#"):
+            continue
+        current_section = normalize_id(line.lstrip("#").strip())
+        if current_section == section_name_id and section_start is None:
+            section_start = index
+        elif section_start is not None and section_end is None:
+            section_end = index
+            break
+    if section_start is None:
+        raise ValueError("Section not found: " + section_id)
+    return "\n".join(lines[section_start : section_end or len(lines)])
 
 
 def normalize_info(value: object) -> dict:
@@ -517,28 +502,100 @@ async def judge_reward(task: vf.Task, state: vf.State) -> float:
 def load_environment(config: vf.EnvConfig) -> vf.Env:
     cfg = PatentTechnicalTasksetConfig(config.taskset)
     ensure_keys([cfg.embed_api_key_var])
-    corpus = PatentCorpus(cfg)
+
+    async def search_patents(query: str) -> list[dict[str, str]]:
+        """Search for relevant patents using title and abstract embedding similarity.
+
+        Args:
+            query: The query to search for.
+        """
+        return await _search_patents(query, _get_patents(cfg))
+
+    async def get_metadata(patent_id: str) -> dict[str, str]:
+        """Get patent metadata.
+
+        Args:
+            patent_id: The ID of the patent.
+        """
+        return await _get_metadata(patent_id, _get_patents(cfg))
+
+    async def get_abstract(patent_id: str) -> str:
+        """Get the full abstract text for a patent.
+
+        Args:
+            patent_id: The ID of the patent.
+        """
+        return await _get_abstract(patent_id, _get_patents(cfg))
+
+    async def get_claims_text(patent_id: str) -> str:
+        """Get the full claims section text for a patent.
+
+        Args:
+            patent_id: The ID of the patent.
+        """
+        return await _get_claims_text(patent_id, _get_patents(cfg))
+
+    async def get_description(patent_id: str) -> str:
+        """Get the description section for a patent.
+
+        Args:
+            patent_id: The ID of the patent.
+        """
+        return await _get_description(patent_id, _get_patents(cfg))
+
+    async def get_full_content(patent_id: str) -> str:
+        """Get the full content of a patent including all sections.
+
+        Args:
+            patent_id: The ID of the patent.
+        """
+        return await _get_full_content(patent_id, _get_patents(cfg))
+
+    async def compare_patents(
+        patent_id_1: str, patent_id_2: str
+    ) -> dict[str, dict[str, str]]:
+        """Get side-by-side comparison data for two patents.
+
+        Args:
+            patent_id_1: The ID of the first patent.
+            patent_id_2: The ID of the second patent.
+        """
+        return await _compare_patents(patent_id_1, patent_id_2, _get_patents(cfg))
+
+    async def view_sections(patent_id: str) -> list[dict[str, str]]:
+        """View the sections of a patent.
+
+        Args:
+            patent_id: The ID of the patent to view.
+        """
+        return await _view_sections(patent_id, _get_patents(cfg))
+
+    async def read_section(section_id: str) -> str:
+        """Read a section of a patent.
+
+        Args:
+            section_id: The ID of the section to read.
+        """
+        return await _read_section(section_id, _get_patents(cfg))
+
     toolset = vf.Toolset(
         tools=[
-            corpus.search_patents,
-            corpus.get_metadata,
-            corpus.get_abstract,
-            corpus.get_claims_text,
-            corpus.get_description,
-            corpus.get_full_content,
-            corpus.compare_patents,
-            corpus.view_sections,
-            corpus.read_section,
+            search_patents,
+            get_metadata,
+            get_abstract,
+            get_claims_text,
+            get_description,
+            get_full_content,
+            compare_patents,
+            view_sections,
+            read_section,
         ],
     )
-    taskset = vf.Taskset(
+    taskset = PatentTechnicalTaskset(
         source=lambda: source(cfg),
         system_prompt=SYSTEM_PROMPT,
         toolsets=[toolset],
         rewards=[judge_reward],
         config=cfg,
     )
-    return vf.Env(
-        taskset=taskset,
-        harness=vf.Harness(config=config.harness),
-    )
+    return vf.Env(taskset=taskset)

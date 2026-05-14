@@ -57,6 +57,10 @@ class WikiSearchTasksetConfig(vf.TasksetConfig):
         return self
 
 
+class WikiSearchTaskset(vf.Taskset):
+    config_type = WikiSearchTasksetConfig
+
+
 # Module-scope semaphore: chromadb client is sync; cap concurrent thread-offloaded
 # queries so a burst of rollouts can't exhaust the default executor.
 _chroma_semaphore: asyncio.Semaphore | None = None
@@ -273,14 +277,11 @@ def load_environment(config: vf.EnvConfig) -> vf.Env:
         return await _read_section(section_id, _get_wiki(cfg))
 
     toolset = vf.Toolset(tools=[search_pages, view_sections, read_section])
-    taskset = vf.Taskset(
+    taskset = WikiSearchTaskset(
         source=_source(cfg),
         system_prompt=SYSTEM_PROMPT,
         toolsets=[toolset],
         rewards=[judge_reward],
         config=cfg,
     )
-    return vf.Env(
-        taskset=taskset,
-        harness=vf.Harness(config=config.harness),
-    )
+    return vf.Env(taskset=taskset)

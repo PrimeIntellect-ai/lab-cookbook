@@ -2,23 +2,19 @@ import re
 from collections.abc import Mapping
 from pathlib import Path
 
-import verifiers as v0
 import verifiers.v1 as vf
 from textarena_taskset import TextArenaTaskset, TextArenaTasksetConfig
 
-DEFAULT_SYSTEM_PROMPT = """You are a competitive game player. \
+WORDLE_SYSTEM_PROMPT = """You are a competitive game player. \
 Make sure you read the game instructions carefully, and always follow the required format.
 
 In each turn, think step-by-step, then give your guess inside <guess>...</guess> tags."""
-
-DEFAULT_NUM_TRAIN_EXAMPLES = 2000
-DEFAULT_NUM_EVAL_EXAMPLES = 20
 
 _GUESS_PATTERN = re.compile(r"<guess>(.*?)</guess>", re.DOTALL)
 
 
 class WordleTasksetConfig(TextArenaTasksetConfig):
-    # New wordle-specific field (not on parent).
+    # Wordle-specific knob: load the system prompt from disk if set.
     path_to_system_prompt: str | None = None
 
 
@@ -115,46 +111,22 @@ async def format_reward(task: vf.Task, state: vf.State) -> float:
     return 1.0
 
 
-def _resolve_system_prompt(cfg: WordleTasksetConfig) -> str:
-    """Pick the system prompt: explicit path > cfg.system_prompt > wordle default."""
-    if cfg.path_to_system_prompt is not None:
-        message = v0.SystemMessage.from_path(Path(cfg.path_to_system_prompt).expanduser())
-        content = message.content
-        return content if isinstance(content, str) else str(content)
-    if cfg.system_prompt is not None:
-        return cfg.system_prompt if isinstance(cfg.system_prompt, str) else str(cfg.system_prompt)
-    return DEFAULT_SYSTEM_PROMPT
+class WordleTaskset(TextArenaTaskset):
+    config_type = WordleTasksetConfig
 
-
-def load_taskset(cfg: WordleTasksetConfig) -> TextArenaTaskset:
-    set_fields = cfg.model_fields_set
-    num_train_examples = (
-        cfg.num_train_examples if "num_train_examples" in set_fields else DEFAULT_NUM_TRAIN_EXAMPLES
-    )
-    num_eval_examples = (
-        cfg.num_eval_examples if "num_eval_examples" in set_fields else DEFAULT_NUM_EVAL_EXAMPLES
-    )
-    return TextArenaTaskset(
-        game=cfg.game,
-        num_train_examples=num_train_examples,
-        num_eval_examples=num_eval_examples,
-        seed=cfg.seed,
-        answer_state_key=cfg.answer_state_key,
-        feedback_fn=wordle_feedback_fn,
-        system_prompt=_resolve_system_prompt(cfg),
-        rewards=[
-            correct_answer,
-            partial_answer,
-            length_bonus,
-            format_reward,
-        ],
-        config=cfg,
-    )
+    def __init__(self, *, config: vf.TasksetConfig | None = None, **kwargs: object) -> None:
+        cfg = WordleTasksetConfig.from_config(config)
+        if cfg.path_to_system_prompt is not None:
+            cfg = WordleTasksetConfig(
+                cfg,
+                system_prompt=Path(cfg.path_to_system_prompt).expanduser().read_text(),
+            )
+        elif cfg.system_prompt is None:
+            cfg = WordleTasksetConfig(cfg, system_prompt=WORDLE_SYSTEM_PROMPT)
+        kwargs.setdefault("feedback_fn", wordle_feedback_fn)
+        kwargs.setdefault("rewards", [correct_answer, partial_answer, length_bonus, format_reward])
+        super().__init__(config=cfg, **kwargs)
 
 
 def load_environment(config: vf.EnvConfig) -> vf.Env:
-    cfg = WordleTasksetConfig(config.taskset)
-    return vf.Env(
-        taskset=load_taskset(cfg),
-        harness=vf.Harness(config=config.harness),
-    )
+    return vf.Env(taskset=WordleTaskset(config=config.taskset))

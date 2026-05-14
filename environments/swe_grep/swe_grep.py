@@ -46,6 +46,10 @@ class SweGrepTasksetConfig(vf.TasksetConfig):
     repo_path: str = "vscode"
 
 
+class SweGrepTaskset(vf.Taskset):
+    config_type = SweGrepTasksetConfig
+
+
 class _Sandbox(Protocol):
     async def execute(self, command: str) -> object: ...
 
@@ -296,7 +300,7 @@ def load_environment(config: vf.EnvConfig) -> vf.Env:
         sandbox=sandbox,
         updates=[score_with_judge],
     )
-    taskset = vf.Taskset(
+    taskset = SweGrepTaskset(
         source=_source(cfg, "train"),
         eval_source=_source(cfg, "test"),
         system_prompt=SYSTEM_PROMPT,
@@ -309,7 +313,4 @@ def load_environment(config: vf.EnvConfig) -> vf.Env:
         ],
         config=cfg,
     )
-    return vf.Env(
-        taskset=taskset,
-        harness=vf.Harness(config=config.harness),
-    )
+    return vf.Env(taskset=taskset)

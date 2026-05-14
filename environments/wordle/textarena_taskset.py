@@ -86,7 +86,7 @@ class TextArenaTaskset(Taskset):
         config: TextArenaTasksetConfig | None = None,
         **kwargs: object,
     ):
-        self.config: TextArenaTasksetConfig = TextArenaTasksetConfig.from_config(config)
+        self.config: TextArenaTasksetConfig = type(self).config_type.from_config(config)
         self.game = game if game is not None else self.config.game
         self.num_train_examples = (
             num_train_examples if num_train_examples is not None else self.config.num_train_examples

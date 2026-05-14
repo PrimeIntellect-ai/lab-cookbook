@@ -1,5 +1,4 @@
 import re
-from collections.abc import Sequence
 
 import verifiers.v1 as vf
 from datasets import load_dataset
@@ -64,6 +63,15 @@ class EthicsDebateTasksetConfig(vf.TasksetConfig):
 class EthicsDebateTaskset(vf.Taskset):
     config_type = EthicsDebateTasksetConfig
 
+    def __init__(self, *, config: vf.TasksetConfig | None = None, **kwargs: object) -> None:
+        cfg = EthicsDebateTasksetConfig.from_config(config)
+        kwargs.setdefault("source", lambda: source(cfg))
+        kwargs.setdefault("system_prompt", SYSTEM_PROMPT)
+        kwargs.setdefault("user", debate_user)
+        kwargs.setdefault("setups", [setup_debate])
+        kwargs.setdefault("rewards", [argument_quality])
+        super().__init__(config=cfg, **kwargs)
+
 
 def content_text(content: str | list | None, separator: str = "\n") -> str:
     if isinstance(content, str):
@@ -79,10 +87,10 @@ def content_text(content: str | list | None, separator: str = "\n") -> str:
     return ""
 
 
-def last_assistant_text(transcript: Sequence[vf.Message | vf.ConfigMap]) -> str:
+def last_assistant_text(transcript: list[vf.Message]) -> str:
     for message in reversed(transcript):
-        if isinstance(message, dict) and message.get("role") == "assistant":
-            return content_text(message.get("content"))
+        if message.role == "assistant":
+            return content_text(message.content)
     return ""
 
 
@@ -151,7 +159,7 @@ async def setup_debate(task: vf.Task, state: vf.State) -> None:
 async def debate_user(
     task: vf.Task,
     state: vf.State,
-    transcript: Sequence[vf.Message | vf.ConfigMap],
+    transcript: list[vf.Message],
 ) -> list[dict[str, str]]:
     actor = str(state.get("debate_actor") or ARGUER)
     handoff = parse_handoff(actor, last_assistant_text(transcript))
@@ -210,14 +218,4 @@ async def argument_quality(task: vf.Task, state: vf.State) -> float:
 
 
 def load_environment(config: vf.EnvConfig) -> vf.Env:
-    cfg = EthicsDebateTasksetConfig(config.taskset)
-    return vf.Env(
-        taskset=EthicsDebateTaskset(
-            source=lambda: source(cfg),
-            system_prompt=SYSTEM_PROMPT,
-            user=debate_user,
-            setups=[setup_debate],
-            rewards=[argument_quality],
-            config=cfg,
-        ),
-    )
+    return vf.Env(taskset=EthicsDebateTaskset(config=config.taskset))
