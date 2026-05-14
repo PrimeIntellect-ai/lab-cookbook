@@ -64,22 +64,28 @@ This gives the model a natural retrieval path: search broadly, choose a page, in
 
 The `wiki-search` implementation follows the Taskset pattern. The Taskset is where tasks, tools, prompts, and rewards come together.
 
-Conceptually, it looks like this:
+Conceptually, `load_environment` looks like this:
 
 ```python
 import verifiers.v1 as vf
 
 
-def load_taskset(...):
-    return vf.Taskset(
-        source=build_source(max_turns=max_turns),
-        system_prompt=SYSTEM_PROMPT,
-        toolsets=[load_toolset(...)],
-        rewards=[judge_reward_factory(...)],
+def load_environment(config: vf.EnvConfig) -> vf.Env:
+    cfg = WikiSearchTasksetConfig(config.taskset)
+    toolset = vf.Toolset(tools=[search_pages, view_sections, read_section])
+    return vf.Env(
+        taskset=vf.Taskset(
+            source=build_source(cfg),
+            system_prompt=SYSTEM_PROMPT,
+            toolsets=[toolset],
+            rewards=[judge_reward],
+            config=cfg,
+        ),
+        harness=vf.Harness(config=config.harness),
     )
 ```
 
-The source yields task rows with a user prompt, answer, example ID, and turn limit. The toolset exposes the search tools and binds them to a loaded Wikipedia index. The reward checks the model's final answer against the reference answer.
+The source yields task rows with a user prompt, answer, example ID, and turn limit. The toolset exposes the search tools that look up content in a Wikipedia index built once at process start. `judge_reward` is a module-level `@vf.reward` function that pulls the env's primary endpoint via `state.get_endpoint_config(api="chat")` to call a judge, then scores the model's final answer against the reference.
 
 You do not need a custom harness for this pattern. The default tool-use loop is enough: the model calls tools, receives tool results, and eventually responds with a final answer.
 

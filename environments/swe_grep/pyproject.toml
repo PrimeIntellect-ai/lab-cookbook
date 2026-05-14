@@ -5,7 +5,7 @@ tags = ["train", "eval", "v1", "taskset", "harness"]
 version = "0.3.3"
 requires-python = ">=3.10"
 dependencies = [
-    "verifiers>=0.1.14",
+    "verifiers>=0.1.15.dev4",
 ]
 
 [build-system]

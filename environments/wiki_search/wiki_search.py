@@ -1,9 +1,6 @@
-from __future__ import annotations
-
 import asyncio
 import os
-from collections.abc import Mapping
-from typing import cast
+from dataclasses import dataclass
 
 import chromadb
 import verifiers.v1 as vf
@@ -13,7 +10,7 @@ from datasets import load_dataset
 from openai import AsyncOpenAI
 from pydantic import model_validator
 from typing_extensions import Self
-from verifiers import Parser, ensure_keys
+from verifiers import ensure_keys
 
 CHROMA_DB_DIR = ".chroma_db"
 
@@ -47,9 +44,6 @@ class WikiSearchTasksetConfig(vf.TasksetConfig):
     dataset_split: str = "train"
     max_examples: int | None = None
     max_turns: int = 10
-    judge_model: str = "gpt-4.1-mini"
-    judge_base_url: str = "https://api.openai.com/v1"
-    judge_api_key_var: str = "OPENAI_API_KEY"
     embed_model: str = "text-embedding-3-small"
     embed_base_url: str = "https://api.openai.com/v1"
     embed_api_key_var: str = "OPENAI_API_KEY"
@@ -58,13 +52,13 @@ class WikiSearchTasksetConfig(vf.TasksetConfig):
     chroma_db_dir: str = CHROMA_DB_DIR
 
     @model_validator(mode="after")
-    def _ensure_required_keys(self) -> Self:
-        ensure_keys([self.judge_api_key_var, self.embed_api_key_var])
+    def _ensure_required_keys(self) -> "Self":
+        ensure_keys([self.embed_api_key_var])
         return self
 
 
-parser = Parser()
-
+# Module-scope semaphore: chromadb client is sync; cap concurrent thread-offloaded
+# queries so a burst of rollouts can't exhaust the default executor.
 _chroma_semaphore: asyncio.Semaphore | None = None
 
 
@@ -105,41 +99,60 @@ def init_chroma(collection, page_id_to_title: dict[str, str]) -> None:
         )
 
 
-def load_wiki(config: WikiSearchTasksetConfig) -> dict[str, object]:
+@dataclass(frozen=True)
+class WikiIndex:
+    collection: chromadb.Collection
+    page_id_to_title: dict[str, str]
+    page_id_to_content: dict[str, str]
+
+
+def load_wiki(config: WikiSearchTasksetConfig) -> WikiIndex:
     page_id_to_title: dict[str, str] = {}
     page_id_to_content: dict[str, str] = {}
     corpus = load_dataset(config.corpus_dataset, split=config.corpus_split)
     for raw_row in corpus:
-        row = cast(Mapping[str, object], raw_row)
-        page_id = str(row["id"])
-        page_id_to_title[page_id] = str(row["title"])
-        page_id_to_content[page_id] = str(row["content"])
+        if not isinstance(raw_row, dict):
+            raise TypeError("Corpus rows must be dicts.")
+        page_id = str(raw_row["id"])
+        page_id_to_title[page_id] = str(raw_row["title"])
+        page_id_to_content[page_id] = str(raw_row["content"])
 
     openai_ef = embedding_functions.OpenAIEmbeddingFunction(
         model_name=config.embed_model,
         api_base=config.embed_base_url,
         api_key=os.getenv(config.embed_api_key_var, "EMPTY"),
     )
+    embedding_fn: EmbeddingFunction[Embeddable] = openai_ef
     client = chromadb.PersistentClient(path=config.chroma_db_dir)
     collection = client.get_or_create_collection(
         name="wiki_titles",
-        embedding_function=cast(EmbeddingFunction[Embeddable], openai_ef),
+        embedding_function=embedding_fn,
     )
     init_chroma(collection, page_id_to_title)
-    return {
-        "collection": collection,
-        "page_id_to_title": page_id_to_title,
-        "page_id_to_content": page_id_to_content,
-    }
+    return WikiIndex(
+        collection=collection,
+        page_id_to_title=page_id_to_title,
+        page_id_to_content=page_id_to_content,
+    )
 
 
-async def search_pages(query: str, wiki: dict[str, object]) -> list[dict[str, str]]:
-    """Search for top 10 relevant articles using title embedding similarity."""
-    collection = cast(chromadb.Collection, wiki["collection"])
+# Module-scope wiki index handle: the chroma collection + dictionaries are an
+# expensive shared resource that must be built exactly once per process. A
+# process-level handle is the only way to assert that invariant across the
+# tool closures (see environments/AGENTS.md "Rare exception").
+_wiki_singleton: WikiIndex | None = None
+
+
+def _get_wiki(config: WikiSearchTasksetConfig) -> WikiIndex:
+    global _wiki_singleton
+    if _wiki_singleton is None:
+        _wiki_singleton = load_wiki(config)
+    return _wiki_singleton
+
+
+async def _search_pages(query: str, wiki: WikiIndex) -> list[dict[str, str]]:
     async with get_chroma_semaphore():
-        results = await asyncio.to_thread(
-            collection.query, query_texts=[query], n_results=10
-        )
+        results = await asyncio.to_thread(wiki.collection.query, query_texts=[query], n_results=10)
     if not results or not results["metadatas"]:
         raise ValueError(f"No results found for query: {query}")
     output: list[dict[str, str]] = []
@@ -153,10 +166,8 @@ async def search_pages(query: str, wiki: dict[str, object]) -> list[dict[str, st
     return output
 
 
-async def view_sections(page_id: str, wiki: dict[str, object]) -> list[dict[str, str]]:
-    """View the sections of a page."""
-    page_id_to_content = cast(dict[str, str], wiki["page_id_to_content"])
-    content = page_id_to_content[page_id]
+async def _view_sections(page_id: str, wiki: WikiIndex) -> list[dict[str, str]]:
+    content = wiki.page_id_to_content[page_id]
     sections: list[dict[str, str]] = []
     for line in content.split("\n"):
         if line.startswith("#"):
@@ -177,13 +188,11 @@ async def view_sections(page_id: str, wiki: dict[str, object]) -> list[dict[str,
     return sections
 
 
-async def read_section(section_id: str, wiki: dict[str, object]) -> str:
-    """Read a section of a page."""
+async def _read_section(section_id: str, wiki: WikiIndex) -> str:
     if ":" not in section_id:
         raise ValueError("Invalid section_id format. Expected: page_id:section_name")
     page_id, section_name_id = section_id.split(":", 1)
-    page_id_to_content = cast(dict[str, str], wiki["page_id_to_content"])
-    content = page_id_to_content[page_id]
+    content = wiki.page_id_to_content[page_id]
     if section_name_id == "full":
         return content
     lines = content.split("\n")
@@ -203,97 +212,75 @@ async def read_section(section_id: str, wiki: dict[str, object]) -> str:
     return "\n".join(lines[section_start : section_end or len(lines)])
 
 
-def source(config: WikiSearchTasksetConfig):
+def _source(config: WikiSearchTasksetConfig):
     def _iter():
         dataset = load_dataset(config.dataset_name, split=config.dataset_split)
         for index, raw_row in enumerate(dataset):
             if config.max_examples is not None and index >= config.max_examples:
                 break
-            row = cast(Mapping[str, object], raw_row)
+            if not isinstance(raw_row, dict):
+                raise TypeError("Dataset rows must be dicts.")
             yield {
-                **dict(row),
+                **raw_row,
                 "example_id": index,
                 "max_turns": config.max_turns,
-                "prompt": [{"role": "user", "content": str(row["question"])}],
+                "prompt": [{"role": "user", "content": str(raw_row["question"])}],
             }
 
     return _iter
 
 
-# TODO(verifiers#1362): collapse this update+reward pair into a single
-# @vf.reward once PR 1362 lands. Rewards currently can't receive Toolset
-# binding injection (`_toolset_binding_targets` only registers tool/stop/
-# setup/update/cleanup callables), so the judge client has to be bound to
-# an @vf.update that stages `judge_score` into state for a trivial reward
-# reader. When 1362 merges, delete `score_with_judge`, move the body into
-# `judge_reward`, and bind `judge` + `judge_model` directly to it.
-@vf.update
-async def score_with_judge(
-    task: vf.Task,
-    state: vf.State,
-    judge: AsyncOpenAI,
-    judge_model: str,
-) -> None:
+@vf.reward(weight=1.0)
+async def judge_reward(task: vf.Task, state: vf.State) -> float:
+    completion = state.get("completion") or []
+    response_text = ""
+    for message in reversed(completion):
+        if isinstance(message, dict) and message.get("role") == "assistant":
+            response_text = str(message.get("content") or "")
+            break
+    endpoint = state.get_endpoint_config(api="chat")
+    judge = AsyncOpenAI(api_key=endpoint["api_key"], base_url=endpoint["api_base"])
     response = await judge.chat.completions.create(
-        model=judge_model,
+        model=endpoint["model"],
         messages=[
             {
                 "role": "user",
                 "content": JUDGE_PROMPT.format(
                     question=task["question"],
                     answer=task["answer"],
-                    response=parser.parse_answer(state["completion"]) or "",
+                    response=response_text,
                 ),
             }
         ],
     )
     text = response.choices[0].message.content or ""
-    state["judge_score"] = 1.0 if "yes" in text.lower() else 0.0
-
-
-@vf.reward(weight=1.0)
-async def judge_reward(task: vf.Task, state: vf.State) -> float:
-    del task
-    return float(state.get("judge_score", 0.0))
-
-
-def load_toolset(config: vf.ToolsetConfig, taskset_config: WikiSearchTasksetConfig) -> vf.Toolset:
-    judge_client = AsyncOpenAI(
-        api_key=os.environ[taskset_config.judge_api_key_var],
-        base_url=taskset_config.judge_base_url,
-    )
-    return vf.Toolset(
-        tools=[search_pages, view_sections, read_section],
-        objects={"wiki": lambda: load_wiki(taskset_config)},
-        bindings={
-            "search_pages.wiki": "objects.wiki",
-            "view_sections.wiki": "objects.wiki",
-            "read_section.wiki": "objects.wiki",
-            "score_with_judge.judge": judge_client,
-            "score_with_judge.judge_model": lambda: taskset_config.judge_model,
-        },
-        updates=[score_with_judge],
-        config=config,
-    )
-
-
-def load_taskset(config: vf.TasksetConfig) -> vf.Taskset:
-    taskset_config = WikiSearchTasksetConfig.from_config(config)
-    return vf.Taskset(
-        source=source(taskset_config),
-        system_prompt=SYSTEM_PROMPT,
-        toolsets=[load_toolset(vf.ToolsetConfig(), taskset_config)],
-        rewards=[judge_reward],
-        config=taskset_config,
-    )
-
-
-def load_harness(config: vf.HarnessConfig) -> vf.Harness:
-    return vf.Harness(config=config)
+    return 1.0 if "yes" in text.lower() else 0.0
 
 
 def load_environment(config: vf.EnvConfig) -> vf.Env:
+    cfg = WikiSearchTasksetConfig(config.taskset)
+
+    async def search_pages(query: str) -> list[dict[str, str]]:
+        """Search for top 10 relevant articles using title embedding similarity."""
+        return await _search_pages(query, _get_wiki(cfg))
+
+    async def view_sections(page_id: str) -> list[dict[str, str]]:
+        """View the sections of a page."""
+        return await _view_sections(page_id, _get_wiki(cfg))
+
+    async def read_section(section_id: str) -> str:
+        """Read a section of a page."""
+        return await _read_section(section_id, _get_wiki(cfg))
+
+    toolset = vf.Toolset(tools=[search_pages, view_sections, read_section])
+    taskset = vf.Taskset(
+        source=_source(cfg),
+        system_prompt=SYSTEM_PROMPT,
+        toolsets=[toolset],
+        rewards=[judge_reward],
+        config=cfg,
+    )
     return vf.Env(
-        taskset=load_taskset(config=config.taskset),
-        harness=load_harness(config=config.harness),
+        taskset=taskset,
+        harness=vf.Harness(config=config.harness),
     )

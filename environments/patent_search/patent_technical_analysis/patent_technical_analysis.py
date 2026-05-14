@@ -1,17 +1,17 @@
-from __future__ import annotations
-
 import asyncio
 import json
 import logging
 import os
-from collections.abc import Mapping
-from typing import Any, cast
+from typing import TYPE_CHECKING
 
 import verifiers.v1 as vf
 from datasets import load_dataset
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
-from verifiers import Parser, ensure_keys
+from verifiers import ensure_keys
+
+if TYPE_CHECKING:
+    from chromadb.api.models.Collection import Collection
 
 os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
 
@@ -23,6 +23,8 @@ HALLUCINATION_MULTIPLIER = 0.2
 FACTUAL_ERROR_MULTIPLIER = 0.5
 
 logger = logging.getLogger(__name__)
+# Module-scope semaphore: chromadb client is sync; cap concurrent thread-offloaded
+# queries so a burst of rollouts can't exhaust the default executor.
 _chroma_semaphore: asyncio.Semaphore | None = None
 
 SYSTEM_PROMPT = """You are an expert patent analyst with access to a corpus of patents in the wireless communications domain.
@@ -111,10 +113,6 @@ VERDICT:
 
 
 class PatentTechnicalTasksetConfig(vf.TasksetConfig):
-    max_turns: int = 10
-    judge_model: str = "gpt-4.1"
-    judge_base_url: str = "https://api.openai.com/v1"
-    judge_api_key_var: str = "OPENAI_API_KEY"
     embed_model: str = "text-embedding-3-small"
     embed_base_url: str = "https://api.openai.com/v1"
     embed_api_key_var: str = "OPENAI_API_KEY"
@@ -122,7 +120,6 @@ class PatentTechnicalTasksetConfig(vf.TasksetConfig):
     corpus_file: str = "patents_formatted.json"
     qa_file: str = "patent_qa_level3.jsonl"
     chroma_db_dir: str = CHROMA_DB_DIR
-    system_prompt: str | None = SYSTEM_PROMPT
 
 
 def chroma_semaphore() -> asyncio.Semaphore:
@@ -172,19 +169,17 @@ def normalize_id(text: str) -> str:
     return text.strip().lower().replace(" ", "_")
 
 
-parser = Parser()
-
-
 class PatentCorpus:
     def __init__(self, config: PatentTechnicalTasksetConfig):
         self.config = config
         self.patent_id_to_title: dict[str, str] = {}
         self.patent_id_to_content: dict[str, str] = {}
-        self.patent_id_to_metadata: dict[str, dict] = {}
+        self.patent_id_to_metadata: dict[str, dict[str, str]] = {}
         self.patent_id_to_abstract: dict[str, str] = {}
         self.patent_id_to_claims: dict[str, str] = {}
         self.patent_id_to_description: dict[str, str] = {}
-        self.collection: Any | None = None
+        # chromadb.Collection has no public type stub; narrowed lazily.
+        self.collection: "Collection | None" = None
         self.loaded = False
 
     def load(self) -> None:
@@ -195,23 +190,24 @@ class PatentCorpus:
             data_files=self.config.corpus_file,
             split="train",
         )
-        for raw_row in corpus:
-            row = cast(dict[str, Any], raw_row)
+        for row in corpus:
             patent_id = str(row["id"])
             content = str(row["content"])
             self.patent_id_to_title[patent_id] = str(row["title"])
             self.patent_id_to_content[patent_id] = content
-            self.patent_id_to_metadata[patent_id] = cast(dict, row.get("metadata", {}))
+            metadata = row.get("metadata") or {}
+            self.patent_id_to_metadata[patent_id] = {
+                str(key): str(value) for key, value in metadata.items()
+            }
             self.patent_id_to_abstract[patent_id] = extract_abstract(content)
             self.patent_id_to_claims[patent_id] = extract_claims_text(content)
             self.patent_id_to_description[patent_id] = extract_description(content)
         self.loaded = True
 
-    def get_collection(self):
+    def get_collection(self) -> "Collection":
         self.load()
         if self.collection is None:
             import chromadb
-            from chromadb.api.types import Embeddable, EmbeddingFunction
             from chromadb.utils import embedding_functions
 
             openai_ef = embedding_functions.OpenAIEmbeddingFunction(
@@ -222,12 +218,13 @@ class PatentCorpus:
             client = chromadb.PersistentClient(path=self.config.chroma_db_dir)
             self.collection = client.get_or_create_collection(
                 name="patent_titles_abstracts_v3",
-                embedding_function=cast(EmbeddingFunction[Embeddable], openai_ef),
+                embedding_function=openai_ef,
             )
             self.init_chroma()
         return self.collection
 
     def init_chroma(self) -> None:
+        assert self.collection is not None
         all_ids = list(self.patent_id_to_title.keys())
         existing: set[str] = set()
         for index in range(0, len(all_ids), 500):
@@ -255,7 +252,7 @@ class PatentCorpus:
                 metadatas=metadatas[index : index + batch_size],
             )
 
-    async def search_patents(self, query: str) -> list[dict]:
+    async def search_patents(self, query: str) -> list[dict[str, str]]:
         """Search for relevant patents using title and abstract embedding similarity.
 
         Args:
@@ -266,7 +263,7 @@ class PatentCorpus:
             results = await asyncio.to_thread(collection.query, query_texts=[query], n_results=10)
         if not results or not results["metadatas"]:
             raise ValueError("No results found for query: " + query)
-        output = []
+        output: list[dict[str, str]] = []
         for index in range(len(results["ids"][0])):
             output.append(
                 {
@@ -277,7 +274,7 @@ class PatentCorpus:
             )
         return output
 
-    async def get_metadata(self, patent_id: str) -> dict:
+    async def get_metadata(self, patent_id: str) -> dict[str, str]:
         """Get patent metadata.
 
         Args:
@@ -289,9 +286,9 @@ class PatentCorpus:
         metadata = self.patent_id_to_metadata[patent_id]
         return {
             "title": self.patent_id_to_title.get(patent_id, ""),
-            "filing_date": format_date(str(metadata.get("filing_date", ""))),
-            "grant_date": format_date(str(metadata.get("grant_date", ""))),
-            "claim_count": metadata.get("claim_count", 0),
+            "filing_date": format_date(metadata.get("filing_date", "")),
+            "grant_date": format_date(metadata.get("grant_date", "")),
+            "claim_count": metadata.get("claim_count", "0"),
         }
 
     async def get_abstract(self, patent_id: str) -> str:
@@ -344,7 +341,9 @@ class PatentCorpus:
             return content[:20000] + "\n\n[TRUNCATED - content continues...]"
         return content
 
-    async def compare_patents(self, patent_id_1: str, patent_id_2: str) -> dict:
+    async def compare_patents(
+        self, patent_id_1: str, patent_id_2: str
+    ) -> dict[str, dict[str, str]]:
         """Get side-by-side comparison data for two patents.
 
         Args:
@@ -363,19 +362,19 @@ class PatentCorpus:
                 "id": patent_id_1,
                 "title": self.patent_id_to_title.get(patent_id_1, ""),
                 "abstract": self.patent_id_to_abstract.get(patent_id_1, ""),
-                "filing_date": format_date(str(meta1.get("filing_date", ""))),
-                "claim_count": meta1.get("claim_count", 0),
+                "filing_date": format_date(meta1.get("filing_date", "")),
+                "claim_count": meta1.get("claim_count", "0"),
             },
             "patent_2": {
                 "id": patent_id_2,
                 "title": self.patent_id_to_title.get(patent_id_2, ""),
                 "abstract": self.patent_id_to_abstract.get(patent_id_2, ""),
-                "filing_date": format_date(str(meta2.get("filing_date", ""))),
-                "claim_count": meta2.get("claim_count", 0),
+                "filing_date": format_date(meta2.get("filing_date", "")),
+                "claim_count": meta2.get("claim_count", "0"),
             },
         }
 
-    async def view_sections(self, patent_id: str) -> list[dict]:
+    async def view_sections(self, patent_id: str) -> list[dict[str, str]]:
         """View the sections of a patent.
 
         Args:
@@ -383,15 +382,14 @@ class PatentCorpus:
         """
         self.load()
         content = self.patent_id_to_content[patent_id]
-        sections = []
-        for line_number, line in enumerate(content.split("\n")):
+        sections: list[dict[str, str]] = []
+        for line in content.split("\n"):
             if line.startswith("#"):
                 section_name = line.lstrip("#").strip()
                 sections.append(
                     {
                         "section_id": patent_id + ":" + normalize_id(section_name),
                         "section_name": section_name,
-                        "start_line": line_number,
                     }
                 )
         if not sections:
@@ -399,13 +397,9 @@ class PatentCorpus:
                 {
                     "section_id": patent_id + ":full",
                     "section_name": "Full Patent",
-                    "start_line": 0,
                 }
             )
-        return [
-            {"section_id": section["section_id"], "section_name": section["section_name"]}
-            for section in sections
-        ]
+        return sections
 
     async def read_section(self, section_id: str) -> str:
         """Read a section of a patent.
@@ -421,8 +415,8 @@ class PatentCorpus:
         lines = content.split("\n")
         if section_name_id == "full":
             return content
-        section_start = None
-        section_end = None
+        section_start: int | None = None
+        section_end: int | None = None
         for index, line in enumerate(lines):
             if not line.startswith("#"):
                 continue
@@ -447,91 +441,84 @@ def normalize_info(value: object) -> dict:
 
 def source(config: PatentTechnicalTasksetConfig):
     dataset = load_dataset(config.corpus_dataset, data_files=config.qa_file, split="train")
-    for index, raw_row in enumerate(dataset):
-        row = cast(Mapping[str, object], raw_row)
+    for index, row in enumerate(dataset):
         question = str(row["question"])
         yield {
             **dict(row),
             "example_id": index,
             "prompt": [{"role": "user", "content": question}],
             "info": normalize_info(row.get("info", {})),
-            "max_turns": config.max_turns,
         }
 
 
-def judge_reward_factory(config: PatentTechnicalTasksetConfig):
-    ensure_keys([config.judge_api_key_var])
-    judge_client = AsyncOpenAI(
-        api_key=os.environ[config.judge_api_key_var],
-        base_url=config.judge_base_url,
+@vf.reward(weight=1.0)
+async def judge_reward(task: vf.Task, state: vf.State) -> float:
+    info = normalize_info(task.get("info", {}))
+    ground_truth = info.get("ground_truth", {})
+    key_points = ground_truth.get("key_points", [])
+    if not key_points:
+        logger.error("[JUDGE] No key_points found in task info")
+        return 0.0
+    key_points_checklist = "".join(
+        f"{index}. {key_point}\n" for index, key_point in enumerate(key_points, start=1)
     )
-
-    @vf.reward(weight=1.0)
-    async def judge_reward(task: vf.Task, state: vf.State) -> float:
-        info = normalize_info(task.get("info", {}))
-        ground_truth = info.get("ground_truth", {})
-        key_points = ground_truth.get("key_points", [])
-        if not key_points:
-            logger.error("[JUDGE] No key_points found in task info")
-            return 0.0
-        key_points_checklist = "".join(
-            f"{index}. {key_point}\n" for index, key_point in enumerate(key_points, start=1)
+    source_quotes = ground_truth.get("source_quotes", [])
+    source_quotes_text = (
+        "\n".join("- " + str(source_quote) for source_quote in source_quotes)
+        if source_quotes
+        else "N/A"
+    )
+    completion = state["completion"]
+    last_assistant = next(
+        (msg for msg in reversed(completion) if msg.get("role") == "assistant"),
+        None,
+    )
+    response_text = str(last_assistant["content"]) if last_assistant else ""
+    formatted_prompt = JUDGE_PROMPT.format(
+        question=task["question"],
+        answer=task["answer"],
+        source_quotes=source_quotes_text,
+        response=response_text,
+        key_points_checklist=key_points_checklist,
+    )
+    endpoint = state.get_endpoint_config(api="chat")
+    judge_client = AsyncOpenAI(api_key=endpoint["api_key"], base_url=endpoint["api_base"])
+    try:
+        judge_response = await judge_client.chat.completions.create(
+            model=endpoint["model"],
+            messages=[{"role": "user", "content": formatted_prompt}],
+            temperature=0.0,
+            max_tokens=2048,
         )
-        source_quotes = ground_truth.get("source_quotes", [])
-        source_quotes_text = (
-            "\n".join("- " + str(source_quote) for source_quote in source_quotes)
-            if source_quotes
-            else "N/A"
-        )
-        formatted_prompt = JUDGE_PROMPT.format(
-            question=task["question"],
-            answer=task["answer"],
-            source_quotes=source_quotes_text,
-            response=parser.parse_answer(state["completion"]) or "",
-            key_points_checklist=key_points_checklist,
-        )
-        try:
-            judge_response = await judge_client.chat.completions.create(
-                model=config.judge_model,
-                messages=[{"role": "user", "content": formatted_prompt}],
-                temperature=0.0,
-                max_tokens=2048,
-            )
-            response_text = (judge_response.choices[0].message.content or "").strip()
-        except Exception as exc:
-            logger.error("[JUDGE] LLM call failed: %s", exc)
-            return 0.0
-        json_start = response_text.find("{")
-        json_end = response_text.rfind("}") + 1
-        if json_start == -1 or json_end == 0:
-            logger.error("[JUDGE] No JSON block found in judge response")
-            return 0.0
-        try:
-            evaluation = json.loads(response_text[json_start:json_end])
-        except json.JSONDecodeError as exc:
-            logger.error("[JUDGE] JSON parse failed: %s", exc)
-            return 0.0
-        key_point_results = evaluation.get("key_points", [])
-        covered_count = sum(1 for key_point in key_point_results if key_point.get("covered", False))
-        score = covered_count / len(key_points)
-        if evaluation.get("hallucination", False):
-            score *= HALLUCINATION_MULTIPLIER
-        if evaluation.get("factual_error", False):
-            score *= FACTUAL_ERROR_MULTIPLIER
-        return max(0.0, min(1.0, score))
-
-    return judge_reward
+        response_text_judge = (judge_response.choices[0].message.content or "").strip()
+    except Exception as exc:
+        logger.error("[JUDGE] LLM call failed: %s", exc)
+        return 0.0
+    json_start = response_text_judge.find("{")
+    json_end = response_text_judge.rfind("}") + 1
+    if json_start == -1 or json_end == 0:
+        logger.error("[JUDGE] No JSON block found in judge response")
+        return 0.0
+    try:
+        evaluation = json.loads(response_text_judge[json_start:json_end])
+    except json.JSONDecodeError as exc:
+        logger.error("[JUDGE] JSON parse failed: %s", exc)
+        return 0.0
+    key_point_results = evaluation.get("key_points", [])
+    covered_count = sum(1 for key_point in key_point_results if key_point.get("covered", False))
+    score = covered_count / len(key_points)
+    if evaluation.get("hallucination", False):
+        score *= HALLUCINATION_MULTIPLIER
+    if evaluation.get("factual_error", False):
+        score *= FACTUAL_ERROR_MULTIPLIER
+    return max(0.0, min(1.0, score))
 
 
-def load_toolset(
-    config: vf.ToolsetConfig | Mapping[str, object] | None = None,
-    taskset_config: PatentTechnicalTasksetConfig | None = None,
-) -> vf.Toolset:
-    if taskset_config is None:
-        taskset_config = PatentTechnicalTasksetConfig()
-    ensure_keys([taskset_config.embed_api_key_var])
-    corpus = PatentCorpus(taskset_config)
-    return vf.Toolset(
+def load_environment(config: vf.EnvConfig) -> vf.Env:
+    cfg = PatentTechnicalTasksetConfig(config.taskset)
+    ensure_keys([cfg.embed_api_key_var])
+    corpus = PatentCorpus(cfg)
+    toolset = vf.Toolset(
         tools=[
             corpus.search_patents,
             corpus.get_metadata,
@@ -543,88 +530,15 @@ def load_toolset(
             corpus.view_sections,
             corpus.read_section,
         ],
-        config=config,
     )
-
-
-def load_taskset(
-    config: vf.TasksetConfig | Mapping[str, object] | None = None,
-    max_turns: int | None = None,
-    judge_model: str | None = None,
-    judge_base_url: str | None = None,
-    judge_api_key_var: str | None = None,
-    embed_model: str | None = None,
-    embed_base_url: str | None = None,
-    embed_api_key_var: str | None = None,
-    corpus_dataset: str | None = None,
-    corpus_file: str | None = None,
-    qa_file: str | None = None,
-    chroma_db_dir: str | None = None,
-    system_prompt: str | None = None,
-) -> vf.Taskset:
-    taskset_config = PatentTechnicalTasksetConfig.from_config(
-        config,
-        max_turns=max_turns,
-        judge_model=judge_model,
-        judge_base_url=judge_base_url,
-        judge_api_key_var=judge_api_key_var,
-        embed_model=embed_model,
-        embed_base_url=embed_base_url,
-        embed_api_key_var=embed_api_key_var,
-        corpus_dataset=corpus_dataset,
-        corpus_file=corpus_file,
-        qa_file=qa_file,
-        chroma_db_dir=chroma_db_dir,
-        system_prompt=system_prompt,
-    )
-    return vf.Taskset(
-        source=lambda: source(taskset_config),
-        system_prompt=taskset_config.system_prompt,
-        toolsets=[load_toolset(taskset_config=taskset_config)],
-        rewards=[judge_reward_factory(taskset_config)],
-        config=taskset_config,
-    )
-
-
-def load_harness(
-    config: vf.HarnessConfig | Mapping[str, object] | None = None,
-) -> vf.Harness:
-    return vf.Harness(config=config)
-
-
-def load_environment(
-    config: vf.EnvConfig | Mapping[str, object] | None = None,
-    max_turns: int | None = None,
-    judge_model: str | None = None,
-    judge_base_url: str | None = None,
-    judge_api_key_var: str | None = None,
-    embed_model: str | None = None,
-    embed_base_url: str | None = None,
-    embed_api_key_var: str | None = None,
-    corpus_dataset: str | None = None,
-    corpus_file: str | None = None,
-    qa_file: str | None = None,
-    chroma_db_dir: str | None = None,
-    system_prompt: str | None = None,
-) -> vf.Env:
-    config = vf.EnvConfig.from_config(
-        config,
-        taskset=PatentTechnicalTasksetConfig.from_config(
-            max_turns=max_turns,
-            judge_model=judge_model,
-            judge_base_url=judge_base_url,
-            judge_api_key_var=judge_api_key_var,
-            embed_model=embed_model,
-            embed_base_url=embed_base_url,
-            embed_api_key_var=embed_api_key_var,
-            corpus_dataset=corpus_dataset,
-            corpus_file=corpus_file,
-            qa_file=qa_file,
-            chroma_db_dir=chroma_db_dir,
-            system_prompt=system_prompt,
-        ),
+    taskset = vf.Taskset(
+        source=lambda: source(cfg),
+        system_prompt=SYSTEM_PROMPT,
+        toolsets=[toolset],
+        rewards=[judge_reward],
+        config=cfg,
     )
     return vf.Env(
-        taskset=load_taskset(config=config.taskset),
-        harness=load_harness(config=config.harness),
+        taskset=taskset,
+        harness=vf.Harness(config=config.harness),
     )
