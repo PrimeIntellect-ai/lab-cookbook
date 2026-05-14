@@ -4,7 +4,7 @@ Evaluate code-producing agents in isolated runtimes.
 
 Coding environments need more than text comparison. The environment should let the model inspect or write code, execute commands safely, collect logs, and score the result from actual behavior.
 
-This guide starts with [`primeintellect/math-python`](https://app.primeintellect.ai/dashboard/environments/primeintellect/math-python), a lightweight Python-tool environment. Then it moves to [`primeintellect/opencode-harbor`](https://app.primeintellect.ai/dashboard/environments/primeintellect/opencode-harbor), a full CLI-agent environment that runs OpenCode on Harbor tasks.
+This guide starts with [`primeintellect/math-python`](https://app.primeintellect.ai/dashboard/environments/primeintellect/math-python), a lightweight Python-tool environment, then moves to [`primeintellect/opencode-harbor`](https://app.primeintellect.ai/dashboard/environments/primeintellect/opencode-harbor), a full CLI-agent environment that runs OpenCode on Harbor tasks.
 
 ## Warm Up with Math Python
 
@@ -20,10 +20,18 @@ prime eval run primeintellect/math-python \
   -t 1024
 ```
 
+```text
+TODO: expected output
+```
+
 Open the eval results:
 
 ```bash
 prime lab view --evals
+```
+
+```text
+TODO: expected output
 ```
 
 Inspect:
@@ -40,22 +48,26 @@ This is the smallest useful sandbox pattern: one task, one Python tool, one isol
 
 `opencode-harbor` runs a real coding agent inside a sandbox. Each task comes from Harbor: an instruction, files or setup scripts, a Docker image, and tests that determine reward.
 
-Run a small eval:
+Run a small eval using `configs/06/opencode-harbor.toml` (model `openai/gpt-5.4-mini`, environment defaults for everything else):
 
 ```bash
-prime eval run primeintellect/opencode-harbor \
-  -m openai/gpt-5-nano \
-  -n 2 \
-  -r 1 \
-  -t 4096 \
-  --timeout 1800 \
-  -a '{"dataset": "terminal-bench-sample", "max_turns": 4}'
+prime eval run configs/06/opencode-harbor.toml
 ```
+
+```text
+TODO: expected output
+```
+
+A baseline run of this config (5 examples × 3 rollouts, the env's defaults from `pyproject.toml`) cost roughly **$3.04** end-to-end against `gpt-5.4-mini`.
 
 Open the eval results:
 
 ```bash
 prime lab view --evals
+```
+
+```text
+TODO: expected output
 ```
 
 Inspect:

@@ -3,6 +3,7 @@
 This folder contains a small family of patent-focused RL environments built with Verifiers.
 
 The environments train search, retrieval, and technical reasoning over patent-style documents.
+Each package uses the v1 `Taskset` plus default `Harness` pattern: the taskset owns dataset loading, Chroma-backed patent tools, system prompt, and LLM-judge rewards.
 
 ## Environments in this folder
 

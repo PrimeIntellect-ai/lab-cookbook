@@ -140,6 +140,22 @@ return vf.SingleTurnEnv(
 
 When running `prime eval run`, the evaluation dataset is used by default. If no `eval_dataset` is provided, evaluation falls back to the training dataset.
 
+Use the normal eval target path unless the user explicitly asks for a different run shape:
+
+```bash
+prime eval run my-env-name -m openai/gpt-5.4-nano
+```
+
+Do not add prefixes, custom output dirs, save flags, smoke `-n`/`-r` values, key exports, `--provider`, `--skip-upload`, TUI flags, concurrency flags, or other overrides by default. `prime eval run` uses the logged-in Prime CLI session for Prime Inference and saves to the proper eval artifact targets automatically.
+
+Environment `pyproject.toml` files should set:
+
+```toml
+[tool.verifiers.eval]
+num_examples = 5
+rollouts_per_example = 3
+```
+
 ### Lazy Loading with DatasetBuilder
 
 For large datasets or when running multiple environment replicas, you can defer dataset loading using a `DatasetBuilder`—a callable that returns a `Dataset` when invoked:
@@ -705,7 +721,7 @@ tags = ["single-turn", "math", "train", "eval"]
 version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
-    "verifiers>=0.1.8",
+    "verifiers>=0.1.14",
 ]
 
 [build-system]
@@ -733,7 +749,7 @@ All packages your environment needs must be declared in the `dependencies` array
 
 ```toml
 dependencies = [
-    "verifiers>=0.1.8",
+    "verifiers>=0.1.14",
     "chromadb",
     "nltk>=3.9.2",
 ]

@@ -4,7 +4,7 @@ Use GEPA to improve an environment prompt before changing model weights.
 
 RL changes the model. GEPA changes the prompt. It is useful when the environment already has a meaningful scoring signal, but the model behavior depends heavily on the system prompt, tool instructions, output format, or task strategy.
 
-This guide uses [`primeintellect/wordle`](https://app.primeintellect.ai/dashboard/environments/primeintellect/wordle), because its behavior is easy to inspect: the model sees game state, chooses guesses, and gets scored by whether it solves the puzzle.
+This guide uses [`primeintellect/wordle`](https://app.primeintellect.ai/dashboard/environments/primeintellect/wordle), because its behavior is easy to inspect: the model sees game state, chooses guesses, and is scored on whether it solves the puzzle.
 
 ## Check the Baseline
 
@@ -18,10 +18,18 @@ prime eval run primeintellect/wordle \
   -t 1024
 ```
 
+```text
+TODO: expected output
+```
+
 Open the eval results:
 
 ```bash
 prime lab view --evals
+```
+
+```text
+TODO: expected output
 ```
 
 Read a few failed rollouts. GEPA is most useful when the model is trying the task but needs better guidance. If the scoring is broken, the task is impossible, or the model cannot follow the environment loop at all, fix that before optimizing the prompt.
@@ -32,6 +40,10 @@ Run GEPA against the same environment and model:
 
 ```bash
 prime gepa run primeintellect/wordle -m openai/gpt-5.5
+```
+
+```text
+TODO: expected output
 ```
 
 For a reusable run, create `configs/gepa/wordle.toml`:
@@ -48,6 +60,10 @@ Then run:
 
 ```bash
 prime gepa run configs/gepa/wordle.toml
+```
+
+```text
+TODO: expected output
 ```
 
 GEPA evaluates prompt candidates against environment feedback and writes artifacts to a results directory:
@@ -86,13 +102,17 @@ Run the eval:
 prime eval run configs/eval/wordle-gepa.toml
 ```
 
+```text
+TODO: expected output
+```
+
 Then compare the baseline and GEPA runs:
 
 ```bash
 prime lab view --evals
 ```
 
-Keep the model, sample count, rollout count, and sampling settings fixed while comparing prompts. The only intended change is the system prompt loaded through `path_to_system_prompt`.
+Keep the model, sample count, rollout count, and sampling settings fixed while comparing prompts. The only thing that should differ between runs is the system prompt loaded through `path_to_system_prompt`.
 
 ## Decide Whether to Keep It
 

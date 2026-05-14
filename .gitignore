@@ -18,7 +18,7 @@ venv/
 *.index
 *outputs/*
 *.prime
-*uv.locklab-cookbook
+*uv.lock
 # Lab generated artifacts
 .env
 /outputs/
@@ -28,3 +28,6 @@ venv/
 /environments/*/*.egg-info/
 /environments/*/__pycache__/
 
+
+# Claude Code
+.claude/

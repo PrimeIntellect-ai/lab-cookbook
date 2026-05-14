@@ -1,11 +1,11 @@
 [project]
 name = "advanced-patent-q-and-a"
 description = "Advanced Agentic RAG over patent documents for Q&A with more comparisons and lookups"
-tags = ["patents", "multi-turn", "agentic-search", "rag", "train", "eval", "llm-judge"]
+tags = ["patents", "multi-turn", "agentic-search", "rag", "train", "eval", "llm-judge", "v1", "taskset", "harness"]
 requires-python = ">=3.11"
 version = "0.2.3"
 dependencies = [
-    "verifiers>=0.1.8",
+    "verifiers>=0.1.15.dev4",
     "chromadb",
     "datasets",
     "openai",
@@ -20,5 +20,5 @@ build-backend = "hatchling.build"
 include = ["advanced_patent_q_and_a.py", "pyproject.toml"]
 
 [tool.verifiers.eval]
-num_examples = 10
-rollouts_per_example = 2
+num_examples = 5
+rollouts_per_example = 3

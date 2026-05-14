@@ -16,7 +16,11 @@ Start with setup if you are new to Lab. Jump to a later guide if you already kno
 | 05 | [Prompt Optimization](05-prompt-optimization/README.md) | Use GEPA to improve prompts with eval feedback. |
 | 06 | [Coding Agents and Sandboxes](06-coding-agents-and-sandboxes/README.md) | Evaluate agents that write or run code in sandboxes. |
 | 07 | [Tool Use and Search](07-tool-use-and-search/README.md) | Build environments with tools and retrieval. |
-| 08 | [Multimodal Environments](08-multimodal-environments/README.md) | Work with image inputs and multimodal scoring. |
-| 09 | [Browser Environments](09-browser-environments/README.md) | Build environments for browser tasks. |
-| 10 | [Custom Harnesses](10-custom-harnesses/README.md) | Run third-party agent libraries through the program pattern. |
-| 11 | [Advanced Tasksets and Harnesses](11-advanced-tasksets-and-harnesses/README.md) | Go deeper on reusable tasksets, custom harnesses, sandboxes, and nested agent workflows. |
+| 08 | [Custom Data Pipelines](08-custom-data-pipelines/README.md) | Build a search environment from your own corpus, tasks, and tools. |
+| 09 | [Synthetic Agent Environments](09-synthetic-agent-environments/README.md) | Simulate a small world in memory and have an agent interact with it through tools. |
+| 10 | [Multimodal Environments](10-multimodal-environments/README.md) | Work with image inputs and multimodal scoring. |
+| 11 | [Browser Environments](11-browser-environments/README.md) | Build environments for browser tasks. |
+| 12 | [Custom Harnesses](12-custom-harnesses/README.md) | Run third-party agent libraries through the program pattern. |
+| 13 | [Advanced Tasksets and Harnesses](13-advanced-tasksets-and-harnesses/README.md) | Go deeper on reusable tasksets, custom harnesses, sandboxes, and nested agent workflows. |
+
+For platform plumbing (accounts, secrets, Hub workflows, hosted runs, inference deployments), see [Lab Configuration](../reference/lab-configuration.md) in the reference section.

@@ -2,7 +2,7 @@
 
 Build an environment where the model has to search before it answers.
 
-In the first environments, each task gives the model everything it needs in the prompt. Search environments add another layer: the task asks a question, and the environment gives the model tools for finding evidence in a corpus.
+In the earlier guides, each task gives the model everything it needs in the prompt. Search environments add another layer: the task asks a question, and the environment gives the model tools for finding evidence in a corpus.
 
 This guide uses [primeintellect/wiki-search](https://app.primeintellect.ai/dashboard/environments/primeintellect/wiki-search), a Wikipedia search environment on the Environments Hub. The model gets a trivia question, searches a small Wikipedia corpus, reads relevant sections, and answers from the evidence it finds.
 
@@ -18,10 +18,18 @@ prime eval run primeintellect/wiki-search \
   -t 2048
 ```
 
+```text
+TODO: expected output
+```
+
 Open the eval results:
 
 ```bash
 prime lab view --evals
+```
+
+```text
+TODO: expected output
 ```
 
 For tool-use environments, inspect the full trajectory. The final answer matters, but the tool calls explain how the model got there.
@@ -54,24 +62,30 @@ This gives the model a natural retrieval path: search broadly, choose a page, in
 
 ## The Taskset Shape
 
-The `wiki-search` implementation follows the Taskset pattern. The Taskset is the place where tasks, tools, prompts, and rewards come together.
+The `wiki-search` implementation follows the Taskset pattern. The Taskset is where tasks, tools, prompts, and rewards come together.
 
-Conceptually, it looks like this:
+Conceptually, `load_environment` looks like this:
 
 ```python
 import verifiers.v1 as vf
 
 
-def load_taskset(...):
-    return vf.Taskset(
-        source=build_source(max_turns=max_turns),
-        system_prompt=SYSTEM_PROMPT,
-        toolsets=[load_toolset(...)],
-        rewards=[judge_reward_factory(...)],
+def load_environment(config: vf.EnvConfig) -> vf.Env:
+    cfg = WikiSearchTasksetConfig(config.taskset)
+    toolset = vf.Toolset(tools=[search_pages, view_sections, read_section])
+    return vf.Env(
+        taskset=vf.Taskset(
+            source=build_source(cfg),
+            system_prompt=SYSTEM_PROMPT,
+            toolsets=[toolset],
+            rewards=[judge_reward],
+            config=cfg,
+        ),
+        harness=vf.Harness(config=config.harness),
     )
 ```
 
-The source yields task rows with a user prompt, answer, example ID, and turn limit. The toolset exposes the search tools and binds them to a loaded Wikipedia index. The reward checks the model's final answer against the reference answer.
+The source yields task rows with a user prompt, answer, example ID, and turn limit. The toolset exposes the search tools that look up content in a Wikipedia index built once at process start. `judge_reward` is a module-level `@vf.reward` function that pulls the env's primary endpoint via `state.get_endpoint_config(api="chat")` to call a judge, then scores the model's final answer against the reference.
 
 You do not need a custom harness for this pattern. The default tool-use loop is enough: the model calls tools, receives tool results, and eventually responds with a final answer.
 
@@ -129,8 +143,12 @@ Launch training:
 prime train configs/rl/wiki-search.toml
 ```
 
+```text
+TODO: expected output
+```
+
 During training, watch both reward and trajectories. A good run should show the model searching more directly, reading fewer irrelevant sections, and answering from evidence more consistently.
 
 ## Next
 
-In [Multimodal Environments](../08-multimodal-environments/README.md), you will work with environments that include image inputs and multimodal scoring.
+In [Custom Data Pipelines](../08-custom-data-pipelines/README.md), you will build a search environment over your own corpus instead of a pre-built one. Then [Synthetic Agent Environments](../09-synthetic-agent-environments/README.md) shows how to generate the world itself in memory and let an agent interact with it through tools.
