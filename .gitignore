@@ -28,3 +28,6 @@ venv/
 /environments/*/*.egg-info/
 /environments/*/__pycache__/
 
+
+# Claude Code
+.claude/

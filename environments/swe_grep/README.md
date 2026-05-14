@@ -23,47 +23,31 @@ into a small number of targeted, parallel search operations that surface the rig
 
 ## Environment overview
 
-The environment is implemented in `swe_grep.py` as `SweGrepEnv`, which extends `vf.SandboxEnv`.
+The environment is implemented in `swe_grep.py` as a v1 `Taskset` plus the default `Harness`.
 
 The stack looks like this:
 
-- `StatefulToolEnv`: gives the model tool access and preserves rollout state
-- `SandboxEnv`: provisions a Prime sandbox for each rollout
-- `SweGrepEnv`: customizes the sandbox and tools for grep-centric retrieval
+- `SweGrepTasksetConfig`: owns dataset, judge, prompt, and sandbox defaults
+- `vf.Taskset`: exposes train/eval rows, toolsets, and reward signals
+- `vf.Toolset`: provisions one Prime sandbox per rollout and exposes grep-specific tools
+- `vf.Harness`: runs the default endpoint-backed tool loop
 
-See the Verifiers docs for more on stateful environments:
-https://docs.primeintellect.ai/verifiers/environments#stateful-tool-environments
+See the Verifiers docs for more on tasksets and harnesses:
+https://docs.primeintellect.ai/verifiers/byo-harness
 
 ## Tools exposed to the model
 
-`SweGrepEnv` removes the default bash tool and replaces it with three task-specific tools:
+The taskset exposes three task-specific tools:
 
 - `grep_tool`: search for text patterns with `ripgrep`
 - `list_files`: inspect directory contents
 - `read_file`: read bounded line ranges from a file
 
-```python
-self.remove_tool(self.bash)
-self.add_tool(self.grep_tool, args_to_skip=["sandbox_id"])
-self.add_tool(self.list_files, args_to_skip=["sandbox_id"])
-self.add_tool(self.read_file, args_to_skip=["sandbox_id"])
-```
-
 This keeps the action space narrow and focuses learning on search behavior rather than arbitrary shell usage.
 
-## Stateful tool pattern
+## Taskset tool pattern
 
-Each rollout gets its own Prime sandbox. The environment injects `sandbox_id` into tool calls so the model does not have to manage sandbox state itself.
-
-```python
-def update_tool_args(self, tool_name: str, tool_args: dict[str, Any], messages, state, **kwargs):
-    updated_args = dict(tool_args)
-    if tool_name in ["grep_tool", "list_files", "read_file"]:
-        updated_args["sandbox_id"] = state["sandbox_id"]
-    return updated_args
-```
-
-This is the core `StatefulToolEnv` pattern: keep persistent rollout state in `state`, and let the environment handle internal bookkeeping.
+Each rollout gets its own Prime sandbox through the v1 `Toolset` sandbox config. The model never sees or manages sandbox IDs; the runtime injects the sandbox handle into the Python tool call.
 
 ## Sandbox setup
 
@@ -93,24 +77,16 @@ https://app.primeintellect.ai/dashboard/environments/prime/swe-grep/files/frt126
 
 ## Reward design
 
-This recipe uses a `vf.JudgeRubric` with three active rewards and one tracking metric:
+This recipe uses v1 reward signals owned by the taskset:
 
 - **Correct answer** (`0.4`): did the model produce the right technical explanation?
 - **Correct file paths** (`0.4`): did it identify the relevant file or files?
 - **Parallel tool calls** (`0.2`): did it use available tool parallelism effectively?
-- **Efficiency bonus** (`0.0`): among correct rollouts, reward fewer turns
-
-```python
-rubric = vf.JudgeRubric(judge_prompt=JUDGE_PROMPT)
-rubric.add_reward_func(correct_answer_reward_func, weight=0.4)
-rubric.add_reward_func(correct_file_paths_reward_func, weight=0.4)
-rubric.add_reward_func(parallel_tool_calls_reward_func, weight=0.2)
-rubric.add_reward_func(efficiency_bonus_for_correct, weight=0.0)
-```
 
 A few notable design choices:
 
-- correctness is judged semantically, not by exact string match
+- answer correctness is judged semantically by an LLM judge, run once per rollout as an `@vf.update` and read by the reward
+- file-path coverage is a cheap substring check against the agent's final message (the system prompt forces a `Files:`/`Answer:` shape, so the paths appear verbatim)
 - multi-file tasks are supported via `file_path` and `file_path_2`
 - the environment explicitly encourages parallelism
 - the default system prompt constrains the agent to **2 turns**, increasing pressure to search well
@@ -137,15 +113,6 @@ Answer: <your answer here>
 
 From this recipe directory, install dependencies and run eval through Verifiers or Prime tooling.
 
-### Environment entrypoint
-
-`pyproject.toml` should point at:
-
-```toml
-[tool.verifiers.environment]
-entrypoint = "swe_grep:load_environment"
-```
-
 ### Eval defaults currently present
 
 ```toml
@@ -165,8 +132,6 @@ env = load_environment()
 ## Files
 
 - `swe_grep.py`: environment, tools, prompt, dataset loading, and rewards
-- `src/create_dataset.py`: dataset generation pipeline
-- `src/sandbox_metrics.py`: sandbox execution metrics and retry helpers
 
 ## Notes and limitations
 

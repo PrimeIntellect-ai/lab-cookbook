@@ -4,7 +4,7 @@ Evaluate code-producing agents in isolated runtimes.
 
 Coding environments need more than text comparison. The environment should let the model inspect or write code, execute commands safely, collect logs, and score the result from actual behavior.
 
-This guide starts with [`primeintellect/math-python`](https://app.primeintellect.ai/dashboard/environments/primeintellect/math-python), a lightweight Python-tool environment. Then it moves to [`primeintellect/opencode-harbor`](https://app.primeintellect.ai/dashboard/environments/primeintellect/opencode-harbor), a full CLI-agent environment that runs OpenCode on Harbor tasks.
+This guide starts with [`primeintellect/math-python`](https://app.primeintellect.ai/dashboard/environments/primeintellect/math-python), a lightweight Python-tool environment, then moves to [`primeintellect/opencode-harbor`](https://app.primeintellect.ai/dashboard/environments/primeintellect/opencode-harbor), a full CLI-agent environment that runs OpenCode on Harbor tasks.
 
 ## Warm Up with Math Python
 
@@ -20,10 +20,18 @@ prime eval run primeintellect/math-python \
   -t 1024
 ```
 
+```text
+TODO: expected output
+```
+
 Open the eval results:
 
 ```bash
 prime lab view --evals
+```
+
+```text
+TODO: expected output
 ```
 
 Inspect:
@@ -52,10 +60,18 @@ prime eval run primeintellect/opencode-harbor \
   -a '{"dataset": "terminal-bench-sample", "max_turns": 4}'
 ```
 
+```text
+TODO: expected output
+```
+
 Open the eval results:
 
 ```bash
 prime lab view --evals
+```
+
+```text
+TODO: expected output
 ```
 
 Inspect:
