@@ -78,6 +78,24 @@ enable_thinking = true # Nemotron 3 and Qwen 3.5 / 3.6
 
 The default is `true`. Set it to `false` when you want shorter, more direct responses or want to compare thinking and non-thinking rollouts.
 
+## Hyperparameters and Intuitions
+
+Status: TODO
+
+For a first run, the config below is intentionally small. Once it works, these are the knobs that change run behavior most, in roughly the order you'll want to think about them.
+
+TODO: turn each bullet into a paragraph with concrete intuitions and failure modes.
+
+- **`rollouts_per_example`.** How many attempts the trainer samples per task. RL learns from advantage across rollouts in the same group, so this can't be 1. Typical range 4–16. Higher → cleaner gradient signal, more compute per step. Drop it when rollouts are expensive (long contexts, sandboxes); raise it when the reward is noisy or the model is exploring.
+- **`batch_size`.** Total rollouts consumed per step. Bigger batches stabilize learning and make reward curves smoother; smaller batches step faster but noisier. Keep `batch_size` a multiple of `rollouts_per_example`.
+- **Learning rate.** Default is usually right. If reward collapses or oscillates wildly in the first 20 steps, the LR is too high. If it plateaus from the start and never moves, it may be too low.
+- **KL / clip controls.** These keep the policy from drifting too far from the reference model. Loosen them if learning stalls because the model can't change enough; tighten them if the model degrades on out-of-distribution prompts during training.
+- **`max_tokens` and reasoning effort.** Reasoning models need enough budget to think *and* produce the answer. If completions are getting truncated mid-answer, raise `max_tokens` before changing anything else. Reasoning effort trades cost for capability — start at `"medium"` and only move up if the smaller setting hits a ceiling.
+- **Eval cadence.** How often a held-out eval runs during training. Frequent enough to catch regressions, sparse enough to not dominate cost. Configure under `[[eval]]` once the basic loop is working.
+- **Difficulty filtering and oversampling.** When most tasks are too easy or too hard, the gradient is wasted. The `train-with-environments` skill covers this in depth.
+
+The general intuition: change one knob at a time, watch the rollouts, and compare against the previous run's curves. The [Choosing a Model](../01-environments-and-evals/README.md#choosing-a-model) section in 01 covers model-level tradeoffs that show up here too.
+
 ## Write a Training Config
 
 Create `configs/rl/reverse-text.toml`:

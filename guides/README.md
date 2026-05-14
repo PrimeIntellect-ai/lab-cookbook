@@ -16,6 +16,7 @@ Start with setup if you are new to Lab. Jump to a later guide if you already kno
 | 05 | [Prompt Optimization](05-prompt-optimization/README.md) | Use GEPA to improve prompts with eval feedback. |
 | 06 | [Coding Agents and Sandboxes](06-coding-agents-and-sandboxes/README.md) | Evaluate agents that write or run code in sandboxes. |
 | 07 | [Tool Use and Search](07-tool-use-and-search/README.md) | Build environments with tools and retrieval. |
+| 08 | [Custom Data Pipelines](08-custom-data-pipelines/README.md) | Build a search environment from your own corpus, tasks, and tools. |
 | 08 | [Synthetic Agent Environments](08-synthetic-agent-environments/README.md) | Simulate a small world in memory and have an agent interact with it through tools. |
 | 09 | [Multimodal Environments](09-multimodal-environments/README.md) | Work with image inputs and multimodal scoring. |
 | 10 | [Browser Environments](10-browser-environments/README.md) | Build environments for browser tasks. |
