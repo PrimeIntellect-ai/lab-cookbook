@@ -5,7 +5,7 @@ tags = ["patents", "multi-turn", "agentic-search", "rag", "train", "eval", "llm-
 requires-python = ">=3.11"
 version = "0.2.3"
 dependencies = [
-    "verifiers>=0.1.14",
+    "verifiers>=0.1.15.dev4",
     "chromadb",
     "datasets",
     "openai",

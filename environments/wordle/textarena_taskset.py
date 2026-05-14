@@ -10,16 +10,14 @@ exposes a single answer field (``secret_word`` by default) plays through this
 wrapper without modification.
 """
 
-from __future__ import annotations
-
 import asyncio
 import logging
 import random
+import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from copy import deepcopy
-from typing import Any, ClassVar, cast
+from typing import ClassVar
 
-import verifiers as v0
 import verifiers.v1 as vf
 from verifiers.v1.config import TasksetConfig
 from verifiers.v1.taskset import Taskset
@@ -27,28 +25,34 @@ from verifiers.v1.taskset import Taskset
 try:
     import nltk
 except ImportError as e:
-    raise ImportError(
-        "TextArenaTaskset requires nltk. Install with: uv add nltk"
-    ) from e
+    raise ImportError("TextArenaTaskset requires nltk. Install with: uv add nltk") from e
 
+
+# nltk.download is noisy by default; route every call through a quiet wrapper
+# without touching the imported module's attributes (mypy-friendly, no cast).
 _original_nltk_download = nltk.download
 
 
-def _quiet_download(*args: Any, **kwargs: Any) -> Any:
-    return _original_nltk_download(*args, **{**kwargs, "quiet": True})
+def _nltk_download(name: str) -> None:
+    _original_nltk_download(name, quiet=True)
 
-
-cast(Any, nltk).download = _quiet_download
 
 try:
     import textarena as ta
 except ImportError as e:
-    raise ImportError(
-        "TextArenaTaskset requires textarena. Install with: uv add textarena"
-    ) from e
+    raise ImportError("TextArenaTaskset requires textarena. Install with: uv add textarena") from e
 
 
 logger = logging.getLogger(__name__)
+
+_GUESS_PATTERN = re.compile(r"<guess>(.*?)</guess>", re.DOTALL)
+
+
+def _extract_guess(text: str) -> str:
+    matches = _GUESS_PATTERN.findall(text)
+    if not matches:
+        return ""
+    return matches[-1].strip()
 
 
 class TextArenaTasksetConfig(TasksetConfig):
@@ -77,37 +81,27 @@ class TextArenaTaskset(Taskset):
         num_eval_examples: int | None = None,
         seed: int | None = None,
         answer_state_key: str | None = None,
-        parser: v0.XMLParser | None = None,
         feedback_fn: Callable[[str], str] | None = None,
-        rewards: Iterable[Callable[..., object]] = (),
-        config: TextArenaTasksetConfig | Mapping[str, object] | None = None,
-        **kwargs: Any,
+        rewards: Iterable[vf.Handler] = (),
+        config: TextArenaTasksetConfig | None = None,
+        **kwargs: object,
     ):
-        self.config = type(self).config_type.from_config(config)
+        self.config: TextArenaTasksetConfig = type(self).config_type.from_config(config)
         self.game = game if game is not None else self.config.game
         self.num_train_examples = (
-            num_train_examples
-            if num_train_examples is not None
-            else self.config.num_train_examples
+            num_train_examples if num_train_examples is not None else self.config.num_train_examples
         )
         self.num_eval_examples = (
-            num_eval_examples
-            if num_eval_examples is not None
-            else self.config.num_eval_examples
+            num_eval_examples if num_eval_examples is not None else self.config.num_eval_examples
         )
         self.seed = seed if seed is not None else self.config.seed
         self.answer_state_key = (
-            answer_state_key
-            if answer_state_key is not None
-            else self.config.answer_state_key
-        )
-        self.parser = parser or v0.XMLParser(
-            fields=["think", "guess"], answer_field="guess"
+            answer_state_key if answer_state_key is not None else self.config.answer_state_key
         )
         self.feedback_fn = feedback_fn or (lambda x: x)
 
-        nltk.download("words", quiet=True)
-        nltk.download("averaged_perceptron_tagger_eng", quiet=True)
+        _nltk_download("words")
+        _nltk_download("averaged_perceptron_tagger_eng")
 
         self._template_ta_env = ta.make(env_id=self.game)
         self._template_ta_env.reset(num_players=1)
@@ -117,9 +111,7 @@ class TextArenaTaskset(Taskset):
 
         super().__init__(
             source=self._build_train_rows,
-            eval_source=self._build_eval_rows
-            if self.num_eval_examples > 0
-            else None,
+            eval_source=self._build_eval_rows if self.num_eval_examples > 0 else None,
             user=self._user_fn,
             setups=[self._setup_state],
             cleanups=[self._cleanup_state],
@@ -129,7 +121,7 @@ class TextArenaTaskset(Taskset):
         )
 
     @staticmethod
-    def _build_shared_memo(ta_env: Any) -> dict:
+    def _build_shared_memo(ta_env: object) -> dict:
         """Share the EnglishDictionary across deepcopies.
 
         The TextArena ``EnglishDictionary`` holds ~430k strings (~38MB) and is
@@ -154,24 +146,26 @@ class TextArenaTaskset(Taskset):
             flat: list[str] = []
             for values in words.values():
                 if isinstance(values, list | tuple):
-                    flat.extend(values)
+                    flat.extend(str(v) for v in values)
                 else:
-                    flat.append(cast(str, values))
+                    flat.append(str(values))
             return flat
-        return list(cast(Iterable[str], words))
+        if isinstance(words, Iterable):
+            return [str(w) for w in words]
+        raise TypeError(f"Unsupported word_list type: {type(words)!r}")
 
-    def _row(self, rng: random.Random, index: int) -> dict[str, Any]:
+    def _row(self, rng: random.Random, index: int) -> vf.ConfigData:
         return {
             "example_id": index,
             "prompt": [{"role": "user", "content": self._initial_prompt}],
             "answer": rng.choice(self._word_list),
         }
 
-    def _build_train_rows(self) -> list[dict[str, Any]]:
+    def _build_train_rows(self) -> list[vf.ConfigData]:
         rng = random.Random(self.seed)
         return [self._row(rng, index) for index in range(self.num_train_examples)]
 
-    def _build_eval_rows(self) -> list[dict[str, Any]]:
+    def _build_eval_rows(self) -> list[vf.ConfigData]:
         rng = random.Random(self.seed)
         for _ in range(self.num_train_examples):
             rng.choice(self._word_list)
@@ -181,9 +175,7 @@ class TextArenaTaskset(Taskset):
         ]
 
     async def _setup_state(self, task: vf.Task, state: vf.State) -> None:
-        ta_env = await asyncio.to_thread(
-            deepcopy, self._template_ta_env, self._shared_memo.copy()
-        )
+        ta_env = await asyncio.to_thread(deepcopy, self._template_ta_env, self._shared_memo.copy())
         ta_env.state.game_state[self.answer_state_key] = task["answer"]
         state["ta_env"] = ta_env
 
@@ -195,17 +187,15 @@ class TextArenaTaskset(Taskset):
         self,
         task: vf.Task,
         state: vf.State,
-        transcript: Sequence[object],
+        transcript: Sequence[vf.Message | vf.ConfigMap],
     ) -> list[dict[str, str]]:
         _ = task
         ta_env = state.get("ta_env")
         if ta_env is None:
             return []
         last_text = _last_assistant_text(transcript)
-        guess = self.parser.parse_answer(
-            [{"role": "assistant", "content": last_text}]
-        )
-        await asyncio.to_thread(ta_env.step, str(guess))
+        guess = _extract_guess(last_text)
+        await asyncio.to_thread(ta_env.step, guess)
         if ta_env.state.done:
             reason = str(ta_env.state.game_info[0]["reason"])
             state["final_env_response"] = reason
@@ -215,7 +205,7 @@ class TextArenaTaskset(Taskset):
         return [{"role": "user", "content": str(feedback)}]
 
 
-def _last_assistant_text(transcript: Sequence[object]) -> str:
+def _last_assistant_text(transcript: Sequence[vf.Message | vf.ConfigMap]) -> str:
     for message in reversed(transcript):
         if isinstance(message, Mapping) and message.get("role") == "assistant":
             content = message.get("content")

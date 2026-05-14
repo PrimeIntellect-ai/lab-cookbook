@@ -80,23 +80,22 @@ If either tag is missing, the splits fall through to the raw completion.
 
 ## Wire It Together
 
-Two `load_*` functions tie the pieces together. `load_taskset` packages the source, system prompt, and reward. `load_environment` wraps the taskset in `vf.Env`, which is what evals and trainers load:
+A single `load_environment` ties the pieces together. It takes one argument — `config: vf.EnvConfig` — and wires the taskset and harness in one expression:
 
 ```python
-def load_taskset(config: vf.TasksetConfig) -> vf.Taskset:
-    return vf.Taskset(
-        source=source,
-        system_prompt=SYSTEM_PROMPT,
-        rewards=[lcs_reward],
-        config=config,
-    )
-
-
 def load_environment(config: vf.EnvConfig) -> vf.Env:
-    return vf.Env(taskset=load_taskset(config=config.taskset))
+    return vf.Env(
+        taskset=vf.Taskset(
+            source=source,
+            system_prompt=SYSTEM_PROMPT,
+            rewards=[lcs_reward],
+            config=config.taskset,
+        ),
+        harness=vf.Harness(config=config.harness),
+    )
 ```
 
-By default, `vf.Env` sends each prompt to the model and hands the response back to the taskset for scoring.
+By default, `vf.Env` sends each prompt to the model and hands the response back to the taskset for scoring. `vf.Harness` accepts the harness slice of the run-time config (sampling, max turns, etc.) so per-run knobs flow through evaluation/RL TOMLs.
 
 ## Check the Package
 

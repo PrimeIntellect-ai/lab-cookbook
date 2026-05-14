@@ -11,10 +11,10 @@ The Taskset still owns the task rows, metrics, and rewards. The Harness owns how
 A custom harness usually starts with a program:
 
 ```python
-import verifiers as vf
+import verifiers.v1 as vf
 
 
-async def run_program(task, state):
+async def run_program(task: vf.Task, state: vf.State) -> vf.State:
     endpoint = state.get_endpoint_config(api="chat")
 
     # Build the third-party client from endpoint["model"],
@@ -26,8 +26,11 @@ async def run_program(task, state):
     return state
 
 
-def load_harness(config=None):
-    return vf.Harness(program=run_program, config=config)
+def load_environment(config: vf.EnvConfig) -> vf.Env:
+    return vf.Env(
+        taskset=vf.Taskset(source=..., rewards=[...], config=config.taskset),
+        harness=vf.Harness(program=run_program, config=config.harness),
+    )
 ```
 
 The important part is `state.get_endpoint_config(api="chat")`. It gives the framework the model, base URL, and API key for the current rollout, so calls made inside the third-party library are routed through Lab instead of bypassing the environment.

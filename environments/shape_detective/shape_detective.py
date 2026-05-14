@@ -1,16 +1,12 @@
-from __future__ import annotations
-
 import base64
 import io
 import math
 import random
 from typing import Literal
 
-from PIL import Image, ImageDraw
-
 import verifiers.v1 as vf
+from PIL import Image, ImageDraw
 from verifiers.utils.data_utils import extract_boxed_answer
-
 
 SHAPES = ("circle", "square", "triangle", "star")
 COLORS: dict[str, tuple[int, int, int]] = {
@@ -53,15 +49,13 @@ SYSTEM_PROMPT = (
 
 def clue_line(target: Tile, prop: str, clue_index: int) -> str:
     article = "a " if prop == "shape" else ""
-    return (
-        f"Clue {clue_index + 1} — {prop}: the target is {article}**{target[prop]}**."
-    )
+    return f"Clue {clue_index + 1} — {prop}: the target is {article}**{target[prop]}**."
 
 
 def source(mode: Mode, num_rows: int, seed: int):
-    def build() -> list[dict[str, object]]:
+    def build() -> list[vf.ConfigData]:
         rng = random.Random(seed)
-        rows: list[dict[str, object]] = []
+        rows: list[vf.ConfigData] = []
         for _ in range(num_rows):
             while True:
                 tiles: list[Tile] = [
@@ -78,9 +72,7 @@ def source(mode: Mode, num_rows: int, seed: int):
                     tiles[target]["color"],
                     tiles[target]["pattern"],
                 )
-                if sum(
-                    1 for t in tiles if (t["shape"], t["color"], t["pattern"]) == key
-                ) == 1:
+                if sum(1 for t in tiles if (t["shape"], t["color"], t["pattern"]) == key) == 1:
                     break
             target_tile = tiles[target]
 
@@ -124,7 +116,12 @@ def source(mode: Mode, num_rows: int, seed: int):
                     for cy in range(DOT_SPACING - 4, TILE_PX, DOT_SPACING):
                         for cx in range(DOT_SPACING - 4, TILE_PX, DOT_SPACING):
                             draw.ellipse(
-                                (cx - DOT_RADIUS, cy - DOT_RADIUS, cx + DOT_RADIUS, cy + DOT_RADIUS),
+                                (
+                                    cx - DOT_RADIUS,
+                                    cy - DOT_RADIUS,
+                                    cx + DOT_RADIUS,
+                                    cy + DOT_RADIUS,
+                                ),
                                 fill=BG_COLOR,
                             )
 
@@ -140,21 +137,16 @@ def source(mode: Mode, num_rows: int, seed: int):
 
             buf = io.BytesIO()
             img.save(buf, format="PNG")
-            image_url = (
-                "data:image/png;base64,"
-                + base64.b64encode(buf.getvalue()).decode("ascii")
-            )
+            image_url = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
 
             if mode == "single":
-                clue_block = "\n".join(
-                    f"- {prop}: {target_tile[prop]}" for prop in CLUE_ORDER
-                )
+                clue_block = "\n".join(f"- {prop}: {target_tile[prop]}" for prop in CLUE_ORDER)
                 intro = (
                     "Find the tile that matches **all three** of these clues:\n"
                     f"{clue_block}\n\n"
                     "Reply with the tile index in \\boxed{N}."
                 )
-                info: dict[str, object] = {"mode": "single", "target": target}
+                info: vf.ConfigData = {"mode": "single", "target": target}
                 max_turns = 1
             else:
                 intro = (
@@ -194,9 +186,7 @@ def source(mode: Mode, num_rows: int, seed: int):
     return build
 
 
-async def shape_detective_user(
-    task: vf.Task, state: vf.State
-) -> list[dict[str, object]]:
+async def shape_detective_user(task: vf.Task, state: vf.State) -> list[vf.ConfigData]:
     info = task["info"]
     if info["mode"] != "multi":
         return []
@@ -235,39 +225,30 @@ async def solved(task: vf.Task, state: vf.State) -> float:
     text = (
         content
         if isinstance(content, str)
-        else " ".join(
-            part["text"] for part in content if part.get("type") == "text"
-        )
+        else " ".join(part["text"] for part in content if part.get("type") == "text")
     )
     answer = extract_boxed_answer(text, strict=True).strip()
     return 1.0 if answer == str(task["answer"]) else 0.0
 
 
-def load_taskset(
-    config: vf.TasksetConfig,
-    mode: Mode = "multi",
-    num_rows: int = 12,
-    seed: int = 0,
-) -> vf.Taskset:
-    if mode not in ("single", "multi"):
-        raise ValueError(f"mode must be 'single' or 'multi'; got {mode!r}")
-    return vf.Taskset(
-        source=source(mode, num_rows, seed),
-        system_prompt=SYSTEM_PROMPT,
-        rewards=[solved],
-        user=shape_detective_user if mode == "multi" else None,
-        config=config,
-    )
+class ShapeDetectiveTasksetConfig(vf.TasksetConfig):
+    mode: Mode = "multi"
+    num_rows: int = 12
+    seed: int = 0
 
 
-def load_environment(
-    config: vf.EnvConfig,
-    mode: Mode = "multi",
-    num_rows: int = 12,
-    seed: int = 0,
-) -> vf.Env:
-    return vf.Env(
-        taskset=load_taskset(
-            config=config.taskset, mode=mode, num_rows=num_rows, seed=seed
-        )
-    )
+class ShapeDetectiveTaskset(vf.Taskset):
+    config_type = ShapeDetectiveTasksetConfig
+
+    def __init__(self, *, config: vf.TasksetConfig | None = None, **kwargs: object) -> None:
+        cfg = ShapeDetectiveTasksetConfig.from_config(config)
+        kwargs.setdefault("source", source(cfg.mode, cfg.num_rows, cfg.seed))
+        kwargs.setdefault("system_prompt", SYSTEM_PROMPT)
+        kwargs.setdefault("rewards", [solved])
+        if cfg.mode == "multi":
+            kwargs.setdefault("user", shape_detective_user)
+        super().__init__(config=cfg, **kwargs)
+
+
+def load_environment(config: vf.EnvConfig) -> vf.Env:
+    return vf.Env(taskset=ShapeDetectiveTaskset(config=config.taskset))

@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Multi-agent ethics debate: arguer vs critic with LLM judge"
 tags = ["ethics", "multi-agent", "debate", "llm-judge", "train", "eval", "v1", "taskset", "harness"]
 dependencies = [
-    "verifiers>=0.1.14",
+    "verifiers>=0.1.15.dev4",
     "datasets",
     "openai",
 ]

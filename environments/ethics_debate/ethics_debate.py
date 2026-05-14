@@ -1,13 +1,8 @@
-from __future__ import annotations
-
-import os
 import re
-from collections.abc import Mapping, Sequence
 
 import verifiers.v1 as vf
 from datasets import load_dataset
 from openai import AsyncOpenAI
-from verifiers import ensure_keys
 
 ARGUER = "arguer"
 CRITIC = "critic"
@@ -62,20 +57,29 @@ Sum the five scores (0-10). Respond with ONLY the total number."""
 class EthicsDebateTasksetConfig(vf.TasksetConfig):
     dataset_name: str = "ergotts/ethics_questions"
     dataset_split: str = "train"
-    judge_model: str = "google/gemini-3-flash-preview"
-    judge_base_url: str = "https://api.pinference.ai/api/v1"
-    judge_api_key_var: str = "PRIME_API_KEY"
     num_rounds: int = 2
-    system_prompt: str | None = SYSTEM_PROMPT
 
 
-def content_text(content: object, separator: str = "\n") -> str:
+class EthicsDebateTaskset(vf.Taskset):
+    config_type = EthicsDebateTasksetConfig
+
+    def __init__(self, *, config: vf.TasksetConfig | None = None, **kwargs: object) -> None:
+        cfg = EthicsDebateTasksetConfig.from_config(config)
+        kwargs.setdefault("source", lambda: source(cfg))
+        kwargs.setdefault("system_prompt", SYSTEM_PROMPT)
+        kwargs.setdefault("user", debate_user)
+        kwargs.setdefault("setups", [setup_debate])
+        kwargs.setdefault("rewards", [argument_quality])
+        super().__init__(config=cfg, **kwargs)
+
+
+def content_text(content: str | list | None, separator: str = "\n") -> str:
     if isinstance(content, str):
         return content
     if isinstance(content, list):
         chunks: list[str] = []
         for part in content:
-            if isinstance(part, Mapping):
+            if isinstance(part, dict):
                 text = part.get("text")
                 if part.get("type") == "text" and isinstance(text, str):
                     chunks.append(text)
@@ -83,10 +87,10 @@ def content_text(content: object, separator: str = "\n") -> str:
     return ""
 
 
-def last_assistant_text(transcript: Sequence[object]) -> str:
+def last_assistant_text(transcript: list[vf.Message]) -> str:
     for message in reversed(transcript):
-        if isinstance(message, Mapping) and message.get("role") == "assistant":
-            return content_text(message.get("content"))
+        if message.role == "assistant":
+            return content_text(message.content)
     return ""
 
 
@@ -155,7 +159,7 @@ async def setup_debate(task: vf.Task, state: vf.State) -> None:
 async def debate_user(
     task: vf.Task,
     state: vf.State,
-    transcript: Sequence[object],
+    transcript: list[vf.Message],
 ) -> list[dict[str, str]]:
     actor = str(state.get("debate_actor") or ARGUER)
     handoff = parse_handoff(actor, last_assistant_text(transcript))
@@ -188,97 +192,30 @@ async def debate_user(
     return [{"role": "user", "content": refine_message(handoff)}]
 
 
-def argument_quality_factory(config: EthicsDebateTasksetConfig):
-    ensure_keys([config.judge_api_key_var])
-    judge_client = AsyncOpenAI(
-        api_key=os.environ[config.judge_api_key_var],
-        base_url=config.judge_base_url,
+@vf.reward(weight=1.0)
+async def argument_quality(task: vf.Task, state: vf.State) -> float:
+    final_argument = state.get("final_argument")
+    if not final_argument:
+        return 0.0
+    endpoint = state.get_endpoint_config(api="chat")
+    client = AsyncOpenAI(api_key=endpoint["api_key"], base_url=endpoint["api_base"])
+    response = await client.chat.completions.create(
+        model=endpoint["model"],
+        messages=[
+            {"role": "system", "content": JUDGE_SYSTEM},
+            {
+                "role": "user",
+                "content": JUDGE_USER_TEMPLATE.format(
+                    question=task["question"],
+                    argument=final_argument,
+                ),
+            },
+        ],
     )
-
-    @vf.reward(weight=1.0)
-    async def argument_quality(task: vf.Task, state: vf.State) -> float:
-        final_argument = state.get("final_argument")
-        if not final_argument:
-            return 0.0
-        response = await judge_client.chat.completions.create(
-            model=config.judge_model,
-            messages=[
-                {"role": "system", "content": JUDGE_SYSTEM},
-                {
-                    "role": "user",
-                    "content": JUDGE_USER_TEMPLATE.format(
-                        question=task["question"],
-                        argument=final_argument,
-                    ),
-                },
-            ],
-        )
-        text = response.choices[0].message.content or ""
-        numbers = re.findall(r"\b(10|[0-9])\b", text)
-        return float(numbers[0]) / 10.0 if numbers else 0.0
-
-    return argument_quality
+    text = response.choices[0].message.content or ""
+    numbers = re.findall(r"\b(10|[0-9])\b", text)
+    return float(numbers[0]) / 10.0 if numbers else 0.0
 
 
-def load_taskset(
-    config: vf.TasksetConfig | Mapping[str, object] | None = None,
-    dataset_name: str | None = None,
-    dataset_split: str | None = None,
-    judge_model: str | None = None,
-    judge_base_url: str | None = None,
-    judge_api_key_var: str | None = None,
-    num_rounds: int | None = None,
-    system_prompt: str | None = None,
-) -> vf.Taskset:
-    taskset_config = EthicsDebateTasksetConfig.from_config(
-        config,
-        dataset_name=dataset_name,
-        dataset_split=dataset_split,
-        judge_model=judge_model,
-        judge_base_url=judge_base_url,
-        judge_api_key_var=judge_api_key_var,
-        num_rounds=num_rounds,
-        system_prompt=system_prompt,
-    )
-    return vf.Taskset(
-        source=lambda: source(taskset_config),
-        system_prompt=taskset_config.system_prompt,
-        user=debate_user,
-        setups=[setup_debate],
-        rewards=[argument_quality_factory(taskset_config)],
-        config=taskset_config,
-    )
-
-
-def load_harness(
-    config: vf.HarnessConfig | Mapping[str, object] | None = None,
-) -> vf.Harness:
-    return vf.Harness(config=config)
-
-
-def load_environment(
-    config: vf.EnvConfig | Mapping[str, object] | None = None,
-    dataset_name: str | None = None,
-    dataset_split: str | None = None,
-    judge_model: str | None = None,
-    judge_base_url: str | None = None,
-    judge_api_key_var: str | None = None,
-    num_rounds: int | None = None,
-    system_prompt: str | None = None,
-) -> vf.Env:
-    config = vf.EnvConfig.from_config(
-        config,
-        taskset=EthicsDebateTasksetConfig.from_config(
-            dataset_name=dataset_name,
-            dataset_split=dataset_split,
-            judge_model=judge_model,
-            judge_base_url=judge_base_url,
-            judge_api_key_var=judge_api_key_var,
-            num_rounds=num_rounds,
-            system_prompt=system_prompt,
-        ),
-    )
-    return vf.Env(
-        taskset=load_taskset(config=config.taskset),
-        harness=load_harness(config=config.harness),
-    )
+def load_environment(config: vf.EnvConfig) -> vf.Env:
+    return vf.Env(taskset=EthicsDebateTaskset(config=config.taskset))

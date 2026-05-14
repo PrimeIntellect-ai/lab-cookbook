@@ -1,0 +1,18 @@
+{
+  "mcp": {
+    "prime_lab": {
+      "type": "local",
+      "command": [
+        "/Users/williambrown/.local/share/uv/tools/prime/bin/python3",
+        "-c",
+        "from prime_cli.main import run; run()",
+        "lab",
+        "mcp",
+        "--workspace",
+        "/Users/williambrown/dev/lab-cookbook"
+      ],
+      "enabled": true,
+      "timeout": 60000
+    }
+  }
+}
