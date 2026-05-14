@@ -133,4 +133,4 @@ During training, watch both reward and trajectories. A good run should show the 
 
 ## Next
 
-In [Multimodal Environments](../08-multimodal-environments/README.md), you will work with environments that include image inputs and multimodal scoring.
+In [Custom Data Pipelines](../08-custom-data-pipelines/README.md), you will build a search environment over your own corpus instead of a pre-built one.

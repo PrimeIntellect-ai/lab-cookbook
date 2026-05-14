@@ -150,6 +150,45 @@ prime lab view --evals
 
 Read a few rollouts. For reverse-text, check whether the model copied the string forward, reversed only words, dropped punctuation, or produced the right characters in the wrong order. `lcs_reward` tells you how close it got.
 
+## Designing Rewards
+
+Status: TODO
+
+`lcs_reward` is the easy case: a deterministic, continuous reward with a single weight of 1.0. Most real environments need more.
+
+TODO: walk the reader through the reward-design choices they will hit.
+
+- **Rule-based vs. judged.** When string match, regex, math-verify, or test execution is enough, vs. when you need an LLM judge.
+- **Combining rewards.** Layering a cheap deterministic check with an expensive judged check via multiple `@vf.reward` functions or `RubricGroup`. Pick weights so the deterministic signal dominates and the judge nudges.
+- **Continuous vs. binary.** Continuous rewards (like LCS) give partial credit and learn faster; binary rewards are easier to interpret. When each is the right call.
+- **JudgeRubric basics.** Setting `judge_model`, writing a `judge_prompt` that returns parseable output, and exposing `judge` to reward functions.
+- **Caching judges during iteration.** Avoid paying for judge calls every time you re-run the same rollout while tuning.
+- **Reward hacking.** The classic failure modes — keyword bonuses the model exploits, judges that reward verbosity, length rewards that flip the gradient. How to spot them in rollouts.
+- **Metrics vs. rewards.** Add observability with `weight=0` reward functions; they show up in rollout metrics without affecting the training signal.
+
+Cross-link forward: [Prompt Optimization](../05-prompt-optimization/README.md) and [Custom Data Pipelines](../08-custom-data-pipelines/README.md) both lean on judges heavily.
+
+## Troubleshooting & QA
+
+Status: TODO
+
+Before you push an environment or launch training, run a small QA pass.
+
+TODO: turn this into a real checklist with copy-pasteable commands.
+
+- **Smoke-eval first.** Run `prime eval run <env> -m <small model> -n 5 -r 2` and open the rollouts. If the model gets every example right or every example wrong, the environment is not ready.
+- **Read the rollouts, not just the score.** Look for: prompt shape (system + user as expected), reward matches your judgment, tasks the model can't possibly solve, tasks the model trivially solves.
+- **Common bugs.**
+  - Dataset rows shaped wrong (e.g. `prompt` is a string when it should be a list of messages).
+  - Reward function silently returning `0.0` on a parse failure — add a metric for "parsed successfully" with `weight=0`.
+  - Sync HTTP/LLM clients inside reward functions or `env_response` — these block the event loop and serialize concurrent rollouts. Use `AsyncOpenAI`, `httpx.AsyncClient`, or `asyncio.to_thread` for unavoidable sync calls.
+  - `info` shape changing between rows — store as a JSON string when rows have different schemas.
+  - Judge prompts that return prose instead of a score — fail loudly during eval, not silently in training.
+- **Spread of rewards.** Across the smoke eval, you want a spread, not all-0 or all-1. If the distribution is collapsed, fix the task difficulty or the reward before training.
+- **Re-run on a second model.** Confirm the environment isn't accidentally tuned to one model family's quirks.
+
+When all of the above looks clean, the environment is ready for [Training with RL](../03-training-with-rl/README.md).
+
 ## Why This Environment Works
 
 Reverse-text has a clear task, a deterministic answer, and a graded reward. That makes it a good first training target:

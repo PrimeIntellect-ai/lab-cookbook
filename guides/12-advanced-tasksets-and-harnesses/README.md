@@ -16,7 +16,7 @@ TODO: The reader can identify when to use tasksets, harnesses, and environment a
 - Explain harnesses as the boundary for agent execution.
 - Show current TOML shapes for taskset and harness args.
 - Link to the current BYO Harness docs.
-- Build on [Custom Harnesses](../10-custom-harnesses/README.md) instead of reintroducing the program pattern.
+- Build on [Custom Harnesses](../11-custom-harnesses/README.md) instead of reintroducing the program pattern.
 - Use examples that are simple enough to debug locally.
 
 ## Candidate Examples
