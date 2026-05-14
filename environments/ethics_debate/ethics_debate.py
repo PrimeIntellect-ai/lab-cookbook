@@ -1,4 +1,5 @@
 import re
+from collections.abc import Sequence
 
 import verifiers.v1 as vf
 from datasets import load_dataset
@@ -60,6 +61,10 @@ class EthicsDebateTasksetConfig(vf.TasksetConfig):
     num_rounds: int = 2
 
 
+class EthicsDebateTaskset(vf.Taskset):
+    config_type = EthicsDebateTasksetConfig
+
+
 def content_text(content: str | list | None, separator: str = "\n") -> str:
     if isinstance(content, str):
         return content
@@ -74,7 +79,7 @@ def content_text(content: str | list | None, separator: str = "\n") -> str:
     return ""
 
 
-def last_assistant_text(transcript: list) -> str:
+def last_assistant_text(transcript: Sequence[vf.Message | vf.ConfigMap]) -> str:
     for message in reversed(transcript):
         if isinstance(message, dict) and message.get("role") == "assistant":
             return content_text(message.get("content"))
@@ -146,7 +151,7 @@ async def setup_debate(task: vf.Task, state: vf.State) -> None:
 async def debate_user(
     task: vf.Task,
     state: vf.State,
-    transcript: list,
+    transcript: Sequence[vf.Message | vf.ConfigMap],
 ) -> list[dict[str, str]]:
     actor = str(state.get("debate_actor") or ARGUER)
     handoff = parse_handoff(actor, last_assistant_text(transcript))
@@ -207,7 +212,7 @@ async def argument_quality(task: vf.Task, state: vf.State) -> float:
 def load_environment(config: vf.EnvConfig) -> vf.Env:
     cfg = EthicsDebateTasksetConfig(config.taskset)
     return vf.Env(
-        taskset=vf.Taskset(
+        taskset=EthicsDebateTaskset(
             source=lambda: source(cfg),
             system_prompt=SYSTEM_PROMPT,
             user=debate_user,
@@ -215,5 +220,4 @@ def load_environment(config: vf.EnvConfig) -> vf.Env:
             rewards=[argument_quality],
             config=cfg,
         ),
-        harness=vf.Harness(config=config.harness),
     )
