@@ -2,6 +2,8 @@
 
 In Lab, evals are environments.
 
+If you've run or read about a benchmark like GSM8K, MMLU, or SWE-bench, you already have the mental model: an eval is a collection of tasks plus a way to score a model's attempts on them. An *environment* is that same unit — tasks and scoring — packaged behind a single entry point so anything in Lab can load it and run rollouts against it. The name is borrowed from reinforcement learning, where tasks and a reward signal are what a model *trains* against; the choice is deliberate, because in Lab the package you use to grade a model is the same package you'd use to train one. No need to rewrite your evals.
+
 An environment packages the work you want a model or agent to do. It samples tasks, produces rollouts, and computes metrics from the results. The same environment can be used for benchmarking models and prompts, generating synthetic data, optimizing harnesses, and training with RL or other algorithms.
 
 Environments can live locally in your workspace or on the Environments Hub. This guide uses [`primeintellect/gsm8k`](https://app.primeintellect.ai/dashboard/environments/primeintellect/gsm8k), a Hub environment.
@@ -25,27 +27,11 @@ prime eval run primeintellect/gsm8k \
   -r 2
 ```
 
-<<<<<<< HEAD
-This evaluates 5 examples with 2 rollouts per example, using the default value of 1024 for `max_tokens`. Results are saved automatically. This is equivalent to running:
-
-```toml
-model = "openai/gpt-5-nano"
-save_results = true
-
-[[eval]]
-env_id = "primeintellect/gsm8k"
-num_examples = 5 
-rollouts_per_example = 2
-sampling_args = { max_tokens = 1024 }
-```
-# link to configs/00/first-eval.toml
-=======
 ```text
 TODO: expected output
 ```
 
 This evaluates 5 examples with 2 rollouts per example. Results are saved automatically.
->>>>>>> worktree-validated-snuggling-pebble
 
 Open the Lab viewer to inspect eval results:
 
