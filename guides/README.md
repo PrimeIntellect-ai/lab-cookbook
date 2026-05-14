@@ -20,3 +20,4 @@ Start with setup if you are new to Lab. Jump to a later guide if you already kno
 | 09 | [Browser Environments](09-browser-environments/README.md) | Build environments for browser tasks. |
 | 10 | [Custom Harnesses](10-custom-harnesses/README.md) | Run third-party agent libraries through the program pattern. |
 | 11 | [Advanced Tasksets and Harnesses](11-advanced-tasksets-and-harnesses/README.md) | Go deeper on reusable tasksets, custom harnesses, sandboxes, and nested agent workflows. |
+| 12 | [Advanced Lab Configuration](12-advanced-lab-configuration/README.md) | Reference tour of secrets, Hub workflows, hosted runs, inference deployments, teams, and billing. |

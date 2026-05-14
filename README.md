@@ -24,3 +24,4 @@ Lab Cookbook
 10. [Browser Environments](guides/09-browser-environments/README.md)
 11. [Custom Harnesses](guides/10-custom-harnesses/README.md)
 12. [Advanced Tasksets and Harnesses](guides/11-advanced-tasksets-and-harnesses/README.md)
+13. [Advanced Lab Configuration](guides/12-advanced-lab-configuration/README.md)
