@@ -18,10 +18,18 @@ prime eval run primeintellect/reverse-text \
   -t 512
 ```
 
+```text
+TODO: expected output
+```
+
 Open the eval results:
 
 ```bash
 prime lab view --evals
+```
+
+```text
+TODO: expected output
 ```
 
 Look for two things before launching training:
@@ -37,6 +45,10 @@ See the current Hosted Training models with:
 
 ```bash
 prime train models
+```
+
+```text
+TODO: expected output
 ```
 
 Hosted Training currently supports these model families:
@@ -105,16 +117,28 @@ Start the run:
 prime train configs/rl/reverse-text.toml
 ```
 
+```text
+TODO: expected output
+```
+
 The command prints a run ID and the log command for the new Hosted Training run. Follow logs with:
 
 ```bash
 prime train logs <run_id> -f
 ```
 
+```text
+TODO: expected output
+```
+
 Open the Lab viewer to follow training:
 
 ```bash
 prime lab view --training
+```
+
+```text
+TODO: expected output
 ```
 
 ## Decide Whether It Is Learning

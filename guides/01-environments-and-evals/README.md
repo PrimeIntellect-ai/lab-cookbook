@@ -25,12 +25,20 @@ prime eval run primeintellect/gsm8k \
   -r 2
 ```
 
+```text
+TODO: expected output
+```
+
 This evaluates 5 examples with 2 rollouts per example. Results are saved automatically.
 
 Open the Lab viewer to inspect eval results:
 
 ```bash
 prime lab view --evals
+```
+
+```text
+TODO: expected output
 ```
 
 ## Read the Rollouts
@@ -74,6 +82,10 @@ Run the suite:
 
 ```bash
 prime eval run configs/eval/first-suite.toml
+```
+
+```text
+TODO: expected output
 ```
 
 Use this pattern when you want to compare model behavior across environments, compare a base model to a trained adapter, or re-run the same checks after changing a prompt or config.

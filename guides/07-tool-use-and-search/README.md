@@ -18,10 +18,18 @@ prime eval run primeintellect/wiki-search \
   -t 2048
 ```
 
+```text
+TODO: expected output
+```
+
 Open the eval results:
 
 ```bash
 prime lab view --evals
+```
+
+```text
+TODO: expected output
 ```
 
 For tool-use environments, inspect the full trajectory. The final answer matters, but the tool calls explain how the model got there.
@@ -127,6 +135,10 @@ Launch training:
 
 ```bash
 prime train configs/rl/wiki-search.toml
+```
+
+```text
+TODO: expected output
 ```
 
 During training, watch both reward and trajectories. A good run should show the model searching more directly, reading fewer irrelevant sections, and answering from evidence more consistently.
