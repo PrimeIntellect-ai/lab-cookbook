@@ -80,7 +80,6 @@ rollouts_per_example = 8
 [sampling]
 max_tokens = 512
 reasoning_effort = "medium"
-temperature = 0.7
 
 [[env]]
 id = "primeintellect/reverse-text"
@@ -128,6 +127,54 @@ Early in the run, watch for:
 - no obvious reward bug where bad completions receive high scores
 
 For reverse-text, the first "aha" is usually visible in rollouts before it is obvious from aggregate metrics: the model starts reversing more characters in the right order, then exact matches become more common.
+
+## Advanced Configs
+
+Once the basic run is learning, the same config can be extended with a few common knobs. See [Advanced Configurations](https://docs.primeintellect.ai/hosted-training/advanced-configs) for the full reference.
+
+### Sampling Temperature
+
+Set `temperature` under `[sampling]` to control rollout diversity. The default is `1.0`; raise it slightly to encourage exploration when rollouts within a group look too similar.
+
+```toml
+[sampling]
+max_tokens = 512
+temperature = 1.1
+```
+
+### Multiple Environments
+
+Add more `[[env]]` sections to train across environments at once, and use `[buffer].env_ratios` to set the mix:
+
+```toml
+[[env]]
+id = "primeintellect/reverse-text"
+
+[[env]]
+id = "primeintellect/wordle"
+
+[buffer]
+env_ratios = [0.5, 0.5]
+```
+
+The ratios match the order of the `[[env]]` sections.
+
+### Online Evaluation
+
+Add an `[eval]` block to evaluate periodically during training without stopping the run:
+
+```toml
+[eval]
+interval = 25
+num_examples = 64
+rollouts_per_example = 1
+eval_base_model = true
+
+[[eval.env]]
+id = "primeintellect/reverse-text"
+```
+
+Results show up alongside training metrics in `prime lab view --training`. Use `eval_base_model = true` on the first run with a new environment to anchor the curve against the untrained model.
 
 ## Next
 
