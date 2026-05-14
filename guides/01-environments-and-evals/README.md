@@ -25,6 +25,7 @@ prime eval run primeintellect/gsm8k \
   -r 2
 ```
 
+<<<<<<< HEAD
 This evaluates 5 examples with 2 rollouts per example, using the default value of 1024 for `max_tokens`. Results are saved automatically. This is equivalent to running:
 
 ```toml
@@ -38,11 +39,22 @@ rollouts_per_example = 2
 sampling_args = { max_tokens = 1024 }
 ```
 # link to configs/00/first-eval.toml
+=======
+```text
+TODO: expected output
+```
+
+This evaluates 5 examples with 2 rollouts per example. Results are saved automatically.
+>>>>>>> worktree-validated-snuggling-pebble
 
 Open the Lab viewer to inspect eval results:
 
 ```bash
 prime lab view --evals
+```
+
+```text
+TODO: expected output
 ```
 
 ## Read the Rollouts
@@ -88,6 +100,10 @@ Run the suite:
 
 ```bash
 prime eval run configs/00/first-suite.toml
+```
+
+```text
+TODO: expected output
 ```
 
 Use this pattern when you want to compare model behavior across environments, compare a base model to a trained adapter, or re-run the same checks after changing a prompt or config.

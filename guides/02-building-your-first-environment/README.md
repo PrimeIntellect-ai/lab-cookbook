@@ -14,6 +14,10 @@ From your Lab workspace, scaffold a local environment package:
 prime env init reverse-text
 ```
 
+```text
+TODO: expected output
+```
+
 This creates `environments/reverse_text/` with a starter `reverse_text.py` and `pyproject.toml`. Open `reverse_text.py` — you will replace its contents as you go.
 
 ## Define Your Tasks
@@ -130,6 +134,10 @@ Install the environment into your workspace:
 prime env install reverse-text
 ```
 
+```text
+TODO: expected output
+```
+
 ## Evaluate It
 
 Run a small eval:
@@ -142,10 +150,18 @@ prime eval run reverse-text \
   -t 512
 ```
 
+```text
+TODO: expected output
+```
+
 Open the Lab viewer:
 
 ```bash
 prime lab view --evals
+```
+
+```text
+TODO: expected output
 ```
 
 Read a few rollouts. For reverse-text, check whether the model copied the string forward, reversed only words, dropped punctuation, or produced the right characters in the wrong order. `lcs_reward` tells you how close it got.

@@ -56,16 +56,28 @@ Start the run:
 prime train configs/sft-oss-20b.toml
 ```
 
+```text
+TODO: expected output
+```
+
 Follow logs:
 
 ```bash
 prime train logs <run_id> -f
 ```
 
+```text
+TODO: expected output
+```
+
 Open the Lab viewer:
 
 ```bash
 prime lab view --training
+```
+
+```text
+TODO: expected output
 ```
 
 ## Inspect the Warm Start
@@ -95,6 +107,10 @@ Then launch RL from that adapter:
 
 ```bash
 prime train configs/rl/wordle-from-sft.toml
+```
+
+```text
+TODO: expected output
 ```
 
 This keeps the environment fixed while changing the starting policy: SFT teaches the model what good behavior looks like, and RL optimizes that behavior against the environment reward.

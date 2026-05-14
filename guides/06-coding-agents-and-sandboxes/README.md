@@ -20,10 +20,18 @@ prime eval run primeintellect/math-python \
   -t 1024
 ```
 
+```text
+TODO: expected output
+```
+
 Open the eval results:
 
 ```bash
 prime lab view --evals
+```
+
+```text
+TODO: expected output
 ```
 
 Inspect:
@@ -52,10 +60,18 @@ prime eval run primeintellect/opencode-harbor \
   -a '{"dataset": "terminal-bench-sample", "max_turns": 4}'
 ```
 
+```text
+TODO: expected output
+```
+
 Open the eval results:
 
 ```bash
 prime lab view --evals
+```
+
+```text
+TODO: expected output
 ```
 
 Inspect:
