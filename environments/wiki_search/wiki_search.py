@@ -1,8 +1,5 @@
-from __future__ import annotations
-
 import asyncio
 import os
-from collections.abc import Mapping
 from typing import cast
 
 import chromadb
@@ -58,7 +55,7 @@ class WikiSearchTasksetConfig(vf.TasksetConfig):
     chroma_db_dir: str = CHROMA_DB_DIR
 
     @model_validator(mode="after")
-    def _ensure_required_keys(self) -> Self:
+    def _ensure_required_keys(self) -> "Self":
         ensure_keys([self.judge_api_key_var, self.embed_api_key_var])
         return self
 
@@ -105,12 +102,12 @@ def init_chroma(collection, page_id_to_title: dict[str, str]) -> None:
         )
 
 
-def load_wiki(config: WikiSearchTasksetConfig) -> dict[str, object]:
+def load_wiki(config: WikiSearchTasksetConfig) -> vf.ConfigData:
     page_id_to_title: dict[str, str] = {}
     page_id_to_content: dict[str, str] = {}
     corpus = load_dataset(config.corpus_dataset, split=config.corpus_split)
     for raw_row in corpus:
-        row = cast(Mapping[str, object], raw_row)
+        row = cast(vf.TaskRow, raw_row)
         page_id = str(row["id"])
         page_id_to_title[page_id] = str(row["title"])
         page_id_to_content[page_id] = str(row["content"])
@@ -133,13 +130,11 @@ def load_wiki(config: WikiSearchTasksetConfig) -> dict[str, object]:
     }
 
 
-async def search_pages(query: str, wiki: dict[str, object]) -> list[dict[str, str]]:
+async def search_pages(query: str, wiki: vf.ConfigData) -> list[dict[str, str]]:
     """Search for top 10 relevant articles using title embedding similarity."""
     collection = cast(chromadb.Collection, wiki["collection"])
     async with get_chroma_semaphore():
-        results = await asyncio.to_thread(
-            collection.query, query_texts=[query], n_results=10
-        )
+        results = await asyncio.to_thread(collection.query, query_texts=[query], n_results=10)
     if not results or not results["metadatas"]:
         raise ValueError(f"No results found for query: {query}")
     output: list[dict[str, str]] = []
@@ -153,7 +148,7 @@ async def search_pages(query: str, wiki: dict[str, object]) -> list[dict[str, st
     return output
 
 
-async def view_sections(page_id: str, wiki: dict[str, object]) -> list[dict[str, str]]:
+async def view_sections(page_id: str, wiki: vf.ConfigData) -> list[dict[str, str]]:
     """View the sections of a page."""
     page_id_to_content = cast(dict[str, str], wiki["page_id_to_content"])
     content = page_id_to_content[page_id]
@@ -177,7 +172,7 @@ async def view_sections(page_id: str, wiki: dict[str, object]) -> list[dict[str,
     return sections
 
 
-async def read_section(section_id: str, wiki: dict[str, object]) -> str:
+async def read_section(section_id: str, wiki: vf.ConfigData) -> str:
     """Read a section of a page."""
     if ":" not in section_id:
         raise ValueError("Invalid section_id format. Expected: page_id:section_name")
@@ -209,7 +204,7 @@ def source(config: WikiSearchTasksetConfig):
         for index, raw_row in enumerate(dataset):
             if config.max_examples is not None and index >= config.max_examples:
                 break
-            row = cast(Mapping[str, object], raw_row)
+            row = cast(vf.TaskRow, raw_row)
             yield {
                 **dict(row),
                 "example_id": index,
@@ -257,7 +252,10 @@ async def judge_reward(task: vf.Task, state: vf.State) -> float:
     return float(state.get("judge_score", 0.0))
 
 
-def load_toolset(config: vf.ToolsetConfig, taskset_config: WikiSearchTasksetConfig) -> vf.Toolset:
+def load_toolset(
+    taskset_config: WikiSearchTasksetConfig,
+    config: vf.ToolsetConfig | None = None,
+) -> vf.Toolset:
     judge_client = AsyncOpenAI(
         api_key=os.environ[taskset_config.judge_api_key_var],
         base_url=taskset_config.judge_base_url,
@@ -277,23 +275,19 @@ def load_toolset(config: vf.ToolsetConfig, taskset_config: WikiSearchTasksetConf
     )
 
 
-def load_taskset(config: vf.TasksetConfig) -> vf.Taskset:
+def load_taskset(config: vf.TasksetConfig | None = None) -> vf.Taskset:
     taskset_config = WikiSearchTasksetConfig.from_config(config)
     return vf.Taskset(
         source=source(taskset_config),
         system_prompt=SYSTEM_PROMPT,
-        toolsets=[load_toolset(vf.ToolsetConfig(), taskset_config)],
+        toolsets=[load_toolset(taskset_config)],
         rewards=[judge_reward],
         config=taskset_config,
     )
 
 
-def load_harness(config: vf.HarnessConfig) -> vf.Harness:
-    return vf.Harness(config=config)
-
-
 def load_environment(config: vf.EnvConfig) -> vf.Env:
     return vf.Env(
         taskset=load_taskset(config=config.taskset),
-        harness=load_harness(config=config.harness),
+        harness=vf.Harness(config=config.harness),
     )

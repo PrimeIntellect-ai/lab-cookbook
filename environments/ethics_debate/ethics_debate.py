@@ -1,8 +1,5 @@
-from __future__ import annotations
-
 import os
 import re
-from collections.abc import Mapping, Sequence
 
 import verifiers.v1 as vf
 from datasets import load_dataset
@@ -66,16 +63,15 @@ class EthicsDebateTasksetConfig(vf.TasksetConfig):
     judge_base_url: str = "https://api.pinference.ai/api/v1"
     judge_api_key_var: str = "PRIME_API_KEY"
     num_rounds: int = 2
-    system_prompt: str | None = SYSTEM_PROMPT
 
 
-def content_text(content: object, separator: str = "\n") -> str:
+def content_text(content: str | list | None, separator: str = "\n") -> str:
     if isinstance(content, str):
         return content
     if isinstance(content, list):
         chunks: list[str] = []
         for part in content:
-            if isinstance(part, Mapping):
+            if isinstance(part, dict):
                 text = part.get("text")
                 if part.get("type") == "text" and isinstance(text, str):
                     chunks.append(text)
@@ -83,9 +79,9 @@ def content_text(content: object, separator: str = "\n") -> str:
     return ""
 
 
-def last_assistant_text(transcript: Sequence[object]) -> str:
+def last_assistant_text(transcript: list) -> str:
     for message in reversed(transcript):
-        if isinstance(message, Mapping) and message.get("role") == "assistant":
+        if isinstance(message, dict) and message.get("role") == "assistant":
             return content_text(message.get("content"))
     return ""
 
@@ -155,7 +151,7 @@ async def setup_debate(task: vf.Task, state: vf.State) -> None:
 async def debate_user(
     task: vf.Task,
     state: vf.State,
-    transcript: Sequence[object],
+    transcript: list,
 ) -> list[dict[str, str]]:
     actor = str(state.get("debate_actor") or ARGUER)
     handoff = parse_handoff(actor, last_assistant_text(transcript))
@@ -221,14 +217,13 @@ def argument_quality_factory(config: EthicsDebateTasksetConfig):
 
 
 def load_taskset(
-    config: vf.TasksetConfig | Mapping[str, object] | None = None,
+    config: vf.TasksetConfig | None = None,
     dataset_name: str | None = None,
     dataset_split: str | None = None,
     judge_model: str | None = None,
     judge_base_url: str | None = None,
     judge_api_key_var: str | None = None,
     num_rounds: int | None = None,
-    system_prompt: str | None = None,
 ) -> vf.Taskset:
     taskset_config = EthicsDebateTasksetConfig.from_config(
         config,
@@ -238,11 +233,10 @@ def load_taskset(
         judge_base_url=judge_base_url,
         judge_api_key_var=judge_api_key_var,
         num_rounds=num_rounds,
-        system_prompt=system_prompt,
     )
     return vf.Taskset(
         source=lambda: source(taskset_config),
-        system_prompt=taskset_config.system_prompt,
+        system_prompt=SYSTEM_PROMPT,
         user=debate_user,
         setups=[setup_debate],
         rewards=[argument_quality_factory(taskset_config)],
@@ -250,21 +244,14 @@ def load_taskset(
     )
 
 
-def load_harness(
-    config: vf.HarnessConfig | Mapping[str, object] | None = None,
-) -> vf.Harness:
-    return vf.Harness(config=config)
-
-
 def load_environment(
-    config: vf.EnvConfig | Mapping[str, object] | None = None,
+    config: vf.EnvConfig,
     dataset_name: str | None = None,
     dataset_split: str | None = None,
     judge_model: str | None = None,
     judge_base_url: str | None = None,
     judge_api_key_var: str | None = None,
     num_rounds: int | None = None,
-    system_prompt: str | None = None,
 ) -> vf.Env:
     config = vf.EnvConfig.from_config(
         config,
@@ -275,10 +262,9 @@ def load_environment(
             judge_base_url=judge_base_url,
             judge_api_key_var=judge_api_key_var,
             num_rounds=num_rounds,
-            system_prompt=system_prompt,
         ),
     )
     return vf.Env(
         taskset=load_taskset(config=config.taskset),
-        harness=load_harness(config=config.harness),
+        harness=vf.Harness(config=config.harness),
     )

@@ -1,0 +1,28 @@
+default_install_hook_types: [pre-commit, pre-push]
+# Exclude Harbor task assets from linting
+exclude: ^environments/.*/tasks/
+
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --fix
+        language: system
+        types_or: [python, pyi]
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types_or: [python, pyi]
+      - id: semgrep-env-policy
+        name: Semgrep env policy
+        entry: uv run --group policy semgrep --metrics=off --disable-version-check --config .semgrep/lab-cookbook.yml --error --quiet
+        language: system
+        pass_filenames: false
+      - id: ty
+        name: ty (ci parity)
+        entry: uv run --python 3.13 ty check environments
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

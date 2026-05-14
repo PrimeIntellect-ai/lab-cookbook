@@ -1,8 +1,5 @@
-from __future__ import annotations
-
 import os
 import shlex
-from collections.abc import Mapping
 from typing import Protocol, cast
 
 import verifiers.v1 as vf
@@ -56,7 +53,7 @@ class SweGrepTasksetConfig(vf.TasksetConfig):
     repo_path: str = "vscode"
 
     @model_validator(mode="after")
-    def _ensure_required_keys(self) -> Self:
+    def _ensure_required_keys(self) -> "Self":
         ensure_keys([self.judge_api_key_var])
         return self
 
@@ -244,9 +241,7 @@ async def parallel_tool_calls(task: vf.Task, state: vf.State) -> float:
 
 
 @vf.reward(weight=0.0, stage="group")
-async def efficiency_bonus_for_correct(
-    tasks: list[vf.Task], states: list[vf.State]
-) -> list[float]:
+async def efficiency_bonus_for_correct(tasks: list[vf.Task], states: list[vf.State]) -> list[float]:
     del tasks
     rewards = [0.0] * len(states)
     correct_indices = [
@@ -283,7 +278,7 @@ def _source(config: SweGrepTasksetConfig, split: str):
             cache["train"] = train
             cache["test"] = test
         for index, raw_row in enumerate(cache[split]):
-            row = cast(Mapping[str, object], raw_row)
+            row = cast(vf.TaskRow, raw_row)
             question = str(row["question"])
             yield {
                 **dict(row),
@@ -296,7 +291,8 @@ def _source(config: SweGrepTasksetConfig, split: str):
 
 
 def load_toolset(
-    config: vf.ToolsetConfig, taskset_config: SweGrepTasksetConfig
+    taskset_config: SweGrepTasksetConfig,
+    config: vf.ToolsetConfig | None = None,
 ) -> vf.Toolset:
     judge_client = AsyncOpenAI(
         api_key=os.environ[taskset_config.judge_api_key_var],
@@ -327,13 +323,13 @@ def load_toolset(
     )
 
 
-def load_taskset(config: vf.TasksetConfig) -> vf.Taskset:
+def load_taskset(config: vf.TasksetConfig | None = None) -> vf.Taskset:
     taskset_config = SweGrepTasksetConfig.from_config(config)
     return vf.Taskset(
         source=_source(taskset_config, "train"),
         eval_source=_source(taskset_config, "test"),
         system_prompt=SYSTEM_PROMPT,
-        toolsets=[load_toolset(vf.ToolsetConfig(), taskset_config)],
+        toolsets=[load_toolset(taskset_config)],
         rewards=[
             correct_answer,
             correct_file_paths,
@@ -344,12 +340,8 @@ def load_taskset(config: vf.TasksetConfig) -> vf.Taskset:
     )
 
 
-def load_harness(config: vf.HarnessConfig) -> vf.Harness:
-    return vf.Harness(config=config)
-
-
 def load_environment(config: vf.EnvConfig) -> vf.Env:
     return vf.Env(
         taskset=load_taskset(config=config.taskset),
-        harness=load_harness(config=config.harness),
+        harness=vf.Harness(config=config.harness),
     )
