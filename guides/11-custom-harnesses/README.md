@@ -87,4 +87,4 @@ Do not add a custom harness just to expose a tool or change a system prompt. The
 
 ## Next
 
-In [Advanced Tasksets and Harnesses](../11-advanced-tasksets-and-harnesses/README.md), you will go deeper on reusable Tasksets, reusable Harnesses, config sections, nested calls, and lower-level composition.
+In [Advanced Tasksets and Harnesses](../12-advanced-tasksets-and-harnesses/README.md), you will go deeper on reusable Tasksets, reusable Harnesses, config sections, nested calls, and lower-level composition.

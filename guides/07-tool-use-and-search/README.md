@@ -133,4 +133,4 @@ During training, watch both reward and trajectories. A good run should show the 
 
 ## Next
 
-In [Multimodal Environments](../08-multimodal-environments/README.md), you will work with environments that include image inputs and multimodal scoring.
+In [Synthetic Agent Environments](../08-synthetic-agent-environments/README.md), you will build environments that generate their own world in memory and let an agent interact with it through tools.
