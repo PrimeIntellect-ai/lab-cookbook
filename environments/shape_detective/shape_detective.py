@@ -231,18 +231,20 @@ async def solved(task: vf.Task, state: vf.State) -> float:
     return 1.0 if answer == str(task["answer"]) else 0.0
 
 
-def load_environment(
-    config: vf.EnvConfig,
-    mode: Mode = "multi",
-    num_rows: int = 12,
-    seed: int = 0,
-) -> vf.Env:
+class ShapeDetectiveTasksetConfig(vf.TasksetConfig):
+    mode: Mode = "multi"
+    num_rows: int = 12
+    seed: int = 0
+
+
+def load_environment(config: vf.EnvConfig) -> vf.Env:
+    cfg = ShapeDetectiveTasksetConfig(config.taskset)
     return vf.Env(
         taskset=vf.Taskset(
-            source=source(mode, num_rows, seed),
+            source=source(cfg.mode, cfg.num_rows, cfg.seed),
             system_prompt=SYSTEM_PROMPT,
             rewards=[solved],
-            user=shape_detective_user if mode == "multi" else None,
-            config=config.taskset,
+            user=shape_detective_user if cfg.mode == "multi" else None,
+            config=cfg,
         )
     )

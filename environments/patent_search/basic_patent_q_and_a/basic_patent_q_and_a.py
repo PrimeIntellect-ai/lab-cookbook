@@ -49,9 +49,6 @@ _chroma_semaphore: asyncio.Semaphore | None = None
 
 
 class BasicPatentTasksetConfig(vf.TasksetConfig):
-    judge_model: str = "gpt-4.1-mini"
-    judge_base_url: str = "https://api.openai.com/v1"
-    judge_api_key_var: str = "OPENAI_API_KEY"
     embed_model: str = "text-embedding-3-small"
     embed_base_url: str = "https://api.openai.com/v1"
     embed_api_key_var: str = "OPENAI_API_KEY"
@@ -248,44 +245,38 @@ def source(config: BasicPatentTasksetConfig):
         }
 
 
-def judge_reward_factory(config: BasicPatentTasksetConfig):
-    ensure_keys([config.judge_api_key_var])
-    judge_client = AsyncOpenAI(
-        api_key=os.environ[config.judge_api_key_var],
-        base_url=config.judge_base_url,
+@vf.reward(weight=1.0)
+async def judge_reward(task: vf.Task, state: vf.State) -> float:
+    endpoint = state.get_endpoint_config(api="chat")
+    judge_client = AsyncOpenAI(api_key=endpoint["api_key"], base_url=endpoint["api_base"])
+    completion = state["completion"]
+    last_assistant = next(
+        (msg for msg in reversed(completion) if msg.get("role") == "assistant"),
+        None,
     )
-
-    @vf.reward(weight=1.0)
-    async def judge_reward(task: vf.Task, state: vf.State) -> float:
-        completion = state["completion"]
-        last_assistant = next(
-            (msg for msg in reversed(completion) if msg.get("role") == "assistant"),
-            None,
-        )
-        response_text = str(last_assistant["content"]) if last_assistant else ""
-        response = await judge_client.chat.completions.create(
-            model=config.judge_model,
-            messages=[
-                {
-                    "role": "user",
-                    "content": JUDGE_PROMPT.format(
-                        question=task["question"],
-                        answer=task["answer"],
-                        response=response_text,
-                    ),
-                }
-            ],
-        )
-        text = response.choices[0].message.content or ""
-        return 1.0 if "yes" in text.lower() else 0.0
-
-    return judge_reward
+    response_text = str(last_assistant["content"]) if last_assistant else ""
+    response = await judge_client.chat.completions.create(
+        model=endpoint["model"],
+        messages=[
+            {
+                "role": "user",
+                "content": JUDGE_PROMPT.format(
+                    question=task["question"],
+                    answer=task["answer"],
+                    response=response_text,
+                ),
+            }
+        ],
+    )
+    text = response.choices[0].message.content or ""
+    return 1.0 if "yes" in text.lower() else 0.0
 
 
-def load_toolset(taskset_config: BasicPatentTasksetConfig) -> vf.Toolset:
-    ensure_keys([taskset_config.embed_api_key_var])
-    corpus = PatentCorpus(taskset_config)
-    return vf.Toolset(
+def load_environment(config: vf.EnvConfig) -> vf.Env:
+    cfg = BasicPatentTasksetConfig(config.taskset)
+    ensure_keys([cfg.embed_api_key_var])
+    corpus = PatentCorpus(cfg)
+    toolset = vf.Toolset(
         tools=[
             corpus.search_patents,
             corpus.get_metadata,
@@ -293,25 +284,14 @@ def load_toolset(taskset_config: BasicPatentTasksetConfig) -> vf.Toolset:
             corpus.read_section,
         ],
     )
-
-
-def load_taskset(
-    config: vf.TasksetConfig | None = None,
-) -> vf.Taskset:
-    taskset_config = BasicPatentTasksetConfig.from_config(config)
-    return vf.Taskset(
-        source=lambda: source(taskset_config),
+    taskset = vf.Taskset(
+        source=lambda: source(cfg),
         system_prompt=SYSTEM_PROMPT,
-        toolsets=[load_toolset(taskset_config)],
-        rewards=[judge_reward_factory(taskset_config)],
-        config=taskset_config,
+        toolsets=[toolset],
+        rewards=[judge_reward],
+        config=cfg,
     )
-
-
-def load_environment(
-    config: vf.EnvConfig,
-) -> vf.Env:
     return vf.Env(
-        taskset=load_taskset(config=config.taskset),
+        taskset=taskset,
         harness=vf.Harness(config=config.harness),
     )

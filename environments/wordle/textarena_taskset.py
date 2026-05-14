@@ -13,11 +13,11 @@ wrapper without modification.
 import asyncio
 import logging
 import random
+import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from copy import deepcopy
 from typing import ClassVar
 
-import verifiers as v0
 import verifiers.v1 as vf
 from verifiers.v1.config import TasksetConfig
 from verifiers.v1.taskset import Taskset
@@ -44,6 +44,15 @@ except ImportError as e:
 
 
 logger = logging.getLogger(__name__)
+
+_GUESS_PATTERN = re.compile(r"<guess>(.*?)</guess>", re.DOTALL)
+
+
+def _extract_guess(text: str) -> str:
+    matches = _GUESS_PATTERN.findall(text)
+    if not matches:
+        return ""
+    return matches[-1].strip()
 
 
 class TextArenaTasksetConfig(TasksetConfig):
@@ -72,13 +81,12 @@ class TextArenaTaskset(Taskset):
         num_eval_examples: int | None = None,
         seed: int | None = None,
         answer_state_key: str | None = None,
-        parser: v0.XMLParser | None = None,
         feedback_fn: Callable[[str], str] | None = None,
         rewards: Iterable[vf.Handler] = (),
         config: TextArenaTasksetConfig | None = None,
         **kwargs: object,
     ):
-        self.config = type(self).config_type.from_config(config)
+        self.config: TextArenaTasksetConfig = TextArenaTasksetConfig.from_config(config)
         self.game = game if game is not None else self.config.game
         self.num_train_examples = (
             num_train_examples if num_train_examples is not None else self.config.num_train_examples
@@ -90,7 +98,6 @@ class TextArenaTaskset(Taskset):
         self.answer_state_key = (
             answer_state_key if answer_state_key is not None else self.config.answer_state_key
         )
-        self.parser = parser or v0.XMLParser(fields=["think", "guess"], answer_field="guess")
         self.feedback_fn = feedback_fn or (lambda x: x)
 
         _nltk_download("words")
@@ -187,8 +194,8 @@ class TextArenaTaskset(Taskset):
         if ta_env is None:
             return []
         last_text = _last_assistant_text(transcript)
-        guess = self.parser.parse_answer([{"role": "assistant", "content": last_text}])
-        await asyncio.to_thread(ta_env.step, str(guess))
+        guess = _extract_guess(last_text)
+        await asyncio.to_thread(ta_env.step, guess)
         if ta_env.state.done:
             reason = str(ta_env.state.game_info[0]["reason"])
             state["final_env_response"] = reason

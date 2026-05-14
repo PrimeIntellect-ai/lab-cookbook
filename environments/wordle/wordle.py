@@ -11,9 +11,15 @@ Make sure you read the game instructions carefully, and always follow the requir
 
 In each turn, think step-by-step, then give your guess inside <guess>...</guess> tags."""
 
-DEFAULT_GAME = "Wordle-v0"
 DEFAULT_NUM_TRAIN_EXAMPLES = 2000
 DEFAULT_NUM_EVAL_EXAMPLES = 20
+
+_GUESS_PATTERN = re.compile(r"<guess>(.*?)</guess>", re.DOTALL)
+
+
+class WordleTasksetConfig(TextArenaTasksetConfig):
+    # New wordle-specific field (not on parent).
+    path_to_system_prompt: str | None = None
 
 
 def wordle_feedback_fn(observation: str) -> str:
@@ -42,117 +48,113 @@ def _user_messages(state: vf.State) -> list[vf.ConfigData]:
     return _messages_by_role(state, "user")
 
 
-def _parsed_guess(parser: v0.XMLParser, state: vf.State) -> str:
+def extract_guess(state: vf.State) -> str:
+    """Pull the final ``<guess>...</guess>`` payload from the last assistant turn."""
     messages = _assistant_messages(state)
     if not messages:
         return ""
-    return str(parser.parse_answer(messages) or "")
+    content = str(messages[-1].get("content") or "")
+    matches = _GUESS_PATTERN.findall(content)
+    if not matches:
+        return ""
+    return matches[-1].strip()
 
 
-def correct_answer_factory(parser: v0.XMLParser):
-    @vf.reward(weight=1.0)
-    async def correct_answer(task: vf.Task, state: vf.State) -> float:
-        """1.0 iff the final guess exactly matches the secret word."""
-        guess = _parsed_guess(parser, state)
-        answer = str(task.get("answer") or "")
-        return 1.0 if guess == "[" + answer + "]" else 0.0
-
-    return correct_answer
+@vf.reward(weight=1.0)
+async def correct_answer(task: vf.Task, state: vf.State) -> float:
+    """1.0 iff the final guess exactly matches the secret word."""
+    guess = extract_guess(state)
+    answer = str(task.get("answer") or "")
+    return 1.0 if guess == "[" + answer + "]" else 0.0
 
 
-def length_bonus_factory(parser: v0.XMLParser):
-    @vf.reward(weight=1.0)
-    async def length_bonus(task: vf.Task, state: vf.State) -> float:
-        """Reward solving in fewer turns: is_correct / num_guesses."""
-        guess = _parsed_guess(parser, state)
-        answer = str(task.get("answer") or "")
-        is_correct = 1.0 if guess == "[" + answer + "]" else 0.0
-        guess_pattern = re.compile(r"<guess>.*</guess>", re.DOTALL)
-        num_guesses = sum(
-            1
-            for message in _assistant_messages(state)
-            if guess_pattern.search(str(message.get("content") or ""))
-        )
-        return is_correct / (num_guesses or 1)
-
-    return length_bonus
+@vf.reward(weight=1.0)
+async def length_bonus(task: vf.Task, state: vf.State) -> float:
+    """Reward solving in fewer turns: is_correct / num_guesses."""
+    guess = extract_guess(state)
+    answer = str(task.get("answer") or "")
+    is_correct = 1.0 if guess == "[" + answer + "]" else 0.0
+    num_guesses = sum(
+        1
+        for message in _assistant_messages(state)
+        if _GUESS_PATTERN.search(str(message.get("content") or ""))
+    )
+    return is_correct / (num_guesses or 1)
 
 
-def partial_answer_factory(parser: v0.XMLParser):
-    @vf.reward(weight=1.0)
-    async def partial_answer(task: vf.Task, state: vf.State) -> float:
-        """Partial credit for greens/yellows in the latest feedback block."""
-        guess = _parsed_guess(parser, state)
-        answer = str(task.get("answer") or "")
-        if guess == "[" + answer + "]":
-            return 0.0
-        for message in reversed(_user_messages(state)):
-            feedback = str(message.get("content") or "").strip()
-            parts = feedback.split("\n")
-            if len(parts) == 3:
-                scoring = parts[1].strip()
-                greens = scoring.count("G")
-                yellows = scoring.count("Y")
-                return 0.2 * greens + 0.1 * yellows
+@vf.reward(weight=1.0)
+async def partial_answer(task: vf.Task, state: vf.State) -> float:
+    """Partial credit for greens/yellows in the latest feedback block."""
+    guess = extract_guess(state)
+    answer = str(task.get("answer") or "")
+    if guess == "[" + answer + "]":
         return 0.0
-
-    return partial_answer
-
-
-def format_reward_factory(parser: v0.XMLParser):
-    """Wrap the v0 XML format reward in a v1 reward."""
-    format_fn = parser.get_format_reward_func()
-
-    @vf.reward(weight=0.2)
-    async def format_reward(task: vf.Task, state: vf.State) -> float:
-        _ = task
-        return float(format_fn(state.get("completion") or []))
-
-    return format_reward
+    for message in reversed(_user_messages(state)):
+        feedback = str(message.get("content") or "").strip()
+        parts = feedback.split("\n")
+        if len(parts) == 3:
+            scoring = parts[1].strip()
+            greens = scoring.count("G")
+            yellows = scoring.count("Y")
+            return 0.2 * greens + 0.1 * yellows
+    return 0.0
 
 
-def load_taskset(config: TextArenaTasksetConfig | None = None) -> TextArenaTaskset:
-    taskset_config = TextArenaTasksetConfig.from_config(config)
-    parser = v0.XMLParser(fields=["guess"], answer_field="guess")
+@vf.reward(weight=0.2)
+async def format_reward(task: vf.Task, state: vf.State) -> float:
+    """1.0 iff every assistant turn contains a single well-formed ``<guess>...</guess>`` block."""
+    _ = task
+    messages = _assistant_messages(state)
+    if not messages:
+        return 0.0
+    for message in messages:
+        content = str(message.get("content") or "")
+        matches = _GUESS_PATTERN.findall(content)
+        if len(matches) != 1:
+            return 0.0
+    return 1.0
+
+
+def _resolve_system_prompt(cfg: WordleTasksetConfig) -> str:
+    """Pick the system prompt: explicit path > cfg.system_prompt > wordle default."""
+    if cfg.path_to_system_prompt is not None:
+        message = v0.SystemMessage.from_path(Path(cfg.path_to_system_prompt).expanduser())
+        content = message.content
+        return content if isinstance(content, str) else str(content)
+    if cfg.system_prompt is not None:
+        return cfg.system_prompt if isinstance(cfg.system_prompt, str) else str(cfg.system_prompt)
+    return DEFAULT_SYSTEM_PROMPT
+
+
+def load_taskset(cfg: WordleTasksetConfig) -> TextArenaTaskset:
+    set_fields = cfg.model_fields_set
+    num_train_examples = (
+        cfg.num_train_examples if "num_train_examples" in set_fields else DEFAULT_NUM_TRAIN_EXAMPLES
+    )
+    num_eval_examples = (
+        cfg.num_eval_examples if "num_eval_examples" in set_fields else DEFAULT_NUM_EVAL_EXAMPLES
+    )
     return TextArenaTaskset(
-        parser=parser,
+        game=cfg.game,
+        num_train_examples=num_train_examples,
+        num_eval_examples=num_eval_examples,
+        seed=cfg.seed,
+        answer_state_key=cfg.answer_state_key,
         feedback_fn=wordle_feedback_fn,
-        system_prompt=taskset_config.system_prompt,
+        system_prompt=_resolve_system_prompt(cfg),
         rewards=[
-            correct_answer_factory(parser),
-            partial_answer_factory(parser),
-            length_bonus_factory(parser),
-            format_reward_factory(parser),
+            correct_answer,
+            partial_answer,
+            length_bonus,
+            format_reward,
         ],
-        config=taskset_config,
+        config=cfg,
     )
 
 
-def load_environment(
-    config: vf.EnvConfig,
-    num_train_examples: int | None = None,
-    num_eval_examples: int | None = None,
-    seed: int | None = None,
-    system_prompt: str | None = None,
-    path_to_system_prompt: str | Path | None = None,
-) -> vf.Env:
-    if path_to_system_prompt is not None:
-        system_prompt = v0.SystemMessage.from_path(Path(path_to_system_prompt).expanduser()).content
-    config = vf.EnvConfig.from_config(
-        config,
-        taskset=TextArenaTasksetConfig.from_config(
-            game=DEFAULT_GAME,
-            num_train_examples=num_train_examples
-            if num_train_examples is not None
-            else DEFAULT_NUM_TRAIN_EXAMPLES,
-            num_eval_examples=num_eval_examples
-            if num_eval_examples is not None
-            else DEFAULT_NUM_EVAL_EXAMPLES,
-            seed=seed,
-            system_prompt=system_prompt if system_prompt is not None else DEFAULT_SYSTEM_PROMPT,
-        ),
-    )
+def load_environment(config: vf.EnvConfig) -> vf.Env:
+    cfg = WordleTasksetConfig(config.taskset)
     return vf.Env(
-        taskset=load_taskset(config=config.taskset),
+        taskset=load_taskset(cfg),
         harness=vf.Harness(config=config.harness),
     )

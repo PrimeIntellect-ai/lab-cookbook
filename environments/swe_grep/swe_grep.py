@@ -1,13 +1,9 @@
-import os
 import shlex
-from typing import Protocol, cast
+from typing import Protocol
 
 import verifiers.v1 as vf
 from datasets import Dataset, load_dataset
 from openai import AsyncOpenAI
-from pydantic import model_validator
-from typing_extensions import Self
-from verifiers import ensure_keys
 
 SYSTEM_PROMPT = """You are a helpful assistant that can answer questions and help with tasks.
 Use the provided tools to search through the codebase to best answer user queries.
@@ -46,16 +42,8 @@ class SweGrepTasksetConfig(vf.TasksetConfig):
     dataset_name: str = "cdreetz/swe-grep-v2"
     train_ratio: float = 0.9
     max_turns: int = 2
-    judge_model: str = "gpt-4.1-mini"
-    judge_base_url: str = "https://api.openai.com/v1"
-    judge_api_key_var: str = "OPENAI_API_KEY"
     repo_url: str = "https://github.com/microsoft/vscode.git"
     repo_path: str = "vscode"
-
-    @model_validator(mode="after")
-    def _ensure_required_keys(self) -> "Self":
-        ensure_keys([self.judge_api_key_var])
-        return self
 
 
 class _Sandbox(Protocol):
@@ -171,14 +159,11 @@ def _final_text(state: vf.State) -> str:
 
 
 @vf.update
-async def score_with_judge(
-    task: vf.Task,
-    state: vf.State,
-    judge: AsyncOpenAI,
-    judge_model: str,
-) -> None:
+async def score_with_judge(task: vf.Task, state: vf.State) -> None:
+    endpoint = state.get_endpoint_config(api="chat")
+    judge = AsyncOpenAI(api_key=endpoint["api_key"], base_url=endpoint["api_base"])
     response = await judge.chat.completions.create(
-        model=judge_model,
+        model=endpoint["model"],
         messages=[
             {
                 "role": "user",
@@ -278,10 +263,11 @@ def _source(config: SweGrepTasksetConfig, split: str):
             cache["train"] = train
             cache["test"] = test
         for index, raw_row in enumerate(cache[split]):
-            row = cast(vf.TaskRow, raw_row)
-            question = str(row["question"])
+            if not isinstance(raw_row, dict):
+                raise TypeError("Dataset rows must be dicts.")
+            question = str(raw_row["question"])
             yield {
-                **dict(row),
+                **raw_row,
                 "example_id": index,
                 "prompt": [{"role": "user", "content": question}],
                 "max_turns": config.max_turns,
@@ -290,14 +276,8 @@ def _source(config: SweGrepTasksetConfig, split: str):
     return _iter
 
 
-def load_toolset(
-    taskset_config: SweGrepTasksetConfig,
-    config: vf.ToolsetConfig | None = None,
-) -> vf.Toolset:
-    judge_client = AsyncOpenAI(
-        api_key=os.environ[taskset_config.judge_api_key_var],
-        base_url=taskset_config.judge_base_url,
-    )
+def load_environment(config: vf.EnvConfig) -> vf.Env:
+    cfg = SweGrepTasksetConfig(config.taskset)
     sandbox = vf.SandboxConfig(
         image="python:3.11-slim",
         scope="rollout",
@@ -307,41 +287,29 @@ def load_toolset(
         setup_timeout=600,
         setup_commands=[
             "apt-get update && apt-get install -y git ripgrep",
-            f"git clone --depth 1 {taskset_config.repo_url} {taskset_config.repo_path}",
-            f"test -d {taskset_config.repo_path}",
+            f"git clone --depth 1 {cfg.repo_url} {cfg.repo_path}",
+            f"test -d {cfg.repo_path}",
         ],
     )
-    return vf.Toolset(
+    toolset = vf.Toolset(
         tools=[grep_tool, list_files, read_file],
         sandbox=sandbox,
-        bindings={
-            "score_with_judge.judge": judge_client,
-            "score_with_judge.judge_model": lambda: taskset_config.judge_model,
-        },
         updates=[score_with_judge],
-        config=config,
     )
-
-
-def load_taskset(config: vf.TasksetConfig | None = None) -> vf.Taskset:
-    taskset_config = SweGrepTasksetConfig.from_config(config)
-    return vf.Taskset(
-        source=_source(taskset_config, "train"),
-        eval_source=_source(taskset_config, "test"),
+    taskset = vf.Taskset(
+        source=_source(cfg, "train"),
+        eval_source=_source(cfg, "test"),
         system_prompt=SYSTEM_PROMPT,
-        toolsets=[load_toolset(taskset_config)],
+        toolsets=[toolset],
         rewards=[
             correct_answer,
             correct_file_paths,
             parallel_tool_calls,
             efficiency_bonus_for_correct,
         ],
-        config=taskset_config,
+        config=cfg,
     )
-
-
-def load_environment(config: vf.EnvConfig) -> vf.Env:
     return vf.Env(
-        taskset=load_taskset(config=config.taskset),
+        taskset=taskset,
         harness=vf.Harness(config=config.harness),
     )

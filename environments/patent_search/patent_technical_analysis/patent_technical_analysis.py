@@ -113,9 +113,6 @@ VERDICT:
 
 
 class PatentTechnicalTasksetConfig(vf.TasksetConfig):
-    judge_model: str = "gpt-4.1"
-    judge_base_url: str = "https://api.openai.com/v1"
-    judge_api_key_var: str = "OPENAI_API_KEY"
     embed_model: str = "text-embedding-3-small"
     embed_base_url: str = "https://api.openai.com/v1"
     embed_api_key_var: str = "OPENAI_API_KEY"
@@ -454,80 +451,74 @@ def source(config: PatentTechnicalTasksetConfig):
         }
 
 
-def judge_reward_factory(config: PatentTechnicalTasksetConfig):
-    ensure_keys([config.judge_api_key_var])
-    judge_client = AsyncOpenAI(
-        api_key=os.environ[config.judge_api_key_var],
-        base_url=config.judge_base_url,
+@vf.reward(weight=1.0)
+async def judge_reward(task: vf.Task, state: vf.State) -> float:
+    info = normalize_info(task.get("info", {}))
+    ground_truth = info.get("ground_truth", {})
+    key_points = ground_truth.get("key_points", [])
+    if not key_points:
+        logger.error("[JUDGE] No key_points found in task info")
+        return 0.0
+    key_points_checklist = "".join(
+        f"{index}. {key_point}\n" for index, key_point in enumerate(key_points, start=1)
     )
-
-    @vf.reward(weight=1.0)
-    async def judge_reward(task: vf.Task, state: vf.State) -> float:
-        info = normalize_info(task.get("info", {}))
-        ground_truth = info.get("ground_truth", {})
-        key_points = ground_truth.get("key_points", [])
-        if not key_points:
-            logger.error("[JUDGE] No key_points found in task info")
-            return 0.0
-        key_points_checklist = "".join(
-            f"{index}. {key_point}\n" for index, key_point in enumerate(key_points, start=1)
+    source_quotes = ground_truth.get("source_quotes", [])
+    source_quotes_text = (
+        "\n".join("- " + str(source_quote) for source_quote in source_quotes)
+        if source_quotes
+        else "N/A"
+    )
+    completion = state["completion"]
+    last_assistant = next(
+        (msg for msg in reversed(completion) if msg.get("role") == "assistant"),
+        None,
+    )
+    response_text = str(last_assistant["content"]) if last_assistant else ""
+    formatted_prompt = JUDGE_PROMPT.format(
+        question=task["question"],
+        answer=task["answer"],
+        source_quotes=source_quotes_text,
+        response=response_text,
+        key_points_checklist=key_points_checklist,
+    )
+    endpoint = state.get_endpoint_config(api="chat")
+    judge_client = AsyncOpenAI(api_key=endpoint["api_key"], base_url=endpoint["api_base"])
+    try:
+        judge_response = await judge_client.chat.completions.create(
+            model=endpoint["model"],
+            messages=[{"role": "user", "content": formatted_prompt}],
+            temperature=0.0,
+            max_tokens=2048,
         )
-        source_quotes = ground_truth.get("source_quotes", [])
-        source_quotes_text = (
-            "\n".join("- " + str(source_quote) for source_quote in source_quotes)
-            if source_quotes
-            else "N/A"
-        )
-        completion = state["completion"]
-        last_assistant = next(
-            (msg for msg in reversed(completion) if msg.get("role") == "assistant"),
-            None,
-        )
-        response_text = str(last_assistant["content"]) if last_assistant else ""
-        formatted_prompt = JUDGE_PROMPT.format(
-            question=task["question"],
-            answer=task["answer"],
-            source_quotes=source_quotes_text,
-            response=response_text,
-            key_points_checklist=key_points_checklist,
-        )
-        try:
-            judge_response = await judge_client.chat.completions.create(
-                model=config.judge_model,
-                messages=[{"role": "user", "content": formatted_prompt}],
-                temperature=0.0,
-                max_tokens=2048,
-            )
-            response_text_judge = (judge_response.choices[0].message.content or "").strip()
-        except Exception as exc:
-            logger.error("[JUDGE] LLM call failed: %s", exc)
-            return 0.0
-        json_start = response_text_judge.find("{")
-        json_end = response_text_judge.rfind("}") + 1
-        if json_start == -1 or json_end == 0:
-            logger.error("[JUDGE] No JSON block found in judge response")
-            return 0.0
-        try:
-            evaluation = json.loads(response_text_judge[json_start:json_end])
-        except json.JSONDecodeError as exc:
-            logger.error("[JUDGE] JSON parse failed: %s", exc)
-            return 0.0
-        key_point_results = evaluation.get("key_points", [])
-        covered_count = sum(1 for key_point in key_point_results if key_point.get("covered", False))
-        score = covered_count / len(key_points)
-        if evaluation.get("hallucination", False):
-            score *= HALLUCINATION_MULTIPLIER
-        if evaluation.get("factual_error", False):
-            score *= FACTUAL_ERROR_MULTIPLIER
-        return max(0.0, min(1.0, score))
-
-    return judge_reward
+        response_text_judge = (judge_response.choices[0].message.content or "").strip()
+    except Exception as exc:
+        logger.error("[JUDGE] LLM call failed: %s", exc)
+        return 0.0
+    json_start = response_text_judge.find("{")
+    json_end = response_text_judge.rfind("}") + 1
+    if json_start == -1 or json_end == 0:
+        logger.error("[JUDGE] No JSON block found in judge response")
+        return 0.0
+    try:
+        evaluation = json.loads(response_text_judge[json_start:json_end])
+    except json.JSONDecodeError as exc:
+        logger.error("[JUDGE] JSON parse failed: %s", exc)
+        return 0.0
+    key_point_results = evaluation.get("key_points", [])
+    covered_count = sum(1 for key_point in key_point_results if key_point.get("covered", False))
+    score = covered_count / len(key_points)
+    if evaluation.get("hallucination", False):
+        score *= HALLUCINATION_MULTIPLIER
+    if evaluation.get("factual_error", False):
+        score *= FACTUAL_ERROR_MULTIPLIER
+    return max(0.0, min(1.0, score))
 
 
-def load_toolset(taskset_config: PatentTechnicalTasksetConfig) -> vf.Toolset:
-    ensure_keys([taskset_config.embed_api_key_var])
-    corpus = PatentCorpus(taskset_config)
-    return vf.Toolset(
+def load_environment(config: vf.EnvConfig) -> vf.Env:
+    cfg = PatentTechnicalTasksetConfig(config.taskset)
+    ensure_keys([cfg.embed_api_key_var])
+    corpus = PatentCorpus(cfg)
+    toolset = vf.Toolset(
         tools=[
             corpus.search_patents,
             corpus.get_metadata,
@@ -540,25 +531,14 @@ def load_toolset(taskset_config: PatentTechnicalTasksetConfig) -> vf.Toolset:
             corpus.read_section,
         ],
     )
-
-
-def load_taskset(
-    config: vf.TasksetConfig | None = None,
-) -> vf.Taskset:
-    taskset_config = PatentTechnicalTasksetConfig.from_config(config)
-    return vf.Taskset(
-        source=lambda: source(taskset_config),
+    taskset = vf.Taskset(
+        source=lambda: source(cfg),
         system_prompt=SYSTEM_PROMPT,
-        toolsets=[load_toolset(taskset_config)],
-        rewards=[judge_reward_factory(taskset_config)],
-        config=taskset_config,
+        toolsets=[toolset],
+        rewards=[judge_reward],
+        config=cfg,
     )
-
-
-def load_environment(
-    config: vf.EnvConfig,
-) -> vf.Env:
     return vf.Env(
-        taskset=load_taskset(config=config.taskset),
+        taskset=taskset,
         harness=vf.Harness(config=config.harness),
     )
