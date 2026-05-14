@@ -18,7 +18,7 @@ venv/
 *.index
 *outputs/*
 *.prime
-*uv.locklab-cookbook
+*uv.lock
 # Lab generated artifacts
 .env
 /outputs/
