@@ -74,15 +74,7 @@ prime eval run primeintellect/dspy-rlm \
   -t 2048
 ```
 
-<<<<<<< HEAD:guides/11-custom-harnesses/README.md
 The source package is `dspy_rlm`. The program creates a DSPy LM from the Lab endpoint config, runs the DSPy module, stores the answer in state, and lets the Taskset reward score the result.
-=======
-```text
-TODO: expected output
-```
-
-In source, the package is `dspy_rlm`. The program creates a DSPy LM from the Lab endpoint config, runs the DSPy module, stores the answer in state, and lets the Taskset reward score the result.
->>>>>>> worktree-validated-snuggling-pebble:guides/10-custom-harnesses/README.md
 
 For a more domain-specific DSPy example, use `dspy-flights`, whose source package is `dspy_flights`.
 
@@ -99,4 +91,4 @@ Do not add a custom harness just to expose a tool or change a system prompt. The
 
 ## Next
 
-In [Advanced Tasksets and Harnesses](../12-advanced-tasksets-and-harnesses/README.md), you will go deeper on reusable Tasksets, reusable Harnesses, config sections, nested calls, and lower-level composition.
+In [Advanced Tasksets and Harnesses](../13-advanced-tasksets-and-harnesses/README.md), you will go deeper on reusable Tasksets, reusable Harnesses, config sections, nested calls, and lower-level composition.

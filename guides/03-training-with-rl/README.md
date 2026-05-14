@@ -135,15 +135,7 @@ Start the run:
 prime train configs/rl/reverse-text.toml
 ```
 
-<<<<<<< HEAD
 The command prints a run ID along with the command for streaming logs from the new Hosted Training run. Follow logs with:
-=======
-```text
-TODO: expected output
-```
-
-The command prints a run ID and the log command for the new Hosted Training run. Follow logs with:
->>>>>>> worktree-validated-snuggling-pebble
 
 ```bash
 prime train logs <run_id> -f

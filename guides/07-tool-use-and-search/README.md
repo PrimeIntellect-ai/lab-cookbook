@@ -145,4 +145,4 @@ During training, watch both reward and trajectories. A good run should show the 
 
 ## Next
 
-In [Custom Data Pipelines](../08-custom-data-pipelines/README.md), you will build a search environment over your own corpus instead of a pre-built one. Then [Synthetic Agent Environments](../08-synthetic-agent-environments/README.md) shows how to generate the world itself in memory and let an agent interact with it through tools.
+In [Custom Data Pipelines](../08-custom-data-pipelines/README.md), you will build a search environment over your own corpus instead of a pre-built one. Then [Synthetic Agent Environments](../09-synthetic-agent-environments/README.md) shows how to generate the world itself in memory and let an agent interact with it through tools.

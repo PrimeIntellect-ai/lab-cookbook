@@ -220,4 +220,4 @@ Watch early rollouts as much as the reward curve. The first sign of learning on 
 
 ## Next
 
-In [Multimodal Environments](../09-multimodal-environments/README.md), you will work with environments that include image inputs and multimodal scoring.
+In [Multimodal Environments](../10-multimodal-environments/README.md), you will work with environments that include image inputs and multimodal scoring.

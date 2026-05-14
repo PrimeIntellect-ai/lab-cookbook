@@ -112,15 +112,7 @@ Then compare the baseline and GEPA runs:
 prime lab view --evals
 ```
 
-<<<<<<< HEAD
 Keep the model, sample count, rollout count, and sampling settings fixed while comparing prompts. The only thing that should differ between runs is the system prompt loaded through `path_to_system_prompt`.
-=======
-```text
-TODO: expected output
-```
-
-Keep the model, sample count, rollout count, and sampling settings fixed while comparing prompts. The only intended change is the system prompt loaded through `path_to_system_prompt`.
->>>>>>> worktree-validated-snuggling-pebble
 
 ## Decide Whether to Keep It
 

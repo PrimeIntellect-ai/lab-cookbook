@@ -68,7 +68,7 @@ TODO: walk through the tradeoffs the reader is implicitly making when they type 
 - **Size vs. cost vs. latency.** When a small, fast model is enough; when you need a bigger one to tell whether the environment is the bottleneck or the model is.
 - **Reasoning controls.** Models with `reasoning_effort` (e.g. gpt-oss, Nemotron) vs. plain instruct models; when the extra thinking time pays for itself.
 - **Tool-use and JSON reliability.** Which families follow tool schemas cleanly enough to evaluate; what to watch for in rollouts when they don't.
-- **Multimodal support.** Which families accept images; cross-link to [Multimodal Environments](../09-multimodal-environments/README.md).
+- **Multimodal support.** Which families accept images; cross-link to [Multimodal Environments](../10-multimodal-environments/README.md).
 - **Open vs. closed.** When you want a model you can also train (covered in [Training with RL](../03-training-with-rl/README.md#choose-a-training-model)) vs. a frontier model you only evaluate against.
 
 Practical defaults: a small, cheap model for the smoke-eval pass, then a stronger model once the environment is stable. The same `-m` flag swaps between them with no other changes.
