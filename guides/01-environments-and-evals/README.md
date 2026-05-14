@@ -25,7 +25,19 @@ prime eval run primeintellect/gsm8k \
   -r 2
 ```
 
-This evaluates 5 examples with 2 rollouts per example. Results are saved automatically.
+This evaluates 5 examples with 2 rollouts per example, using the default value of 1024 for `max_tokens`. Results are saved automatically. This is equivalent to running:
+
+```toml
+model = "openai/gpt-5-nano"
+save_results = true
+
+[[eval]]
+env_id = "primeintellect/gsm8k"
+num_examples = 5 
+rollouts_per_example = 2
+sampling_args = { max_tokens = 1024 }
+```
+# link to configs/00/first-eval.toml
 
 Open the Lab viewer to inspect eval results:
 
@@ -69,11 +81,13 @@ num_examples = 20
 rollouts_per_example = 1
 sampling_args = { max_tokens = 1024, temperature = 0.7 }
 ```
+# link to configs/00/first-eval-suite.toml
+
 
 Run the suite:
 
 ```bash
-prime eval run configs/eval/first-suite.toml
+prime eval run configs/00/first-suite.toml
 ```
 
 Use this pattern when you want to compare model behavior across environments, compare a base model to a trained adapter, or re-run the same checks after changing a prompt or config.
@@ -81,3 +95,7 @@ Use this pattern when you want to compare model behavior across environments, co
 ## Next
 
 In [Building Your First Environment](../02-building-your-first-environment/README.md), you will build a small environment yourself and use evals to check whether it is ready for training.
+
+---
+
+### Footnotes

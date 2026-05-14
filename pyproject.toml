@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "prime-cookbook"
 version = "0.1.0"
-description = "RL environment recipes for Prime Intellect Lab"
+description = "Guides and recipes for Prime Intellect Lab"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
@@ -28,8 +28,8 @@ dev = [
 packages = ["lab_cookbook"]
 
 [tool.verifiers.eval]
-num_examples = 100
-rollouts_per_example = 4
+num_examples = 5
+rollouts_per_example = 3
 
 [tool.ruff]
 line-length = 100

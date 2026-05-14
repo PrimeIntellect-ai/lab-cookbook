@@ -17,9 +17,6 @@ build-backend = "hatchling.build"
 [tool.hatch.build]
 include = ["swe_grep.py", "pyproject.toml", "src"] 
 
-[project.entry-points."verifiers.environments"]
-swe-grep = "swe_grep:load_environment"
-
 [tool.verifiers.eval]
 num_examples = 5
 rollouts_per_example = 3

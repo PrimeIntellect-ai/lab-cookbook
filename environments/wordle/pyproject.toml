@@ -17,9 +17,6 @@ build-backend = "hatchling.build"
 [tool.hatch.build]
 include = ["wordle.py", "textarena_taskset.py", "pyproject.toml", "README.md"]
 
-[project.entry-points."verifiers.environments"]
-wordle = "wordle:load_environment"
-
 [tool.verifiers.eval]
-num_examples = 20
-rollouts_per_example = 1
+num_examples = 5
+rollouts_per_example = 3

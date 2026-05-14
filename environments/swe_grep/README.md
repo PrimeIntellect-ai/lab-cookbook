@@ -112,15 +112,6 @@ Answer: <your answer here>
 
 From this recipe directory, install dependencies and run eval through Verifiers or Prime tooling.
 
-### Environment entrypoint
-
-`pyproject.toml` points at:
-
-```toml
-[project.entry-points."verifiers.environments"]
-swe-grep = "swe_grep:load_environment"
-```
-
 ### Eval defaults currently present
 
 ```toml

@@ -16,9 +16,6 @@ build-backend = "hatchling.build"
 [tool.hatch.build]
 include = ["ethics_debate.py", "README.md"]
 
-[project.entry-points."verifiers.environments"]
-ethics-debate = "ethics_debate:load_environment"
-
 [tool.verifiers.eval]
-num_examples = 3
-rollouts_per_example = 1
+num_examples = 5
+rollouts_per_example = 3

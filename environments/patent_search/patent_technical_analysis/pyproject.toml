@@ -19,9 +19,6 @@ build-backend = "hatchling.build"
 [tool.hatch.build]
 include = ["patent_technical_analysis.py", "pyproject.toml"]
 
-[project.entry-points."verifiers.environments"]
-patent-technical-analysis = "patent_technical_analysis:load_environment"
-
 [tool.verifiers.eval]
-num_examples = 10
+num_examples = 5
 rollouts_per_example = 3

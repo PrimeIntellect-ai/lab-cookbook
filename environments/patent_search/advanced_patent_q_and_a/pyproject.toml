@@ -19,9 +19,6 @@ build-backend = "hatchling.build"
 [tool.hatch.build]
 include = ["advanced_patent_q_and_a.py", "pyproject.toml"]
 
-[project.entry-points."verifiers.environments"]
-advanced-patent-q-and-a = "advanced_patent_q_and_a:load_environment"
-
 [tool.verifiers.eval]
-num_examples = 10
-rollouts_per_example = 2
+num_examples = 5
+rollouts_per_example = 3

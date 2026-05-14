@@ -18,9 +18,6 @@ build-backend = "hatchling.build"
 [tool.hatch.build]
 include = ["wiki_search.py", "pyproject.toml"]
 
-[project.entry-points."verifiers.environments"]
-wiki-search = "wiki_search:load_environment"
-
 [tool.verifiers.eval]
 num_examples = 5
 rollouts_per_example = 3
