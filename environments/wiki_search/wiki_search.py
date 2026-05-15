@@ -57,6 +57,11 @@ class WikiSearchTasksetConfig(vf.TasksetConfig):
         return self
 
 
+class WikiSearchEnvConfig(vf.EnvConfig):
+    taskset: WikiSearchTasksetConfig
+    harness: vf.HarnessConfig
+
+
 class WikiSearchTaskset(vf.Taskset):
     config_type = WikiSearchTasksetConfig
 
@@ -154,68 +159,6 @@ def _get_wiki(config: WikiSearchTasksetConfig) -> WikiIndex:
     return _wiki_singleton
 
 
-async def _search_pages(query: str, wiki: WikiIndex) -> list[dict[str, str]]:
-    async with get_chroma_semaphore():
-        results = await asyncio.to_thread(wiki.collection.query, query_texts=[query], n_results=10)
-    if not results or not results["metadatas"]:
-        raise ValueError(f"No results found for query: {query}")
-    output: list[dict[str, str]] = []
-    for i in range(len(results["ids"][0])):
-        output.append(
-            {
-                "page_id": results["ids"][0][i],
-                "title": results["metadatas"][0][i]["title"],
-            }
-        )
-    return output
-
-
-async def _view_sections(page_id: str, wiki: WikiIndex) -> list[dict[str, str]]:
-    content = wiki.page_id_to_content[page_id]
-    sections: list[dict[str, str]] = []
-    for line in content.split("\n"):
-        if line.startswith("#"):
-            section_name = line.lstrip("#").strip()
-            sections.append(
-                {
-                    "section_id": f"{page_id}:{normalize_id(section_name)}",
-                    "section_name": section_name,
-                }
-            )
-    if not sections:
-        sections.append(
-            {
-                "section_id": f"{page_id}:full",
-                "section_name": "Full Page",
-            }
-        )
-    return sections
-
-
-async def _read_section(section_id: str, wiki: WikiIndex) -> str:
-    if ":" not in section_id:
-        raise ValueError("Invalid section_id format. Expected: page_id:section_name")
-    page_id, section_name_id = section_id.split(":", 1)
-    content = wiki.page_id_to_content[page_id]
-    if section_name_id == "full":
-        return content
-    lines = content.split("\n")
-    section_start: int | None = None
-    section_end: int | None = None
-    for i, line in enumerate(lines):
-        if not line.startswith("#"):
-            continue
-        current_section = normalize_id(line.lstrip("#").strip())
-        if current_section == section_name_id and section_start is None:
-            section_start = i
-        elif section_start is not None and section_end is None:
-            section_end = i
-            break
-    if section_start is None:
-        raise ValueError(f"Section not found: {section_id}")
-    return "\n".join(lines[section_start : section_end or len(lines)])
-
-
 def _source(config: WikiSearchTasksetConfig):
     def _iter():
         dataset = load_dataset(config.dataset_name, split=config.dataset_split)
@@ -261,27 +204,77 @@ async def judge_reward(task: vf.Task, state: vf.State) -> float:
     return 1.0 if "yes" in text.lower() else 0.0
 
 
-def load_environment(config: vf.EnvConfig) -> vf.Env:
-    cfg = WikiSearchTasksetConfig(config.taskset)
-
+def load_taskset(config: WikiSearchTasksetConfig) -> WikiSearchTaskset:
     async def search_pages(query: str) -> list[dict[str, str]]:
         """Search for top 10 relevant articles using title embedding similarity."""
-        return await _search_pages(query, _get_wiki(cfg))
+        wiki = _get_wiki(config)
+        async with get_chroma_semaphore():
+            results = await asyncio.to_thread(
+                wiki.collection.query, query_texts=[query], n_results=10
+            )
+        if not results or not results["metadatas"]:
+            raise ValueError(f"No results found for query: {query}")
+        return [
+            {
+                "page_id": results["ids"][0][i],
+                "title": results["metadatas"][0][i]["title"],
+            }
+            for i in range(len(results["ids"][0]))
+        ]
 
     async def view_sections(page_id: str) -> list[dict[str, str]]:
         """View the sections of a page."""
-        return await _view_sections(page_id, _get_wiki(cfg))
+        content = _get_wiki(config).page_id_to_content[page_id]
+        sections: list[dict[str, str]] = []
+        for line in content.split("\n"):
+            if line.startswith("#"):
+                section_name = line.lstrip("#").strip()
+                sections.append(
+                    {
+                        "section_id": f"{page_id}:{normalize_id(section_name)}",
+                        "section_name": section_name,
+                    }
+                )
+        if not sections:
+            sections.append({"section_id": f"{page_id}:full", "section_name": "Full Page"})
+        return sections
 
     async def read_section(section_id: str) -> str:
         """Read a section of a page."""
-        return await _read_section(section_id, _get_wiki(cfg))
+        if ":" not in section_id:
+            raise ValueError("Invalid section_id format. Expected: page_id:section_name")
+        page_id, section_name_id = section_id.split(":", 1)
+        content = _get_wiki(config).page_id_to_content[page_id]
+        if section_name_id == "full":
+            return content
+        lines = content.split("\n")
+        section_start: int | None = None
+        section_end: int | None = None
+        for i, line in enumerate(lines):
+            if not line.startswith("#"):
+                continue
+            current_section = normalize_id(line.lstrip("#").strip())
+            if current_section == section_name_id and section_start is None:
+                section_start = i
+            elif section_start is not None and section_end is None:
+                section_end = i
+                break
+        if section_start is None:
+            raise ValueError(f"Section not found: {section_id}")
+        return "\n".join(lines[section_start : section_end or len(lines)])
 
     toolset = vf.Toolset(tools=[search_pages, view_sections, read_section])
-    taskset = WikiSearchTaskset(
-        source=_source(cfg),
+    return WikiSearchTaskset(
+        source=_source(config),
         system_prompt=SYSTEM_PROMPT,
         toolsets=[toolset],
         rewards=[judge_reward],
-        config=cfg,
+        config=config,
     )
-    return vf.Env(taskset=taskset)
+
+
+def load_environment(config: WikiSearchEnvConfig) -> vf.Env:
+    return vf.Env(
+        taskset=load_taskset(config=config.taskset),
+        harness=vf.Harness(config=config.harness),
+    )

@@ -60,6 +60,11 @@ class EthicsDebateTasksetConfig(vf.TasksetConfig):
     num_rounds: int = 2
 
 
+class EthicsDebateEnvConfig(vf.EnvConfig):
+    taskset: EthicsDebateTasksetConfig
+    harness: vf.HarnessConfig
+
+
 class EthicsDebateTaskset(vf.Taskset):
     config_type = EthicsDebateTasksetConfig
 
@@ -217,5 +222,12 @@ async def argument_quality(task: vf.Task, state: vf.State) -> float:
     return float(numbers[0]) / 10.0 if numbers else 0.0
 
 
-def load_environment(config: vf.EnvConfig) -> vf.Env:
-    return vf.Env(taskset=EthicsDebateTaskset(config=config.taskset))
+def load_taskset(config: EthicsDebateTasksetConfig) -> EthicsDebateTaskset:
+    return EthicsDebateTaskset(config=config)
+
+
+def load_environment(config: EthicsDebateEnvConfig) -> vf.Env:
+    return vf.Env(
+        taskset=load_taskset(config=config.taskset),
+        harness=vf.Harness(config=config.harness),
+    )
