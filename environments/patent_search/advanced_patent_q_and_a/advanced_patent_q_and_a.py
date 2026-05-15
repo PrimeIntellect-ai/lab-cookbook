@@ -52,6 +52,11 @@ class AdvancedPatentTasksetConfig(vf.TasksetConfig):
     chroma_db_dir: str = CHROMA_DB_DIR
 
 
+class AdvancedPatentEnvConfig(vf.EnvConfig):
+    taskset: AdvancedPatentTasksetConfig
+    harness: vf.HarnessConfig
+
+
 class AdvancedPatentTaskset(vf.Taskset):
     config_type = AdvancedPatentTasksetConfig
 
@@ -184,89 +189,6 @@ def _get_patents(config: AdvancedPatentTasksetConfig) -> PatentIndex:
     return _patents_singleton
 
 
-async def _search_patents(query: str, patents: PatentIndex) -> list[dict[str, str]]:
-    async with get_chroma_semaphore():
-        results = await asyncio.to_thread(
-            patents.collection.query, query_texts=[query], n_results=10
-        )
-    if not results or not results["metadatas"]:
-        raise ValueError(f"No results found for query: {query}")
-    output: list[dict[str, str]] = []
-    for index in range(len(results["ids"][0])):
-        output.append(
-            {
-                "patent_id": results["ids"][0][index],
-                "title": results["metadatas"][0][index]["title"],
-                "abstract": results["metadatas"][0][index].get("abstract", ""),
-            }
-        )
-    return output
-
-
-async def _get_metadata(patent_id: str, patents: PatentIndex) -> dict[str, str]:
-    if patent_id not in patents.patent_id_to_metadata:
-        raise ValueError(f"Patent not found: {patent_id}")
-    metadata = patents.patent_id_to_metadata[patent_id]
-    return {
-        "title": patents.patent_id_to_title.get(patent_id, ""),
-        "filing_date": format_date(metadata.get("filing_date", "")),
-        "grant_date": format_date(metadata.get("grant_date", "")),
-        "claim_count": metadata.get("claim_count", "0"),
-    }
-
-
-async def _get_abstract(patent_id: str, patents: PatentIndex) -> str:
-    if patent_id not in patents.patent_id_to_abstract:
-        raise ValueError(f"Patent not found: {patent_id}")
-    return patents.patent_id_to_abstract[patent_id]
-
-
-async def _view_sections(patent_id: str, patents: PatentIndex) -> list[dict[str, str]]:
-    content = patents.patent_id_to_content[patent_id]
-    sections: list[dict[str, str]] = []
-    for line in content.split("\n"):
-        if line.startswith("#"):
-            section_name = line.lstrip("#").strip()
-            sections.append(
-                {
-                    "section_id": f"{patent_id}:{normalize_id(section_name)}",
-                    "section_name": section_name,
-                }
-            )
-    if not sections:
-        sections.append(
-            {
-                "section_id": f"{patent_id}:full",
-                "section_name": "Full Patent",
-            }
-        )
-    return sections
-
-
-async def _read_section(section_id: str, patents: PatentIndex) -> str:
-    if ":" not in section_id:
-        raise ValueError("Invalid section_id format. Expected: patent_id:section_name")
-    patent_id, section_name_id = section_id.split(":", 1)
-    content = patents.patent_id_to_content[patent_id]
-    if section_name_id == "full":
-        return content
-    lines = content.split("\n")
-    section_start: int | None = None
-    section_end: int | None = None
-    for index, line in enumerate(lines):
-        if not line.startswith("#"):
-            continue
-        current_section = normalize_id(line.lstrip("#").strip())
-        if current_section == section_name_id and section_start is None:
-            section_start = index
-        elif section_start is not None and section_end is None:
-            section_end = index
-            break
-    if section_start is None:
-        raise ValueError(f"Section not found: {section_id}")
-    return "\n".join(lines[section_start : section_end or len(lines)])
-
-
 def source(config: AdvancedPatentTasksetConfig):
     dataset = load_dataset(config.corpus_dataset, data_files=config.qa_file, split="train")
     for index, row in enumerate(dataset):
@@ -305,9 +227,8 @@ async def judge_reward(task: vf.Task, state: vf.State) -> float:
     return 1.0 if "yes" in text.lower() else 0.0
 
 
-def load_environment(config: vf.EnvConfig) -> vf.Env:
-    cfg = AdvancedPatentTasksetConfig(config.taskset)
-    ensure_keys([cfg.embed_api_key_var])
+def load_taskset(config: AdvancedPatentTasksetConfig) -> AdvancedPatentTaskset:
+    ensure_keys([config.embed_api_key_var])
 
     async def search_patents(query: str) -> list[dict[str, str]]:
         """Search for relevant patents using title and abstract embedding similarity.
@@ -315,7 +236,21 @@ def load_environment(config: vf.EnvConfig) -> vf.Env:
         Args:
             query: The query to search for.
         """
-        return await _search_patents(query, _get_patents(cfg))
+        patents = _get_patents(config)
+        async with get_chroma_semaphore():
+            results = await asyncio.to_thread(
+                patents.collection.query, query_texts=[query], n_results=10
+            )
+        if not results or not results["metadatas"]:
+            raise ValueError(f"No results found for query: {query}")
+        return [
+            {
+                "patent_id": results["ids"][0][index],
+                "title": results["metadatas"][0][index]["title"],
+                "abstract": results["metadatas"][0][index].get("abstract", ""),
+            }
+            for index in range(len(results["ids"][0]))
+        ]
 
     async def get_metadata(patent_id: str) -> dict[str, str]:
         """Get patent metadata.
@@ -323,7 +258,16 @@ def load_environment(config: vf.EnvConfig) -> vf.Env:
         Args:
             patent_id: The ID of the patent.
         """
-        return await _get_metadata(patent_id, _get_patents(cfg))
+        patents = _get_patents(config)
+        if patent_id not in patents.patent_id_to_metadata:
+            raise ValueError(f"Patent not found: {patent_id}")
+        metadata = patents.patent_id_to_metadata[patent_id]
+        return {
+            "title": patents.patent_id_to_title.get(patent_id, ""),
+            "filing_date": format_date(metadata.get("filing_date", "")),
+            "grant_date": format_date(metadata.get("grant_date", "")),
+            "claim_count": metadata.get("claim_count", "0"),
+        }
 
     async def get_abstract(patent_id: str) -> str:
         """Get the full abstract text for a patent.
@@ -331,7 +275,10 @@ def load_environment(config: vf.EnvConfig) -> vf.Env:
         Args:
             patent_id: The ID of the patent.
         """
-        return await _get_abstract(patent_id, _get_patents(cfg))
+        patents = _get_patents(config)
+        if patent_id not in patents.patent_id_to_abstract:
+            raise ValueError(f"Patent not found: {patent_id}")
+        return patents.patent_id_to_abstract[patent_id]
 
     async def view_sections(patent_id: str) -> list[dict[str, str]]:
         """View the sections of a patent.
@@ -339,7 +286,20 @@ def load_environment(config: vf.EnvConfig) -> vf.Env:
         Args:
             patent_id: The ID of the patent to view.
         """
-        return await _view_sections(patent_id, _get_patents(cfg))
+        content = _get_patents(config).patent_id_to_content[patent_id]
+        sections: list[dict[str, str]] = []
+        for line in content.split("\n"):
+            if line.startswith("#"):
+                section_name = line.lstrip("#").strip()
+                sections.append(
+                    {
+                        "section_id": f"{patent_id}:{normalize_id(section_name)}",
+                        "section_name": section_name,
+                    }
+                )
+        if not sections:
+            sections.append({"section_id": f"{patent_id}:full", "section_name": "Full Patent"})
+        return sections
 
     async def read_section(section_id: str) -> str:
         """Read a section of a patent.
@@ -347,16 +307,42 @@ def load_environment(config: vf.EnvConfig) -> vf.Env:
         Args:
             section_id: The ID of the section to read.
         """
-        return await _read_section(section_id, _get_patents(cfg))
+        if ":" not in section_id:
+            raise ValueError("Invalid section_id format. Expected: patent_id:section_name")
+        patent_id, section_name_id = section_id.split(":", 1)
+        content = _get_patents(config).patent_id_to_content[patent_id]
+        if section_name_id == "full":
+            return content
+        lines = content.split("\n")
+        section_start: int | None = None
+        section_end: int | None = None
+        for index, line in enumerate(lines):
+            if not line.startswith("#"):
+                continue
+            current_section = normalize_id(line.lstrip("#").strip())
+            if current_section == section_name_id and section_start is None:
+                section_start = index
+            elif section_start is not None and section_end is None:
+                section_end = index
+                break
+        if section_start is None:
+            raise ValueError(f"Section not found: {section_id}")
+        return "\n".join(lines[section_start : section_end or len(lines)])
 
     toolset = vf.Toolset(
         tools=[search_patents, get_metadata, get_abstract, view_sections, read_section],
     )
-    taskset = AdvancedPatentTaskset(
-        source=lambda: source(cfg),
+    return AdvancedPatentTaskset(
+        source=lambda: source(config),
         system_prompt=SYSTEM_PROMPT,
         toolsets=[toolset],
         rewards=[judge_reward],
-        config=cfg,
+        config=config,
     )
-    return vf.Env(taskset=taskset)
+
+
+def load_environment(config: AdvancedPatentEnvConfig) -> vf.Env:
+    return vf.Env(
+        taskset=load_taskset(config=config.taskset),
+        harness=vf.Harness(config=config.harness),
+    )

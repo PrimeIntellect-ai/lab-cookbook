@@ -46,6 +46,11 @@ class SweGrepTasksetConfig(vf.TasksetConfig):
     repo_path: str = "vscode"
 
 
+class SweGrepEnvConfig(vf.EnvConfig):
+    taskset: SweGrepTasksetConfig
+    harness: vf.HarnessConfig
+
+
 class SweGrepTaskset(vf.Taskset):
     config_type = SweGrepTasksetConfig
 
@@ -280,8 +285,7 @@ def _source(config: SweGrepTasksetConfig, split: str):
     return _iter
 
 
-def load_environment(config: vf.EnvConfig) -> vf.Env:
-    cfg = SweGrepTasksetConfig(config.taskset)
+def load_taskset(config: SweGrepTasksetConfig) -> SweGrepTaskset:
     sandbox = vf.SandboxConfig(
         image="python:3.11-slim",
         scope="rollout",
@@ -291,8 +295,8 @@ def load_environment(config: vf.EnvConfig) -> vf.Env:
         setup_timeout=600,
         setup_commands=[
             "apt-get update && apt-get install -y git ripgrep",
-            f"git clone --depth 1 {cfg.repo_url} {cfg.repo_path}",
-            f"test -d {cfg.repo_path}",
+            f"git clone --depth 1 {config.repo_url} {config.repo_path}",
+            f"test -d {config.repo_path}",
         ],
     )
     toolset = vf.Toolset(
@@ -300,9 +304,9 @@ def load_environment(config: vf.EnvConfig) -> vf.Env:
         sandbox=sandbox,
         updates=[score_with_judge],
     )
-    taskset = SweGrepTaskset(
-        source=_source(cfg, "train"),
-        eval_source=_source(cfg, "test"),
+    return SweGrepTaskset(
+        source=_source(config, "train"),
+        eval_source=_source(config, "test"),
         system_prompt=SYSTEM_PROMPT,
         toolsets=[toolset],
         rewards=[
@@ -311,6 +315,12 @@ def load_environment(config: vf.EnvConfig) -> vf.Env:
             parallel_tool_calls,
             efficiency_bonus_for_correct,
         ],
-        config=cfg,
+        config=config,
     )
-    return vf.Env(taskset=taskset)
+
+
+def load_environment(config: SweGrepEnvConfig) -> vf.Env:
+    return vf.Env(
+        taskset=load_taskset(config=config.taskset),
+        harness=vf.Harness(config=config.harness),
+    )

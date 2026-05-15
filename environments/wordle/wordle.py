@@ -18,6 +18,11 @@ class WordleTasksetConfig(TextArenaTasksetConfig):
     path_to_system_prompt: str | None = None
 
 
+class WordleEnvConfig(vf.EnvConfig):
+    taskset: WordleTasksetConfig
+    harness: vf.HarnessConfig
+
+
 def wordle_feedback_fn(observation: str) -> str:
     latest_observation = observation.split("[GAME]")[-1].strip()
     if "Feedback:" in latest_observation:
@@ -128,5 +133,12 @@ class WordleTaskset(TextArenaTaskset):
         super().__init__(config=cfg, **kwargs)
 
 
-def load_environment(config: vf.EnvConfig) -> vf.Env:
-    return vf.Env(taskset=WordleTaskset(config=config.taskset))
+def load_taskset(config: WordleTasksetConfig) -> WordleTaskset:
+    return WordleTaskset(config=config)
+
+
+def load_environment(config: WordleEnvConfig) -> vf.Env:
+    return vf.Env(
+        taskset=load_taskset(config=config.taskset),
+        harness=vf.Harness(config=config.harness),
+    )
