@@ -39,7 +39,7 @@ Inspect:
 - which tools the model called and in what order
 - whether it read attendee constraints before proposing a window
 - whether the proposed window respects required attendees and hard local-time bounds
-- whether the final score is close to the oracle best for that task
+- whether the final score is close to the oracle<a href="../../reference/glossary.md#oracle">¹</a> best for that task
 - whether failures came from running out of turns, picking conflicting windows, or formatting the submission wrong
 
 The environment ships a standalone visualizer that renders the generated problem as a TUI similar to a meeting app. Use it to develop intuition for what the agent sees:
@@ -49,7 +49,7 @@ uv run --project environments/calendar_scheduling \
   calendar-scheduling-tui --show-oracle --difficulty medium --seed 5
 ```
 
-The visualizer shows attendees, time zones, busy blocks, hard and soft constraints, oracle best windows, and the random-baseline score. If the oracle score is high and the random baseline is low, the task has signal: there are valid solutions and they are not trivially common.
+The visualizer shows attendees, time zones, busy blocks, hard and soft constraints, oracle best windows, and the random-baseline score. If the oracle score is high and the random baseline<a href="../../reference/glossary.md#random-baseline">²</a> is low, the task has signal: there are valid solutions and they are not trivially common.
 
 ## The Synthetic Pattern
 
@@ -97,7 +97,7 @@ Two design choices keep the environment honest:
 - **Budget the oracle.** `check_window` is the agent's view of the oracle. Bound the number of calls per rollout (the TUI shows the budget as `Score-check budget`) so the agent cannot brute-force the search space. The remaining budget should be visible in every tool result.
 - **Surface remaining turns.** Tool results include the remaining turn count. The agent learns to plan instead of exploring exhaustively.
 
-This is the same Toolset pattern from [Tool Use and Search](../07-tool-use-and-search/README.md), with one extra requirement: the per-rollout state owns the generated world, not just a session handle into an external one. Wire tools that need per-rollout context through `state` rather than module globals; the v1 `vf.Toolset` runs each tool with `task` and `state` in scope.
+This is the same Toolset pattern from [Tool Use and Search](../07-tool-use-and-search/README.md), with one extra requirement: the per-rollout state<a href="../../reference/glossary.md#per-rollout-state">³</a> owns the generated world, not just a session handle into an external one. Wire tools that need per-rollout context through `state` rather than module globals; the v1 `vf.Toolset` runs each tool with `task` and `state` in scope.
 
 ## Designing the Reward
 

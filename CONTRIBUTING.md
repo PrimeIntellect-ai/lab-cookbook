@@ -56,6 +56,8 @@ def load_environment() -> vf.Environment:
 
 **Checkpoint**: Run `python -c "from my_recipe import load_environment; env = load_environment(); print(env)"` — should not raise.
 
+The `Rubric`<a href="reference/glossary.md#rubric">¹</a> gathers the reward functions that score each rollout.
+
 ---
 
 ## Step 2: Add pyproject.toml

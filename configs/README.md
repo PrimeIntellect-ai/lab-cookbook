@@ -9,9 +9,9 @@ Starter TOMLs for the three Hosted Training CLIs (`prime eval run`, `prime gepa 
 | `eval/` | `prime eval run --config <file>` | Evaluate a model on one or more environments. |
 | `gepa/` | `prime gepa run --config <file>` | Optimize environment prompts with GEPA. |
 | `rl/` | `prime rl train --config <file>` | RL training on one or more environments. |
-| `endpoints.toml` | `prime eval run -e <endpoint_id>` | Named hosted endpoints (Prime Inference, Anthropic, OpenAI, …) for evals against non-trainable models. |
+| `endpoints.toml` | `prime eval run -e <endpoint_id>` | Named hosted endpoints using an `endpoint_id`<a href="../reference/glossary.md#endpoint-id">¹</a> alias (Prime Inference, Anthropic, OpenAI, etc.) for evals against non-trainable models. |
 
-Each subdirectory ships one TOML per supported model family. They differ only along three axes: the **`model`** identifier (and `reflection_model` for GEPA), the **`max_tokens`** sampling budget, and the **default environment** preselected in the `[[env]]`/`[[eval]]` block. Everything else (eval volume, GEPA loop sizes, RL batch shape) is held constant so the files diff cleanly.
+Each subdirectory ships one TOML per supported model family. They differ only along three axes: the **`model`** identifier (and `reflection_model`<a href="../reference/glossary.md#reflection-model">²</a> for GEPA), the **`max_tokens`** sampling budget, and the **default environment** preselected in the `[[env]]`/`[[eval]]` block. Everything else (eval volume, GEPA loop sizes, RL batch shape) is held constant so the files diff cleanly.
 
 ## The model TOMLs
 
@@ -33,6 +33,6 @@ Notes that vary by family beyond the table:
 1. **Pick the family by scale and task shape.** Small dense (`qwen-3-5`, `llama-3`) are the right default for quick iteration, format-following tasks, and the smallest training runs — that's why `reverse-text` is preselected. MoE / larger reasoning models (`qwen-3-5-moe`, `nemotron-3`, `gpt-oss`) are preselected on `wiki-search` because they handle multi-turn tool use and longer contexts better; 2048 `max_tokens` reflects that.
 2. **Pick the size within the family by uncommenting one `model` line.** For `gepa/*`, update both `model` and `reflection_model` together.
 3. **Pick the environment by uncommenting one `[[env]]` / `[[eval]]` block.** The preselected env matches what the family runs well; swap it if you have a specific target.
-4. **Tune the loop knobs only after a smoke run works.** `max_tokens` controls per-rollout budget; RL `batch_size` and `rollouts_per_example` control sample throughput; GEPA `max_calls` / `num_train` / `num_val` / `minibatch_size` control optimizer cost.
+4. **Tune the loop knobs only after a smoke run works.** `max_tokens` controls per-rollout budget; RL `batch_size` and `rollouts_per_example` control sample throughput; GEPA `max_calls`<a href="../reference/glossary.md#max-calls">³</a> / `num_train`<a href="../reference/glossary.md#num-train">⁴</a> / `num_val`<a href="../reference/glossary.md#num-val">⁵</a> / `minibatch_size`<a href="../reference/glossary.md#minibatch-size">⁶</a> control optimizer cost. Use `max_concurrent`<a href="../reference/glossary.md#max-concurrent">⁷</a> to cap parallel GEPA calls.
 
 For RL-specific extensions — eval/val schedules, online difficulty filtering, oversampling, multi-env ratios — see the `train-with-environments` skill and the Hosted Training docs at <https://docs.primeintellect.ai/hosted-training>.

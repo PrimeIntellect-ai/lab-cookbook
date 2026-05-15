@@ -96,9 +96,9 @@ References: [Create](https://docs.primeintellect.ai/tutorials-environments/creat
 
 ## Hosted Evaluations
 
-Hub-driven evals run on Prime infrastructure instead of your machine. Open the env in the Hub, click **Run Hosted Evaluation**, pick a model, set `num_examples` and `rollouts_per_example`, and optionally add `env_args`. Credits cover model tokens; secrets and variables auto-inject. Results show up in the env's **Evaluations** tab alongside CLI-launched runs.
+Hub-driven evals, also called hosted evals<a href="glossary.md#hosted-eval">¹</a>, run on Prime infrastructure instead of your machine. Open the env in the Hub, click **Run Hosted Evaluation**, pick a model, set `num_examples` and `rollouts_per_example`, and optionally add `env_args`. Credits cover model tokens; secrets and variables auto-inject. Results show up in the env's **Evaluations** tab alongside CLI-launched runs.
 
-Reach for hosted evals when the model is large enough that local concurrency is the bottleneck, or when you want a reproducible run pinned to a specific Hub version of the env. For everything else, `prime eval run` from your workspace is still faster to iterate on.
+Reach for hosted evals when the model is large enough that local concurrency is the bottleneck, or when you want a reproducible run pinned to a specific Hub version<a href="glossary.md#hub-version">²</a> of the env. For everything else, `prime eval run` from your workspace is still faster to iterate on.
 
 Reference: [Hosted Evaluations](https://docs.primeintellect.ai/tutorials-environments/hosted-evaluations).
 
@@ -143,7 +143,7 @@ Reference: [Hosted Training: Advanced Configs](https://docs.primeintellect.ai/ho
 
 ## Inference Deployments
 
-Prime Inference exposes an OpenAI-compatible API at `https://api.pinference.ai/api/v1`. Base models are always-on; LoRA adapters from a training run must be deployed before they can be queried.
+Prime Inference exposes an OpenAI-compatible API at `https://api.pinference.ai/api/v1`. Base models are always-on; LoRA adapters from a training run must be deployed before they can be queried through inference deployments<a href="glossary.md#inference-deployment">³</a>.
 
 ```bash
 prime deployments list

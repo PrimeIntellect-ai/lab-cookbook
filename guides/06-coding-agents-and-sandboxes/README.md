@@ -2,7 +2,7 @@
 
 Evaluate code-producing agents in isolated runtimes.
 
-Coding environments need more than text comparison. The environment should let the model inspect or write code, execute commands safely, collect logs, and score the result from actual behavior.
+Coding environments need more than text comparison. The environment should let the model inspect or write code, execute commands safely in a sandbox<a href="../../reference/glossary.md#sandbox">¹</a>, collect logs, and score the result from actual behavior.
 
 This guide starts with [`primeintellect/math-python`](https://app.primeintellect.ai/dashboard/environments/primeintellect/math-python), a lightweight Python-tool environment, then moves to [`primeintellect/opencode-harbor`](https://app.primeintellect.ai/dashboard/environments/primeintellect/opencode-harbor), a full CLI-agent environment that runs OpenCode on Harbor tasks.
 
@@ -40,7 +40,7 @@ Inspect:
 - any command errors or tracebacks
 - whether the final answer is boxed
 - whether symbolic verification matches your judgment
-- how many tool calls the model needed
+- how many tool calls<a href="../../reference/glossary.md#tool-call">²</a> the model needed
 
 This is the smallest useful sandbox pattern: one task, one Python tool, one isolated runtime, and a deterministic reward.
 

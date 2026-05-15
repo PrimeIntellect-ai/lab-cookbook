@@ -45,7 +45,7 @@ TODO: each section below should land as a fleshed-out walkthrough.
 
 - Tool shape: `search(query)`, `view(doc_id)`, `view_section(doc_id, section)`.
 - Keeping tool surface area small so the model learns the loop quickly.
-- Stateful vs. stateless: when the retriever can be shared and when it needs per-rollout state.
+- Stateful vs. stateless<a href="../../reference/glossary.md#stateful-vs-stateless">¹</a>: when the retriever can be shared and when it needs per-rollout state.
 - Hiding implementation details (e.g. embedding clients, session ids) from the model's tool schema.
 
 ### Write the Tasks

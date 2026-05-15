@@ -1,10 +1,10 @@
 # Environments and Evals
 
-In Lab, evals are environments.
+In Lab, evals<a href="../../reference/glossary.md#eval">¹</a> are environments<a href="../../reference/glossary.md#environment">²</a>.
 
-If you've run or read about a benchmark like GSM8K, MMLU, or SWE-bench, you already have the mental model: an eval is a collection of tasks plus a way to score a model's attempts on them. An *environment* is that same unit — tasks and scoring — packaged behind a single entry point so anything in Lab can load it and run rollouts against it. The name is borrowed from reinforcement learning, where tasks and a reward signal are what a model *trains* against; the choice is deliberate, because in Lab the package you use to grade a model is the same package you'd use to train one. No need to rewrite your evals.
+If you've run or read about a benchmark like GSM8K, MMLU, or SWE-bench, you already have the mental model: an eval is a collection of tasks<a href="../../reference/glossary.md#task">³</a> plus a way to score a model's attempts on them. An *environment* is that same unit — tasks and scoring — packaged behind a single entry point so anything in Lab can load it and run rollouts<a href="../../reference/glossary.md#rollout">⁴</a> against it. The name is borrowed from reinforcement learning, where tasks and a reward signal<a href="../../reference/glossary.md#reward-signal">⁵</a> are what a model *trains* against; the choice is deliberate, because in Lab the package you use to grade a model is the same package you'd use to train one. No need to rewrite your evals.
 
-An environment packages the work you want a model or agent to do. It samples tasks, produces rollouts, and computes metrics from the results. The same environment can be used for benchmarking models and prompts, generating synthetic data, optimizing harnesses, and training with RL or other algorithms.
+An environment packages the work you want a model or agent to do. It samples tasks, produces rollouts, and computes metrics<a href="../../reference/glossary.md#metric">⁶</a> from the results. The same environment can be used for benchmarking models and prompts, generating synthetic data, optimizing harnesses<a href="../../reference/glossary.md#harness">⁷</a>, and training with RL or other algorithms.
 
 Environments can live locally in your workspace or on the Environments Hub. This guide uses [`primeintellect/gsm8k`](https://app.primeintellect.ai/dashboard/environments/primeintellect/gsm8k), a Hub environment.
 
@@ -45,7 +45,7 @@ TODO: expected output
 
 ## Read the Rollouts
 
-Open a few individual rollouts before focusing on the aggregate score. Each rollout shows one model attempt, including the prompt, completion, score, and any task data captured by the environment.
+Open a few individual rollouts before focusing on the aggregate score. Each rollout shows one model attempt, including the prompt, completion<a href="../../reference/glossary.md#completion">⁸</a>, score, and any task data captured by the environment.
 
 As you read, check whether:
 
@@ -61,7 +61,7 @@ This is the basic eval loop: evaluate a model, read the rollouts, and decide whe
 
 Status: TODO
 
-Every eval starts with `-m provider/model`. Which model you pick shapes what the eval tells you, what it costs, and how long it takes.
+Every eval starts with `-m provider/model`, where the provider<a href="../../reference/glossary.md#provider">⁹</a> is the service serving the model. Which model you pick shapes what the eval tells you, what it costs, and how long it takes.
 
 TODO: walk through the tradeoffs the reader is implicitly making when they type a model name.
 
@@ -96,6 +96,8 @@ rollouts_per_example = 1
 sampling_args = { max_tokens = 1024, temperature = 0.7 }
 ```
 # link to configs/00/first-eval-suite.toml
+
+The `save_results`<a href="../../reference/glossary.md#save-results">¹⁰</a> field keeps the run visible after it finishes.
 
 
 Run the suite:
