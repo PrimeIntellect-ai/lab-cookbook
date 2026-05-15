@@ -18,9 +18,7 @@ prime eval run primeintellect/wiki-search \
   -t 2048
 ```
 
-```text
-TODO: expected output
-```
+Expect the standard eval summary. The first run may spend extra time building or loading the search index before rollouts begin.
 
 Open the eval results:
 
@@ -28,9 +26,7 @@ Open the eval results:
 prime lab view --evals
 ```
 
-```text
-TODO: expected output
-```
+This opens the eval results view in Lab.
 
 For tool-use environments, inspect the full trajectory<a href="../../reference/glossary.md#trajectory">¹</a>. The final answer matters, but the tool calls explain how the model got there.
 
@@ -143,9 +139,7 @@ Launch training:
 prime train configs/rl/wiki-search.toml
 ```
 
-```text
-TODO: expected output
-```
+The command starts a Hosted Training run and prints a run id plus the command for streaming logs.
 
 During training, watch both reward and trajectories. A good run should show the model searching more directly, reading fewer irrelevant sections, and answering from evidence more consistently.
 

@@ -49,9 +49,7 @@ prime eval run primeintellect/langchain-deep-agents-env \
   -t 2048
 ```
 
-```text
-TODO: expected output
-```
+Expect the standard eval summary. In Lab, the useful fields are the framework's final answer, any saved framework trace, and the reward from the Taskset.
 
 Inspect:
 

@@ -56,9 +56,7 @@ Start the run:
 prime train configs/sft-oss-20b.toml
 ```
 
-```text
-TODO: expected output
-```
+When SFT is enabled for your account, the command starts a Hosted Training run and prints a run id plus a log-streaming command.
 
 Follow logs:
 
@@ -66,9 +64,7 @@ Follow logs:
 prime train logs <run_id> -f
 ```
 
-```text
-TODO: expected output
-```
+The logs should show teacher demonstration generation before the target model trains on those demonstrations.
 
 Open the Lab viewer:
 
@@ -76,9 +72,7 @@ Open the Lab viewer:
 prime lab view --training
 ```
 
-```text
-TODO: expected output
-```
+This opens the Hosted Training view in Lab.
 
 ## Inspect the Warm Start
 
@@ -109,9 +103,7 @@ Then launch RL from that adapter:
 prime train configs/rl/wordle-from-sft.toml
 ```
 
-```text
-TODO: expected output
-```
+The run should behave like a normal RL training job, but with the SFT adapter as the starting model.
 
 This keeps the environment fixed while changing the starting policy: SFT teaches the model what good behavior looks like, and RL optimizes that behavior against the environment reward.
 

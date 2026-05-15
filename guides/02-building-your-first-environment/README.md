@@ -14,9 +14,7 @@ From your Lab workspace, scaffold a local environment package:
 prime env init reverse-text
 ```
 
-```text
-TODO: expected output
-```
+The scaffold command may return quietly. Check that it created `environments/reverse_text/` with a starter `reverse_text.py`, `pyproject.toml`, and README.
 
 This creates `environments/reverse_text/` with a starter `reverse_text.py` and `pyproject.toml`. Open `reverse_text.py` — you will replace its contents as you go.
 
@@ -133,9 +131,9 @@ Install the environment into your workspace:
 prime env install reverse-text
 ```
 
-```text
-TODO: expected output
-```
+Expected output:
+
+![Reverse-text install terminal output](../../assets/expected-output/reverse-text-install-output.png)
 
 ## Evaluate It
 
@@ -149,9 +147,13 @@ prime eval run reverse-text \
   -t 512
 ```
 
-```text
-TODO: expected output
-```
+The exact reward will vary by model and sample, but the summary should show saved results, rollout count, reward metrics, usage, cost, and any error rate:
+
+![Reverse-text eval terminal summary](../../assets/expected-output/reverse-text-eval-summary.png)
+
+The rollout view is useful because it shows the prompt, completion, reward distribution, and reward-specific metrics together:
+
+![Reverse-text rollout and metrics view](../../assets/expected-output/reverse-text-rollout-metrics.png)
 
 Open the Lab viewer:
 
@@ -159,9 +161,7 @@ Open the Lab viewer:
 prime lab view --evals
 ```
 
-```text
-TODO: expected output
-```
+This opens the eval results view in Lab.
 
 Read a few rollouts. For reverse-text, check whether the model copied the string forward, reversed only words, dropped punctuation, or produced the right characters in the wrong order. `lcs_reward` tells you how close it got.
 

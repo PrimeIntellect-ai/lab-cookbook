@@ -27,11 +27,11 @@ prime eval run primeintellect/gsm8k \
   -r 2
 ```
 
-```text
-TODO: expected output
-```
-
 This evaluates 5 examples with 2 rollouts per example. Results are saved automatically.
+
+The terminal summary includes the model, rollout count, average reward, token usage, error rate, and local results path:
+
+![GSM8K eval terminal summary](../../assets/expected-output/gsm8k-eval-summary.png)
 
 Open the Lab viewer to inspect eval results:
 
@@ -39,13 +39,15 @@ Open the Lab viewer to inspect eval results:
 prime lab view --evals
 ```
 
-```text
-TODO: expected output
-```
+This opens the eval results view in Lab.
 
 ## Read the Rollouts
 
 Open a few individual rollouts before focusing on the aggregate score. Each rollout shows one model attempt, including the prompt, completion<a href="../../reference/glossary.md#completion">⁸</a>, score, and any task data captured by the environment.
+
+In the rollout view, expect to see the prompt, completion, reward, reward distribution, metrics, and token usage together:
+
+![GSM8K rollout and metrics view](../../assets/expected-output/gsm8k-rollout-metrics.png)
 
 As you read, check whether:
 
@@ -77,7 +79,7 @@ Practical defaults: a small, cheap model for the smoke-eval pass, then a stronge
 
 Once you want to run more than one environment in a single pass, move the eval settings into a config file. This keeps the model, sampling settings, and environment arguments together.
 
-Create `configs/eval/first-suite.toml`:
+Create `configs/00/first-eval-suite.toml`:
 
 ```toml
 model = "openai/gpt-5-nano"
@@ -95,20 +97,18 @@ num_examples = 20
 rollouts_per_example = 1
 sampling_args = { max_tokens = 1024, temperature = 0.7 }
 ```
-# link to configs/00/first-eval-suite.toml
-
 The `save_results`<a href="../../reference/glossary.md#save-results">¹⁰</a> field keeps the run visible after it finishes.
 
 
 Run the suite:
 
 ```bash
-prime eval run configs/00/first-suite.toml
+prime eval run configs/00/first-eval-suite.toml
 ```
 
-```text
-TODO: expected output
-```
+Expected output:
+
+![First eval suite terminal summary](../../assets/expected-output/first-eval-suite-summary.png)
 
 Use this pattern when you want to compare model behavior across environments, compare a base model to a trained adapter, or re-run the same checks after changing a prompt or config.
 

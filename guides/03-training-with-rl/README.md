@@ -18,9 +18,7 @@ prime eval run primeintellect/reverse-text \
   -t 512
 ```
 
-```text
-TODO: expected output
-```
+Expect the same eval summary shape as the local reverse-text eval: a run id, rollout progress, reward metrics, token usage, cost, and a saved results path. This baseline is useful when the reward is neither already perfect nor completely uninformative.
 
 Open the eval results:
 
@@ -28,9 +26,7 @@ Open the eval results:
 prime lab view --evals
 ```
 
-```text
-TODO: expected output
-```
+This opens the eval results view in Lab.
 
 Look for two things before launching training:
 
@@ -47,9 +43,9 @@ See the current Hosted Training models with:
 prime train models
 ```
 
-```text
-TODO: expected output
-```
+The command prints the current Hosted Training model table:
+
+![Hosted Training models terminal output](../../assets/expected-output/hosted-training-models.png)
 
 Hosted Training currently supports these model families:
 
@@ -140,9 +136,7 @@ The command prints a run ID along with the command for streaming logs from the n
 prime train logs <run_id> -f
 ```
 
-```text
-TODO: expected output
-```
+Early logs should show the run starting, the environment loading, rollout collection beginning, and step-level training metrics. Repeated environment errors here usually mean the environment or secrets need fixing before you wait on the run.
 
 Open the Lab viewer to follow training:
 
@@ -150,9 +144,7 @@ Open the Lab viewer to follow training:
 prime lab view --training
 ```
 
-```text
-TODO: expected output
-```
+This opens the Hosted Training view in Lab, where you can follow run status, logs, reward curves, loss curves, checkpoints, and online evals if configured.
 
 ## Decide Whether It Is Learning
 

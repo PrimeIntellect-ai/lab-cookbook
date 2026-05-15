@@ -18,9 +18,7 @@ prime eval run primeintellect/wordle \
   -t 1024
 ```
 
-```text
-TODO: expected output
-```
+Expect the standard eval summary with a run id, rollout progress, reward metrics, token usage, and saved results path.
 
 Open the eval results:
 
@@ -28,9 +26,7 @@ Open the eval results:
 prime lab view --evals
 ```
 
-```text
-TODO: expected output
-```
+This opens the eval results view in Lab.
 
 Read a few failed rollouts. GEPA is most useful when the model is trying the task but needs better guidance. If the scoring is broken, the task is impossible, or the model cannot follow the environment loop at all, fix that before optimizing the prompt.
 
@@ -42,9 +38,7 @@ Run GEPA against the same environment and model:
 prime gepa run primeintellect/wordle -m openai/gpt-5.5
 ```
 
-```text
-TODO: expected output
-```
+The command prints optimization progress and a results directory containing the best prompt artifacts.
 
 For a reusable run, create `configs/gepa/wordle.toml`:
 
@@ -62,9 +56,7 @@ Then run:
 prime gepa run configs/gepa/wordle.toml
 ```
 
-```text
-TODO: expected output
-```
+Use the printed results directory to inspect GEPA artifacts after the run.
 
 GEPA evaluates prompt candidates<a href="../../reference/glossary.md#prompt-candidate">²</a> against environment feedback and writes artifacts to a results directory:
 
@@ -104,9 +96,7 @@ Run the eval:
 prime eval run configs/eval/wordle-gepa.toml
 ```
 
-```text
-TODO: expected output
-```
+Expect another eval summary with the same model and sample count as the baseline, so the comparison isolates the prompt change.
 
 Then compare the baseline and GEPA runs:
 
