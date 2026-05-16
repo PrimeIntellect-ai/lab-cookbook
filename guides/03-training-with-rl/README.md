@@ -18,9 +18,7 @@ prime eval run primeintellect/reverse-text \
   -t 512
 ```
 
-```text
-TODO: expected output
-```
+Expect the same eval summary shape as the local reverse-text eval: a run id, rollout progress, reward metrics, token usage, cost, and a saved results path. This baseline is useful when the reward is neither already perfect nor completely uninformative.
 
 Open the eval results:
 
@@ -28,9 +26,7 @@ Open the eval results:
 prime lab view --evals
 ```
 
-```text
-TODO: expected output
-```
+This opens the eval results view in Lab.
 
 Look for two things before launching training:
 
@@ -47,9 +43,9 @@ See the current Hosted Training models with:
 prime train models
 ```
 
-```text
-TODO: expected output
-```
+The command prints the current Hosted Training model table:
+
+![Hosted Training models terminal output](../../assets/expected-output/hosted-training-models.png)
 
 Hosted Training currently supports these model families:
 
@@ -126,6 +122,21 @@ The main fields are:
 
 For a first run, keep the config small. Bigger batches, more rollouts, validation<a href="../../reference/glossary.md#validation">²³</a>, evals, W&B, and checkpoint<a href="../../reference/glossary.md#checkpoint">²⁴</a> policies can come later once the basic learning loop is working.
 
+## Example Run Costs
+
+The table below shows observed costs from small Hosted Training runs. Treat these as rough reference points rather than quotes: pricing can change, and the final cost depends on the model, rollout length, token usage, and any extra evals or logging you enable. Each run used the same small training shape: `max_steps = 100`, `batch_size = 128`, `rollouts_per_example = 8`, and `max_tokens = 1024`.
+
+| Environment | Model | What it shows | Observed cost |
+|---|---|---|---:|
+| `primeintellect/reverse-text` | `meta-llama/Llama-3.2-1B-Instruct` | Cheapest baseline text-only RL run | $0.14 |
+| `primeintellect/reverse-text` | `Qwen/Qwen3.5-0.8B` | Same task on a similarly small Qwen model | $0.14 |
+| `primeintellect/reverse-text` | `meta-llama/Llama-3.2-3B-Instruct` | Same task on the next Llama size up | $0.35 |
+| `primeintellect/reverse-text` | `Qwen/Qwen3.5-2B` | Same task on a small dense Qwen model | $0.54 |
+| `primeintellect/wordle` | `meta-llama/Llama-3.2-1B-Instruct` | Same small model on a multi-turn game | $0.73 |
+| `primeintellect/reverse-text` | `Qwen/Qwen3.5-4B` | Same task on a larger dense Qwen model | $3.24 |
+
+The main pattern is that text-only runs on the smallest models can stay well under a dollar, while multi-turn environments and larger models move the cost up quickly. For the current per-token model prices, run `prime train models` before launching a larger experiment.
+
 ## Launch Training
 
 Start the run:
@@ -140,9 +151,7 @@ The command prints a run ID along with the command for streaming logs from the n
 prime train logs <run_id> -f
 ```
 
-```text
-TODO: expected output
-```
+Early logs should show the run starting, the environment loading, rollout collection beginning, and step-level training metrics. Repeated environment errors here usually mean the environment or secrets need fixing before you wait on the run.
 
 Open the Lab viewer to follow training:
 
@@ -150,9 +159,7 @@ Open the Lab viewer to follow training:
 prime lab view --training
 ```
 
-```text
-TODO: expected output
-```
+This opens the Hosted Training view in Lab, where you can follow run status, logs, reward curves, loss curves, checkpoints, and online evals if configured.
 
 ## Decide Whether It Is Learning
 

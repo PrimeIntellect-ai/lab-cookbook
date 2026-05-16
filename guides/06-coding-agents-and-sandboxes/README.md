@@ -20,9 +20,7 @@ prime eval run primeintellect/math-python \
   -t 1024
 ```
 
-```text
-TODO: expected output
-```
+Expect the standard eval summary plus tool-use metrics and saved sandbox logs for any rollout that executed code.
 
 Open the eval results:
 
@@ -30,9 +28,7 @@ Open the eval results:
 prime lab view --evals
 ```
 
-```text
-TODO: expected output
-```
+This opens the eval results view in Lab.
 
 Inspect:
 
@@ -54,9 +50,7 @@ Run a small eval using `configs/06/opencode-harbor.toml` (model `openai/gpt-5.4-
 prime eval run configs/06/opencode-harbor.toml
 ```
 
-```text
-TODO: expected output
-```
+Expect a longer eval than the text-only examples. The useful output is the saved results path, error rate, cost, and pointers to agent/test logs.
 
 A baseline run of this config (5 examples × 3 rollouts, the env's defaults from `pyproject.toml`) cost roughly **$3.04** end-to-end against `gpt-5.4-mini`.
 
@@ -66,9 +60,7 @@ Open the eval results:
 prime lab view --evals
 ```
 
-```text
-TODO: expected output
-```
+This opens the eval results view in Lab.
 
 Inspect:
 
