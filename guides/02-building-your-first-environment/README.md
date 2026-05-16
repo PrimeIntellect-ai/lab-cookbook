@@ -14,9 +14,7 @@ From your Lab workspace, scaffold a local environment package:
 prime env init reverse-text
 ```
 
-```text
-TODO: expected output
-```
+The scaffold command may return quietly. Check that it created `environments/reverse_text/` with a starter `reverse_text.py`, `pyproject.toml`, and README.
 
 This creates `environments/reverse_text/` with a starter `reverse_text.py` and `pyproject.toml`. Open `reverse_text.py` — you will replace its contents as you go.
 
@@ -48,11 +46,11 @@ def source():
     return rows
 ```
 
-The taskset will call `source` once and cache the rows.
+The taskset<a href="../../reference/glossary.md#taskset">¹</a> will call `source` once and cache the rows.
 
 ## Add a Reward
 
-Tell the model where to put its answer with a system prompt:
+Tell the model where to put its answer with a system prompt<a href="../../reference/glossary.md#system-prompt">²</a>:
 
 ```python
 SYSTEM_PROMPT = (
@@ -61,7 +59,7 @@ SYSTEM_PROMPT = (
 )
 ```
 
-A reward is an `async` function decorated with `@vf.reward`. It receives the immutable `task` and the `state` produced by the rollout, and returns a float. Pull the tagged answer out of the model's reply and score it against the true reversal with a longest-common-subsequence ratio, so partial answers get partial credit:
+A reward is an `async` function decorated with `@vf.reward`. It receives the immutable `task` and the `state`<a href="../../reference/glossary.md#state">³</a> produced by the rollout, and returns a float. Pull the tagged answer out of the model's reply and score it against the true reversal with a longest-common-subsequence ratio, so partial answers get partial credit:
 
 ```python
 from difflib import SequenceMatcher
@@ -133,9 +131,9 @@ Install the environment into your workspace:
 prime env install reverse-text
 ```
 
-```text
-TODO: expected output
-```
+Expected output:
+
+![Reverse-text install terminal output](../../assets/expected-output/reverse-text-install-output.png)
 
 ## Evaluate It
 
@@ -149,9 +147,13 @@ prime eval run reverse-text \
   -t 512
 ```
 
-```text
-TODO: expected output
-```
+The exact reward will vary by model and sample, but the summary should show saved results, rollout count, reward metrics, usage, cost, and any error rate:
+
+![Reverse-text eval terminal summary](../../assets/expected-output/reverse-text-eval-summary.png)
+
+The rollout view is useful because it shows the prompt, completion, reward distribution, and reward-specific metrics together:
+
+![Reverse-text rollout and metrics view](../../assets/expected-output/reverse-text-rollout-metrics.png)
 
 Open the Lab viewer:
 
@@ -159,9 +161,7 @@ Open the Lab viewer:
 prime lab view --evals
 ```
 
-```text
-TODO: expected output
-```
+This opens the eval results view in Lab.
 
 Read a few rollouts. For reverse-text, check whether the model copied the string forward, reversed only words, dropped punctuation, or produced the right characters in the wrong order. `lcs_reward` tells you how close it got.
 
@@ -169,19 +169,19 @@ Read a few rollouts. For reverse-text, check whether the model copied the string
 
 Status: TODO
 
-`lcs_reward` is the easy case: a deterministic, continuous reward with a single weight of 1.0. Most real environments need more.
+`lcs_reward` is the easy case: a deterministic, continuous reward function<a href="../../reference/glossary.md#reward-function">⁴</a> with a single weight of 1.0. Most real environments need more.
 
 TODO: walk the reader through the reward-design choices they will hit.
 
 - **Rule-based vs. judged.** When string match, regex, math-verify, or test execution is enough, vs. when you need an LLM judge.
-- **Combining rewards.** Layering a cheap deterministic check with an expensive judged check via multiple `@vf.reward` functions or `RubricGroup`. Pick weights so the deterministic signal dominates and the judge nudges.
+- **Combining rewards.** Layering a cheap deterministic check with an expensive judged check via multiple `@vf.reward` functions or `RubricGroup`<a href="../../reference/glossary.md#rubricgroup">⁵</a>. Pick weights so the deterministic signal dominates and the judge nudges.
 - **Continuous vs. binary.** Continuous rewards (like LCS) give partial credit and learn faster; binary rewards are easier to interpret. When each is the right call.
-- **JudgeRubric basics.** Setting `judge_model`, writing a `judge_prompt` that returns parseable output, and exposing `judge` to reward functions.
+- **JudgeRubric basics.** Setting `judge_model`, writing a `judge_prompt` that returns parseable output, and exposing `judge` to reward functions.<a href="../../reference/glossary.md#judgerubric">⁶</a>
 - **Caching judges during iteration.** Avoid paying for judge calls every time you re-run the same rollout while tuning.
 - **Reward hacking.** The classic failure modes — keyword bonuses the model exploits, judges that reward verbosity, length rewards that flip the gradient. How to spot them in rollouts.
 - **Metrics vs. rewards.** Add observability with `weight=0` reward functions; they show up in rollout metrics without affecting the training signal.
 
-Cross-link forward: [Prompt Optimization](../05-prompt-optimization/README.md) and [Custom Data Pipelines](../08-custom-data-pipelines/README.md) both lean on judges heavily.
+Cross-link forward: [Prompt Optimization](../05-prompt-optimization/README.md) and [Custom Data Pipelines](../08-custom-data-pipelines/README.md) both lean on judges<a href="../../reference/glossary.md#judge">⁷</a> heavily.
 
 ## Troubleshooting & QA
 
@@ -198,7 +198,7 @@ TODO: turn this into a real checklist with copy-pasteable commands.
   - Reward function silently returning `0.0` on a parse failure — add a metric for "parsed successfully" with `weight=0`.
   - Sync HTTP/LLM clients inside reward functions or `env_response` — these block the event loop and serialize concurrent rollouts. Use `AsyncOpenAI`, `httpx.AsyncClient`, or `asyncio.to_thread` for unavoidable sync calls.
   - `info` shape changing between rows — store as a JSON string when rows have different schemas.
-  - Judge prompts that return prose instead of a score — fail loudly during eval, not silently in training.
+  - Judge prompts that return prose instead of a score — fail loudly during eval, not silently in training. If the answer needs extraction, use a parser<a href="../../reference/glossary.md#parser">⁸</a> rather than ad hoc string slicing.
 - **Spread of rewards.** Across the smoke eval, you want a spread, not all-0 or all-1. If the distribution is collapsed, fix the task difficulty or the reward before training.
 - **Re-run on a second model.** Confirm the environment isn't accidentally tuned to one model family's quirks.
 

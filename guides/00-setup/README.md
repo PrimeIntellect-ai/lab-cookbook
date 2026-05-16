@@ -10,9 +10,7 @@ Install `uv` if you do not already have it:
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-```text
-TODO: expected output
-```
+The installer prints shell-specific setup instructions if `uv` is new on your machine. Restart your shell or source the profile file it names before continuing.
 
 Install the Prime CLI:
 
@@ -20,9 +18,9 @@ Install the Prime CLI:
 uv tool install prime
 ```
 
-```text
-TODO: expected output
-```
+Expected output:
+
+![Prime CLI install terminal output](../../assets/expected-output/prime-install-output.png)
 
 Authenticate with Prime:
 
@@ -50,6 +48,8 @@ Then set up the workspace and choose which coding agents to configure:
 prime lab setup --agents codex,claude
 ```
 
+The command initializes the workspace, installs the Verifiers dependency, prepares `configs/`, refreshes Lab guidance, and prints a short "get started" panel with next commands.
+
 This adds project structure, example configs, and agent guidance covering environment workflows and best practices.
 
 You can also run `prime lab setup` without flags to configure coding agents interactively.
@@ -60,9 +60,7 @@ To refresh Lab-provided configs and guidance later, run:
 prime lab sync
 ```
 
-```text
-TODO: expected output
-```
+Sync refreshes the managed Lab skills, templates, and agent guidance in the current workspace.
 
 ## Workspace Layout
 
@@ -83,9 +81,9 @@ Check that your workspace is set up correctly:
 prime lab doctor
 ```
 
-```text
-TODO: expected output
-```
+Expected output:
+
+![Lab doctor terminal output](../../assets/expected-output/lab-doctor-output.png)
 
 See the models available for Hosted Training:
 
@@ -93,8 +91,6 @@ See the models available for Hosted Training:
 prime train models
 ```
 
-```text
-TODO: expected output
-```
+You should see a Hosted Training model table with model names, availability, inference pricing, and training pricing.
 
 Then continue to [Environments and Evals](../01-environments-and-evals/README.md) to explore evaluating models using environments.

@@ -2,7 +2,7 @@
 
 Evaluate code-producing agents in isolated runtimes.
 
-Coding environments need more than text comparison. The environment should let the model inspect or write code, execute commands safely, collect logs, and score the result from actual behavior.
+Coding environments need more than text comparison. The environment should let the model inspect or write code, execute commands safely in a sandbox<a href="../../reference/glossary.md#sandbox">¹</a>, collect logs, and score the result from actual behavior.
 
 This guide starts with [`primeintellect/math-python`](https://app.primeintellect.ai/dashboard/environments/primeintellect/math-python), a lightweight Python-tool environment, then moves to [`primeintellect/opencode-harbor`](https://app.primeintellect.ai/dashboard/environments/primeintellect/opencode-harbor), a full CLI-agent environment that runs OpenCode on Harbor tasks.
 
@@ -20,9 +20,7 @@ prime eval run primeintellect/math-python \
   -t 1024
 ```
 
-```text
-TODO: expected output
-```
+Expect the standard eval summary plus tool-use metrics and saved sandbox logs for any rollout that executed code.
 
 Open the eval results:
 
@@ -30,9 +28,7 @@ Open the eval results:
 prime lab view --evals
 ```
 
-```text
-TODO: expected output
-```
+This opens the eval results view in Lab.
 
 Inspect:
 
@@ -40,7 +36,7 @@ Inspect:
 - any command errors or tracebacks
 - whether the final answer is boxed
 - whether symbolic verification matches your judgment
-- how many tool calls the model needed
+- how many tool calls<a href="../../reference/glossary.md#tool-call">²</a> the model needed
 
 This is the smallest useful sandbox pattern: one task, one Python tool, one isolated runtime, and a deterministic reward.
 
@@ -54,9 +50,7 @@ Run a small eval using `configs/06/opencode-harbor.toml` (model `openai/gpt-5.4-
 prime eval run configs/06/opencode-harbor.toml
 ```
 
-```text
-TODO: expected output
-```
+Expect a longer eval than the text-only examples. The useful output is the saved results path, error rate, cost, and pointers to agent/test logs.
 
 A baseline run of this config (5 examples × 3 rollouts, the env's defaults from `pyproject.toml`) cost roughly **$3.04** end-to-end against `gpt-5.4-mini`.
 
@@ -66,9 +60,7 @@ Open the eval results:
 prime lab view --evals
 ```
 
-```text
-TODO: expected output
-```
+This opens the eval results view in Lab.
 
 Inspect:
 

@@ -27,4 +27,4 @@ Lab Cookbook
 13. [Custom Harnesses](guides/12-custom-harnesses/README.md)
 14. [Advanced Tasksets and Harnesses](guides/13-advanced-tasksets-and-harnesses/README.md)
 
-For platform reference (accounts, secrets, Hub workflows, hosted runs, inference deployments), see [Lab Configuration](reference/lab-configuration.md).
+For platform reference (accounts, secrets, Hub workflows, hosted runs, inference deployments), see [Lab Configuration](reference/lab-configuration.md). For quick definitions of Lab, Verifiers, evaluation, and RL terms, see the [Glossary](reference/glossary.md).

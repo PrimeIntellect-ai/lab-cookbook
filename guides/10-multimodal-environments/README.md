@@ -8,7 +8,7 @@ This guide builds and evaluates [`shape-detective`](../../environments/shape_det
 
 The env ships in two modes that share the same scene generator:
 
-- **single-turn** (`max_turns=1`) — all three clues in the initial prompt; the model commits with `\boxed{N}`
+- **single-turn** (`max_turns=1`<a href="../../reference/glossary.md#max-turns">¹</a>) — all three clues in the initial prompt; the model commits with a boxed tile index, such as `\boxed{N}`
 - **multi-turn** (`max_turns=3`, default) — clues revealed across three turns (pattern → color → shape); the model tracks candidates after each clue and commits on the final turn
 
 Both modes are good fits for small native-multimodal models like `Qwen/Qwen3.5-2B`.
@@ -25,7 +25,7 @@ prime eval run shape-detective -m Qwen/Qwen3.5-2B -x '{"mode": "multi"}'
 The bare invocation uses the env's packaged smoke defaults (`num_examples = 5`, `rollouts_per_example = 3`). Switch to single-turn with `-x '{"mode": "single"}'`. Open the trajectory in `prime lab view --evals` and look for:
 
 - whether the model references specific tile contents and positions (signal that the image is being consumed) or hallucinates from the clues alone
-- whether reasoning ends in a single `\boxed{N}`
+- whether reasoning ends in one boxed tile index, such as `\boxed{N}`
 - in multi-turn: whether the candidate set genuinely shrinks each turn, or whether the model commits early and only gets lucky if the final shape clue happens to disambiguate alone
 
 Now the file. The walkthrough below follows [`environments/shape_detective/shape_detective.py`](../../environments/shape_detective/shape_detective.py) top to bottom.
@@ -170,7 +170,7 @@ image_url = (
 )
 ```
 
-The image goes to a memory buffer as PNG, gets base64-encoded, and is wrapped in a `data:` URL. This is the format every OpenAI-compatible chat completions API accepts as an inline `image_url` content part — and what Prime Inference expects.
+The image goes to a memory buffer as PNG, gets base64-encoded, and is wrapped in a `data:` URL. This is the format every OpenAI-compatible<a href="../../reference/glossary.md#openai-compatible">²</a> chat completions API accepts as an inline `image_url` content part — and what Prime Inference expects.
 
 ### Prompt and row assembly (inline)
 
@@ -220,7 +220,7 @@ A row is a plain dict with four interesting fields:
 - **`info`** — a per-row dict that survives serialization and is restored on the other side of the harness. In single mode it carries just the target index (only the reward reads it). In multi mode it carries the whole target tile so the user callback can look up clue values without re-running the scene generator.
 - **`max_turns`** — per-row override that the harness reads off the Task object. Single-mode rows ship with `max_turns=1`, multi-mode rows with `max_turns=3`. The harness reads this off `task["max_turns"]` at rollout setup and caps the loop accordingly. A single env with mixed `max_turns` per row is the cleanest way to ship single-turn and multi-turn variants of the same task.
 
-## User Callback (Multi-Turn)
+## User Callback<a href="../../reference/glossary.md#user-callback">³</a> (Multi-Turn)
 
 ```python
 async def shape_detective_user(task, state):
@@ -248,7 +248,7 @@ The user callback is a `(task, state) → list[message]` function that the harne
 Three things make this work cleanly:
 
 1. **The harness counts turns for us via `state["completion"]`.** That list grows as the conversation progresses: after assistant turn 1 it contains one assistant message; after the harness appends our user-callback output it contains two messages; after assistant turn 2 it contains three; and so on. Counting just the assistant messages gives us a clean turn index.
-2. **Returning `[]` ends the rollout.** When the callback returns no messages on turn 3, the harness sets `stop_condition = "no_tools"` and exits the loop. Combined with `max_turns=3`, this gives us a clean termination either way (the model can also be cut off by `max_turns_reached` if it kept calling tools, but this env has no tools).
+2. **Returning `[]` ends the rollout.** When the callback returns no messages on turn 3, the harness sets `stop_condition = "no_tools"` and exits the loop. Combined with `max_turns=3`, this gives us a clean stop condition<a href="../../reference/glossary.md#stop-condition">⁴</a> either way (the model can also be cut off by `max_turns_reached` if it kept calling tools, but this env has no tools).
 3. **Per-row `info` is the carrier for rollout-time data.** Anything the callback (or the reward) needs at rollout time — clue values, candidate sets, target metadata — goes in `info`. The harness round-trips it through serialization, so accessing `task["info"]["target_tile"]` inside the callback returns the same dict we put in at source-build time.
 
 The dispatch on `info["mode"] != "multi"` lets us register the same callback on both variants of the Taskset without behavioural surprises — single-mode rows simply skip the callback entirely. The Taskset loader keys it on mode:
@@ -283,7 +283,7 @@ Assistant content is *usually* a string, but some providers return it as a list 
 
 ## Loader
 
-`mode`, `num_rows`, and `seed` are env-specific knobs, so they live on a `TasksetConfig` subclass. `load_environment` takes only `config: vf.EnvConfig`, builds the typed config with the subclass constructor, and inlines the taskset construction:
+`mode`, `num_rows`, and `seed` are env-specific knobs, so they live on a `TasksetConfig`<a href="../../reference/glossary.md#tasksetconfig">⁵</a> subclass. `load_environment` takes only `config: vf.EnvConfig`<a href="../../reference/glossary.md#envconfig">⁶</a>, builds the typed config with the subclass constructor, and inlines the taskset construction:
 
 ```python
 class ShapeDetectiveTasksetConfig(vf.TasksetConfig):
@@ -365,7 +365,7 @@ The implementation above is a working template. The pattern is:
 
 Two upgrades that pay back quickly:
 
-- **Cache encoded images.** If your scenes are deterministic given a seed, the encoded base64 is too — save the rendered PNGs (or the full row dicts) and skip re-rendering on every eval. For larger tasksets, wrap source loading in a `DatasetBuilder` so the work happens on first access, not at module load.
+- **Cache encoded images.** If your scenes are deterministic given a seed, the encoded base64 is too — save the rendered PNGs (or the full row dicts) and skip re-rendering on every eval. For larger tasksets, wrap source loading in a `DatasetBuilder`<a href="../../reference/glossary.md#datasetbuilder">⁷</a> so the work happens on first access, not at module load.
 - **Stratify your eval set.** Mix easy, medium, and hard rows. A flat random sample hides which capability the model is missing. For shape-detective specifically, vary `seed` across eval splits and check that performance is stable across them — not just on the seed you developed against.
 
 ## Training Notes
@@ -382,7 +382,7 @@ A few v1 details that came up while building `shape_detective` aren't obvious fr
 - **User-callback signature is duck-typed.** The runtime calls the callback with `maybe_call_with_named_args(fn, task=task, state=state, ...)`, so any subset of `(task, state, transcript)` works. **Suggested doc fix:** name the supported parameters in the Tasksets/User section so authors don't have to read `runtime.py` to learn which arguments are injected.
 - **Custom `info` round-trips through `info["task"]`.** `Taskset._dataset_row` serializes the whole task into the dataset row's `info["task"]` field, and `to_task` deserializes it on the other side — which is why custom fields placed in `info` survive even though the Dataset's `info` column is overwritten. **Suggested doc fix:** document that `info["task"]` is a reserved key (and that user-defined fields inside `info` survive serialization because of the round-trip).
 - **`state["completion"]` is `list[dict]`, not `list[Message]`.** The harness writes dumped dicts (`message.model_dump(exclude_none=True)`) into completion at the end of each turn. Reward functions and user callbacks can index it directly. **Suggested doc fix:** clarify the runtime type of `state["completion"]` vs. `state["trajectory"]` in the State reference.
-- **Config subclasses are the only way to expose tunables.** `load_environment` takes one argument — `config: vf.EnvConfig`. Anything configurable goes on a `*TasksetConfig` (or `*HarnessConfig`) subclass and is accessed via the subclass constructor (`SubclassConfig(config.taskset)`), so the CLI's `-x '{...}'` and TOML `-c config.toml` both flow through the same typed surface. Avoid adding `**kwargs` or extra positional args to `load_environment`.
+- **Config subclasses are the only way to expose tunables.** `load_environment` takes one argument — `config: vf.EnvConfig`. Anything configurable goes on a `*TasksetConfig` (or `*HarnessConfig`<a href="../../reference/glossary.md#harnessconfig">⁸</a>) subclass and is accessed via the subclass constructor (`SubclassConfig(config.taskset)`), so the CLI's `-x '{...}'` and TOML `-c config.toml` both flow through the same typed surface. Avoid adding `**kwargs` or extra positional args to `load_environment`.
 
 ## Next
 

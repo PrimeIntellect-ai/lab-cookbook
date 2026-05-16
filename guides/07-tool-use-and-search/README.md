@@ -18,9 +18,7 @@ prime eval run primeintellect/wiki-search \
   -t 2048
 ```
 
-```text
-TODO: expected output
-```
+Expect the standard eval summary. The first run may spend extra time building or loading the search index before rollouts begin.
 
 Open the eval results:
 
@@ -28,11 +26,9 @@ Open the eval results:
 prime lab view --evals
 ```
 
-```text
-TODO: expected output
-```
+This opens the eval results view in Lab.
 
-For tool-use environments, inspect the full trajectory. The final answer matters, but the tool calls explain how the model got there.
+For tool-use environments, inspect the full trajectory<a href="../../reference/glossary.md#trajectory">¹</a>. The final answer matters, but the tool calls explain how the model got there.
 
 Look for:
 
@@ -85,7 +81,7 @@ def load_environment(config: vf.EnvConfig) -> vf.Env:
     )
 ```
 
-The source yields task rows with a user prompt, answer, example ID, and turn limit. The toolset exposes the search tools that look up content in a Wikipedia index built once at process start. `judge_reward` is a module-level `@vf.reward` function that pulls the env's primary endpoint via `state.get_endpoint_config(api="chat")` to call a judge, then scores the model's final answer against the reference.
+The source yields task rows with a user prompt, answer, example ID, and turn limit. The toolset<a href="../../reference/glossary.md#toolset">²</a> exposes the search tools that look up content in a Wikipedia index built once at process start. `judge_reward` is a module-level `@vf.reward` function that pulls the env's primary endpoint<a href="../../reference/glossary.md#endpoint">³</a> via `state.get_endpoint_config(api="chat")` to call a judge, then scores the model's final answer against the reference.
 
 You do not need a custom harness for this pattern. The default tool-use loop is enough: the model calls tools, receives tool results, and eventually responds with a final answer.
 
@@ -143,9 +139,7 @@ Launch training:
 prime train configs/rl/wiki-search.toml
 ```
 
-```text
-TODO: expected output
-```
+The command starts a Hosted Training run and prints a run id plus the command for streaming logs.
 
 During training, watch both reward and trajectories. A good run should show the model searching more directly, reading fewer irrelevant sections, and answering from evidence more consistently.
 
