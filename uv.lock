@@ -2119,7 +2119,7 @@ requires-dist = [
     { name = "datasets", specifier = ">=2.0" },
     { name = "openai", specifier = ">=1.0" },
     { name = "scikit-learn", specifier = ">=1.3" },
-    { name = "verifiers", specifier = ">=0.1.15.dev4" },
+    { name = "verifiers", specifier = ">=0.1.15.dev6" },
 ]
 
 [package.metadata.requires-dev]
@@ -3874,7 +3874,7 @@ wheels = [
 
 [[package]]
 name = "verifiers"
-version = "0.1.15.dev4"
+version = "0.1.15.dev6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiolimiter" },
@@ -3904,9 +3904,9 @@ dependencies = [
     { name = "tomli", marker = "python_full_version < '3.11'" },
     { name = "typing-extensions", marker = "python_full_version < '3.12'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/53/11/96da2c803c2f38236120d0a2b70464d688131d1aa3a7eec78ba986d9d602/verifiers-0.1.15.dev4.tar.gz", hash = "sha256:6c4c10edf0563a128c39ccd9b53779f2b469de4a8da2a96e6f0d66112d8a2d03", size = 744735, upload-time = "2026-05-14T09:28:22.663Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b7/d3/5b33f86c4069c8c7e1d9dd5a8e4fafa23dfce11d92743c62cddd074414cd/verifiers-0.1.15.dev6.tar.gz", hash = "sha256:9bc2115cc7bb548c3e1c17c6250b966f3f7962c898ee741f89c25c144a13c053", size = 750379, upload-time = "2026-05-14T23:55:32.627Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/bc/99/196e62686cd9b67771b323b43c73171cddf1f56501736f2a55bfbf09252a/verifiers-0.1.15.dev4-py3-none-any.whl", hash = "sha256:72de10c5177007c59bd4b6202ac5d4a6b49cf1d053380644b81636e37637d7ea", size = 672234, upload-time = "2026-05-14T09:28:24.193Z" },
+    { url = "https://files.pythonhosted.org/packages/cd/21/9306c18e30d503b7e8d014147ca119715626d145f334d485467c5beb9b58/verifiers-0.1.15.dev6-py3-none-any.whl", hash = "sha256:c2f44ddcd5cdb55ca560657ad688cc1fa1ab7283d681bb6cf17912827f7a6725", size = 678013, upload-time = "2026-05-14T23:55:34.085Z" },
 ]
 
 [[package]]

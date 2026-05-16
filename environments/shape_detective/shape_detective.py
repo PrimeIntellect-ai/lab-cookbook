@@ -237,6 +237,11 @@ class ShapeDetectiveTasksetConfig(vf.TasksetConfig):
     seed: int = 0
 
 
+class ShapeDetectiveEnvConfig(vf.EnvConfig):
+    taskset: ShapeDetectiveTasksetConfig
+    harness: vf.HarnessConfig
+
+
 class ShapeDetectiveTaskset(vf.Taskset):
     config_type = ShapeDetectiveTasksetConfig
 
@@ -250,5 +255,12 @@ class ShapeDetectiveTaskset(vf.Taskset):
         super().__init__(config=cfg, **kwargs)
 
 
-def load_environment(config: vf.EnvConfig) -> vf.Env:
-    return vf.Env(taskset=ShapeDetectiveTaskset(config=config.taskset))
+def load_taskset(config: ShapeDetectiveTasksetConfig) -> ShapeDetectiveTaskset:
+    return ShapeDetectiveTaskset(config=config)
+
+
+def load_environment(config: ShapeDetectiveEnvConfig) -> vf.Env:
+    return vf.Env(
+        taskset=load_taskset(config=config.taskset),
+        harness=vf.Harness(config=config.harness),
+    )
