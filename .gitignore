@@ -19,6 +19,7 @@ venv/
 *outputs/*
 *.prime
 *uv.lock
+
 # Lab generated artifacts
 .env
 /outputs/
@@ -29,5 +30,7 @@ venv/
 /environments/*/__pycache__/
 
 
-# Claude Code
+# Agents
 .claude/
+.agents/
+.opencode/
