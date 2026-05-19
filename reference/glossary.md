@@ -5,34 +5,35 @@ Concise definitions for Lab, Verifiers, evaluation, and RL training terms used t
 ## Core Loop
 
 - <a id="environment"></a>**environment**: A packaged task and scoring setup that Lab can load for evaluation or training.
-- <a id="eval"></a>**eval**: A run that asks a model to attempt environment tasks and records scores and rollouts.
-- <a id="task"></a>**task**: One problem instance from an environment, such as a question, game state, search request, or coding challenge.
+- <a id="eval"></a>**eval**: A run where a model attempts environment tasks while the framework records rollouts and scores.
+- <a id="task"></a>**task**: One problem instance from an environment, such as a question, game state, retrieval target, or coding challenge.
 - <a id="rollout"></a>**rollout**: One complete model attempt on a task, including prompts, model outputs, tool calls, environment responses, and score.
 - <a id="rollouts-per-example"></a>**rollouts_per_example**: The number of independent attempts sampled for each task or dataset row.
 - <a id="completion"></a>**completion**: The model output captured for a rollout, usually stored as chat messages.
 - <a id="trajectory"></a>**trajectory**: The full step-by-step interaction path in a rollout, including intermediate model and environment actions.
-- <a id="baseline"></a>**baseline**: A reference result used for comparison, often the base model's score before prompt optimization, SFT, or RL.
-- <a id="random-baseline"></a>**random baseline**: A comparison score from random or naive behavior, used to show that a task has useful signal.
+- <a id="baseline"></a><a id="random-baseline"></a>**baseline**: A reference result used for comparison. Common subcases include a base-model baseline before prompt optimization, SFT, or RL, and a random or naive baseline used to show that a task has useful signal.
 
 ## Verifiers Concepts
+
+Class and API names keep Verifiers capitalization; lowercase entries describe roles or concepts.
 
 - <a id="taskset"></a>**Taskset**: The Verifiers component that owns task rows, prompts, tools, rewards, and task-level configuration.
 - <a id="harness"></a>**Harness**: The component that controls how a model or agent is executed during a rollout.
 - <a id="rubric"></a>**Rubric**: The scoring container that runs reward functions and metrics and combines weighted reward outputs.
 - <a id="reward-function"></a>**reward function**: Code that inspects a rollout and returns a numeric score.
 - <a id="rubricgroup"></a>**RubricGroup**: A wrapper that combines multiple rubrics into one scoring surface.
-- <a id="judge"></a>**judge**: Usually an LLM used to score outputs when deterministic scoring is hard.
+- <a id="judge"></a>**judge**: An LLM, or another non-deterministic scorer, used when deterministic scoring is hard.
 - <a id="judgerubric"></a>**JudgeRubric**: A Verifiers rubric that stores judge model configuration and exposes a judge callable to reward functions.
-- <a id="parser"></a>**parser**: Logic that extracts structured fields from a model response, such as boxed answers or XML tags.
-- <a id="metric"></a>**metric**: A recorded diagnostic value that may or may not affect reward.
+- <a id="parser"></a>**parser**: Logic that extracts structured fields from a model response, such as boxed answers or XML tags, so reward functions can score the parsed values.
+- <a id="metric"></a>**metric**: A recorded diagnostic value. In a rubric, `weight = 0` keeps a reward function metric-only; nonzero weights contribute to the final reward.
 - <a id="monitor-rubric"></a>**monitor rubric**: A rubric used to attach automatic metrics for observability, such as tool-call counts or turn counts.
 - <a id="state"></a>**state**: Mutable rollout data shared by the environment, harness, tools, callbacks, and rewards.
 - <a id="per-rollout-state"></a>**per-rollout state**: State initialized fresh for one rollout, such as a sandbox session, generated world, or database handle.
 - <a id="datasetbuilder"></a>**DatasetBuilder**: A callable that lazily creates a dataset when the environment first needs it.
-- <a id="stateful-vs-stateless"></a>**stateful vs. stateless**: Stateful code preserves rollout-specific resources between steps; stateless code returns results without remembering prior calls.
+- <a id="stateful-vs-stateless"></a>**stateful vs. stateless**: A distinction between code that preserves rollout-specific resources between steps and code that returns each result without remembering prior calls.
 - <a id="tool-call"></a>**tool call**: A structured request from the model to run an environment-provided function.
 - <a id="toolset"></a>**Toolset**: A collection of tools exposed to the model during a rollout.
-- <a id="mcp"></a>**MCP**: Model Context Protocol, a standard way to expose external tools or services to agents.
+- <a id="mcp"></a>**MCP**: Model Context Protocol, a standard interface for exposing external tools and services over transports such as stdio or HTTP so agents can call them.
 - <a id="sandbox"></a>**sandbox**: An isolated runtime where agents can execute code or commands without affecting the host system.
 - <a id="stop-condition"></a>**stop condition**: A rule that ends a rollout, such as task success, an error, or reaching a turn limit.
 - <a id="user-callback"></a>**user callback**: Environment code that emits follow-up user messages between assistant turns.
@@ -44,7 +45,7 @@ Concise definitions for Lab, Verifiers, evaluation, and RL training terms used t
 
 ## Training and RL
 
-- <a id="policy"></a>**policy**: The model behavior being optimized: given a prompt or state, what output or action it tends to choose.
+- <a id="policy"></a>**policy**: The model behavior being optimized: what output or action it tends to choose given a prompt or state.
 - <a id="reward-signal"></a>**reward signal**: The score the environment gives a rollout, used to tell training which behavior was better.
 - <a id="training-signal"></a>**training signal**: Any feedback used to update the model, including rewards, supervised examples, or losses.
 - <a id="advantage"></a>**advantage**: A relative score that says whether a rollout did better or worse than comparable rollouts for the same task.
@@ -52,11 +53,11 @@ Concise definitions for Lab, Verifiers, evaluation, and RL training terms used t
 - <a id="kl"></a>**KL**: Kullback-Leibler divergence, commonly used to measure how far the trained policy has drifted from a reference model.
 - <a id="clip-ratio"></a>**clip / clip ratio**: A training control that limits the size of a policy update so learning does not move too abruptly.
 - <a id="batch-size"></a>**batch_size**: The number of rollout samples consumed by one training step.
-- <a id="sample-throughput"></a>**sample throughput**: How many rollout samples the system can generate or consume over time.
+- <a id="sample-throughput"></a>**sample throughput**: An operational metric for how many rollout samples the system can generate or consume over time, not a config knob.
 - <a id="learning-rate"></a>**learning_rate**: The step size used when updating model weights.
-- <a id="eval-cadence"></a>**eval cadence**: How often evaluation runs during training.
+- <a id="eval-cadence"></a>**eval cadence**: How often a held-out eval is launched during training.
 - <a id="held-out-eval"></a>**held-out eval**: Evaluation on examples not used for training, used to detect overfitting or regressions.
-- <a id="validation"></a>**validation / val**: A lighter-weight periodic check during training, usually on held-out examples.
+- <a id="validation"></a>**validation / val**: A smaller, more frequent held-out eval run inside the training loop.
 - <a id="reference-model"></a>**reference model**: The model used as the anchor when measuring or constraining policy drift.
 - <a id="policy-drift"></a>**policy drift**: The amount the trained model's behavior has moved away from the starting or reference model.
 - <a id="checkpoint"></a>**checkpoint**: A saved snapshot of training state or model weights.
@@ -82,7 +83,7 @@ Concise definitions for Lab, Verifiers, evaluation, and RL training terms used t
 - <a id="temperature"></a>**temperature**: A sampling knob that increases or decreases output randomness.
 - <a id="reasoning-effort"></a>**reasoning_effort**: A model-specific knob controlling how much reasoning budget a supported model uses.
 - <a id="enable-thinking"></a>**enable_thinking**: A model-specific toggle that enables explicit reasoning behavior for supported models.
-- <a id="gepa"></a>**GEPA**: The prompt optimization workflow used by Lab to search for better prompts from environment feedback. The repo defines it by behavior, not by acronym expansion.
+- <a id="gepa"></a>**GEPA**: Genetic-Pareto prompt optimization, a workflow that searches for better prompts using environment feedback and a reflection model.
 - <a id="reflection-model"></a>**reflection_model**: The model GEPA uses to reflect on failures and propose prompt changes.
 - <a id="prompt-candidate"></a>**prompt candidate**: One proposed prompt variant being evaluated by prompt optimization.
 - <a id="max-calls"></a>**max_calls**: A GEPA budget limiting total model or evaluator calls.
@@ -94,7 +95,7 @@ Concise definitions for Lab, Verifiers, evaluation, and RL training terms used t
 - <a id="endpoint-id"></a>**endpoint_id**: The short alias used to refer to an endpoint in commands and config files.
 - <a id="provider"></a>**provider**: The service that serves a model, such as Prime Inference, OpenAI, Anthropic, or another API.
 - <a id="openai-compatible"></a>**OpenAI-compatible**: An API shape that follows OpenAI chat-completions conventions, even if served by another provider.
-- <a id="env-args"></a>**env_args**: Extra environment arguments passed at run time.
+- <a id="env-args"></a>**env_args**: Extra keyword arguments forwarded to the environment at run time.
 - <a id="save-results"></a>**save_results**: A config flag that controls whether eval results are persisted.
 - <a id="save-to-environment"></a>**save_to_environment**: A GEPA flag that writes optimized prompts back into a local environment when possible.
 - <a id="hosted-eval"></a>**hosted eval**: An evaluation run executed on Prime infrastructure rather than on the local machine.
