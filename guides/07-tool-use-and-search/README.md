@@ -142,7 +142,3 @@ prime train configs/rl/wiki-search.toml
 The command starts a Hosted Training run and prints a run id plus the command for streaming logs.
 
 During training, watch both reward and trajectories. A good run should show the model searching more directly, reading fewer irrelevant sections, and answering from evidence more consistently.
-
-## Next
-
-In [Custom Data Pipelines](../08-custom-data-pipelines/README.md), you will build a search environment over your own corpus instead of a pre-built one. Then [Synthetic Agent Environments](../09-synthetic-agent-environments/README.md) shows how to generate the world itself in memory and let an agent interact with it through tools.

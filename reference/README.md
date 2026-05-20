@@ -7,8 +7,6 @@ Short, cookbook-scoped summaries of the most important platform surface, with li
 - [Lab Configuration](lab-configuration.md) — accounts, teams, secrets, Hub workflows, hosted runs, inference deployments.
 - [Glossary](glossary.md) — concise definitions for Lab, Verifiers, evaluation, and RL training terms.
 - [Repository Structure](repo-structure.md)
-- [Public Docs Updates](public-docs-updates.md)
-- [Lab Product Updates](lab-product-updates.md)
 - TODO: config schema reference
 - TODO: environment pattern reference
 - TODO: reward design reference
