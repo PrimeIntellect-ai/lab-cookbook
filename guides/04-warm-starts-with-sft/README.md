@@ -18,7 +18,7 @@ Do not use SFT to paper over broken rewards. If the environment gives high score
 
 ## Write an SFT Config
 
-Create `configs/sft-oss-20b.toml`:
+Create a new config in [`configs/`](../../configs/), for example `sft-oss-20b.toml`:
 
 ```toml
 model = "openai/gpt-oss-20b"
@@ -84,7 +84,7 @@ After SFT, evaluate the adapter<a href="../../reference/glossary.md#adapter">⁷
 
 RL uses the same config shape. To train on top of an existing LoRA<a href="../../reference/glossary.md#lora">⁸</a>, set `model` to the adapter you want to start from and omit `loss`, since RL is the default.
 
-Create `configs/rl/wordle-from-sft.toml`:
+Create a new RL config in [`configs/rl/`](../../configs/rl/), for example `wordle-from-sft.toml`:
 
 ```toml
 model = "openai/gpt-oss-20b:my-sft-lora-distilled-from-oss-120b-distill"

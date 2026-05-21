@@ -116,18 +116,20 @@ Keep those as metrics until you are confident they should affect training. A met
 
 Once the eval shows that the environment is healthy, train against the same Hub environment.
 
-Create `configs/rl/wiki-search.toml`:
+Use [`configs/rl/gpt-oss.toml`](../../configs/rl/gpt-oss.toml) as a wiki-search starter. To keep this first run smaller, switch the active model line to `openai/gpt-oss-20b`:
 
 ```toml
+# gpt-oss models. Uncomment exactly one model.
+# model = "openai/gpt-oss-120b"
 model = "openai/gpt-oss-20b"
-max_steps = 100
 
-batch_size = 128
+max_steps = 100
+batch_size = 256
 rollouts_per_example = 8
 
 [sampling]
 max_tokens = 2048
-reasoning_effort = "medium"
+reasoning_effort = "low"
 
 [[env]]
 id = "primeintellect/wiki-search"
@@ -136,13 +138,9 @@ id = "primeintellect/wiki-search"
 Launch training:
 
 ```bash
-prime train configs/rl/wiki-search.toml
+prime train configs/rl/gpt-oss.toml
 ```
 
 The command starts a Hosted Training run and prints a run id plus the command for streaming logs.
 
 During training, watch both reward and trajectories. A good run should show the model searching more directly, reading fewer irrelevant sections, and answering from evidence more consistently.
-
-## Next
-
-In [Custom Data Pipelines](../08-custom-data-pipelines/README.md), you will build a search environment over your own corpus instead of a pre-built one. Then [Synthetic Agent Environments](../09-synthetic-agent-environments/README.md) shows how to generate the world itself in memory and let an agent interact with it through tools.

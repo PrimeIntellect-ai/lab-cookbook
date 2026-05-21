@@ -20,11 +20,8 @@ Lab Cookbook
 6. [Prompt Optimization](guides/05-prompt-optimization/README.md)
 7. [Coding Agents and Sandboxes](guides/06-coding-agents-and-sandboxes/README.md)
 8. [Tool Use and Search](guides/07-tool-use-and-search/README.md)
-9. [Custom Data Pipelines](guides/08-custom-data-pipelines/README.md)
-10. [Synthetic Agent Environments](guides/09-synthetic-agent-environments/README.md)
-11. [Multimodal Environments](guides/10-multimodal-environments/README.md)
-12. [Browser Environments](guides/11-browser-environments/README.md)
-13. [Custom Harnesses](guides/12-custom-harnesses/README.md)
-14. [Advanced Tasksets and Harnesses](guides/13-advanced-tasksets-and-harnesses/README.md)
+9. [Synthetic Agent Environments](guides/09-synthetic-agent-environments/README.md)
+10. [Multimodal Environments](guides/10-multimodal-environments/README.md)
+11. [Custom Harnesses](guides/12-custom-harnesses/README.md)
 
 For platform reference (accounts, secrets, Hub workflows, hosted runs, inference deployments), see [Lab Configuration](reference/lab-configuration.md). For quick definitions of Lab, Verifiers, evaluation, and RL terms, see the [Glossary](reference/glossary.md).

@@ -6,9 +6,9 @@ If you've run or read about a benchmark like GSM8K, MMLU, or SWE-bench, you alre
 
 An environment packages the work you want a model or agent to do. It samples tasks, produces rollouts, and computes metrics<a href="../../reference/glossary.md#metric">⁶</a> from the results. The same environment can be used for benchmarking models and prompts, generating synthetic data, optimizing harnesses<a href="../../reference/glossary.md#harness">⁷</a>, and training with RL or other algorithms.
 
-Environments can live locally in your workspace or on the Environments Hub. This guide uses [`primeintellect/gsm8k`](https://app.primeintellect.ai/dashboard/environments/primeintellect/gsm8k), a Hub environment.
+Environments can live locally in your workspace or on the Environments Hub. This guide uses [`primeintellect/gsm8k`](https://app.primeintellect.ai/dashboard/environments/primeintellect/gsm8k), a [Hub](https://app.primeintellect.ai/dashboard/environments) environment.
 
-Later guides also use [`primeintellect/wordle`](https://app.primeintellect.ai/dashboard/environments/primeintellect/wordle), a game environment with clear task state and simple success criteria.
+Later guides also use [`primeintellect/wordle`](https://app.primeintellect.ai/dashboard/environments/primeintellect/wordle), a Hub game environment with clear task state and simple success criteria.
 
 We'll focus on the two pieces you need first: tasks and metrics. In GSM8K, the tasks are math questions with expected final answers. The metric checks whether each rollout reaches the right answer, and that same score can serve as a reward signal during later optimization.
 
@@ -61,25 +61,23 @@ This is the basic eval loop: evaluate a model, read the rollouts, and decide whe
 
 ## Choosing a Model
 
-Status: TODO
+Here are the factors to think through when selecting a model:
 
-Every eval starts with `-m provider/model`, where the provider<a href="../../reference/glossary.md#provider">⁹</a> is the service serving the model. Which model you pick shapes what the eval tells you, what it costs, and how long it takes.
+**Size vs. cost vs. latency.** Start small. `Qwen/Qwen3.5-0.8B` or `meta-llama/Llama-3.2-1B-Instruct` cost fractions of a cent per million tokens and return results fast — use them to validate that your environment and reward function work at all. Once they do, move to a mid-range MoE like `Qwen/Qwen3.5-35B-A3B`, which gives strong capability at low active-parameter cost. Reserve the large models (`Qwen/Qwen3.5-397B-A17B`, `nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16`) for production runs and ceiling checks. A useful diagnostic: if swapping from a 0.8B to a 35B model doesn't improve scores, the bottleneck is your environment or tasks, not the model.
 
-TODO: walk through the tradeoffs the reader is implicitly making when they type a model name.
+**Reasoning controls.** Qwen3.5, Nemotron, and the gpt-oss models all support thinking mode — extended chain-of-thought before the final answer, toggled via `[sampling].enable_thinking`. This helps on multi-step tasks (math, code, logic) but inflates output length and cost. Plain instruct models like the Llama 3.2 family don't have this knob. If you're comparing across families, test thinking models at multiple effort levels so you understand the cost-performance curve, not just the peak.
 
-- **Size vs. cost vs. latency.** When a small, fast model is enough; when you need a bigger one to tell whether the environment is the bottleneck or the model is.
-- **Reasoning controls.** Models with `reasoning_effort` (e.g. gpt-oss, Nemotron) vs. plain instruct models; when the extra thinking time pays for itself.
-- **Tool-use and JSON reliability.** Which families follow tool schemas cleanly enough to evaluate; what to watch for in rollouts when they don't.
-- **Multimodal support.** Which families accept images; cross-link to [Multimodal Environments](../10-multimodal-environments/README.md).
-- **Open vs. closed.** When you want a model you can also train (covered in [Training with RL](../03-training-with-rl/README.md#choose-a-training-model)) vs. a frontier model you only evaluate against.
+**Tool-use and JSON reliability.** If your environment involves tool calls or structured output, test your chosen model on a small batch with your actual schemas before scaling up. Some models hallucinate extra fields, wrap JSON in markdown fences, or narrate a tool call in prose instead of emitting structured output. These issues are often fixable with prompt tweaks or a retry wrapper, but you need to know they exist — otherwise your eval measures JSON compliance, not task capability.
 
-Practical defaults: a small, cheap model for the smoke-eval pass, then a stronger model once the environment is stable. The same `-m` flag swaps between them with no other changes.
+**Multimodal support.** Most models on the platform are text-only. If your tasks involve images, screenshots, or diagrams, check that your model accepts vision input before designing the eval around it. See the [Multimodal Environments](../10-multimodal-environments/README.md) guide for how to build environments that pass non-text observations.
+
+**Open vs. closed.** Every model on the platform is open-weights, meaning the eval you build today can become the reward signal for RL training tomorrow. If you also want to benchmark against a closed frontier model (GPT-4o, Claude, Gemini) to establish a performance ceiling, design your environment to work with both from the start. See [Training with RL](../03-training-with-rl/README.md#choose-a-training-model) for how to connect a training-compatible model to the same environments.
 
 ## Run a Small Suite
 
 Once you want to run more than one environment in a single pass, move the eval settings into a config file. This keeps the model, sampling settings, and environment arguments together.
 
-Create `configs/00/first-eval-suite.toml`:
+Use [`configs/01/first-eval-suite.toml`](../../configs/01/first-eval-suite.toml):
 
 ```toml
 model = "openai/gpt-5-nano"
@@ -103,7 +101,7 @@ The `save_results`<a href="../../reference/glossary.md#save-results">¹⁰</a> f
 Run the suite:
 
 ```bash
-prime eval run configs/00/first-eval-suite.toml
+prime eval run configs/01/first-eval-suite.toml
 ```
 
 Expected output:
@@ -115,7 +113,3 @@ Use this pattern when you want to compare model behavior across environments, co
 ## Next
 
 In [Building Your First Environment](../02-building-your-first-environment/README.md), you will build a small environment yourself and use evals to check whether it is ready for training.
-
----
-
-### Footnotes

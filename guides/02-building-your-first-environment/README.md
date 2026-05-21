@@ -167,29 +167,23 @@ Read a few rollouts. For reverse-text, check whether the model copied the string
 
 ## Designing Rewards
 
-Status: TODO
-
 `lcs_reward` is the easy case: a deterministic, continuous reward function<a href="../../reference/glossary.md#reward-function">⁴</a> with a single weight of 1.0. Most real environments need more.
 
-TODO: walk the reader through the reward-design choices they will hit.
+**Rule-based vs. judged.** Use deterministic checks — string match, regex, math-verify, test execution — whenever you can. They're fast, free, and reproducible. Reach for an LLM judge only when correctness can't be reduced to a programmatic check: open-ended generation, style, or tasks where valid answers are too numerous to enumerate. If you can write a unit test for it, don't judge it.
 
-- **Rule-based vs. judged.** When string match, regex, math-verify, or test execution is enough, vs. when you need an LLM judge.
-- **Combining rewards.** Layering a cheap deterministic check with an expensive judged check via multiple `@vf.reward` functions or `RubricGroup`<a href="../../reference/glossary.md#rubricgroup">⁵</a>. Pick weights so the deterministic signal dominates and the judge nudges.
-- **Continuous vs. binary.** Continuous rewards (like LCS) give partial credit and learn faster; binary rewards are easier to interpret. When each is the right call.
-- **JudgeRubric basics.** Setting `judge_model`, writing a `judge_prompt` that returns parseable output, and exposing `judge` to reward functions.<a href="../../reference/glossary.md#judgerubric">⁶</a>
-- **Caching judges during iteration.** Avoid paying for judge calls every time you re-run the same rollout while tuning.
-- **Reward hacking.** The classic failure modes — keyword bonuses the model exploits, judges that reward verbosity, length rewards that flip the gradient. How to spot them in rollouts.
-- **Metrics vs. rewards.** Add observability with `weight=0` reward functions; they show up in rollout metrics without affecting the training signal.
+**Combining rewards.** A `vf.Rubric` can hold multiple reward functions with explicit weights. A common pattern is layering a cheap deterministic check (did it parse? did the tests pass?) with an expensive judged check (is the explanation clear?). Set weights so the deterministic signal dominates and the judge nudges — e.g. `weights=[1.0, 0.2]`. Invert this and the model learns to please the judge at the expense of being correct. For combining rubrics of different types — say a `vf.MathRubric` with a `vf.JudgeRubric` — wrap them in a `vf.RubricGroup`<a href="../../reference/glossary.md#rubricgroup">⁵</a>, which aggregates all rewards and metrics.
 
-Cross-link forward: [Prompt Optimization](../05-prompt-optimization/README.md) and [Custom Data Pipelines](../08-custom-data-pipelines/README.md) both lean on judges<a href="../../reference/glossary.md#judge">⁷</a> heavily.
+**Continuous vs. binary.** Continuous rewards like LCS give partial credit and produce smoother gradients. Binary rewards (1.0 or 0.0) are easier to interpret and harder to hack, but give the optimizer no signal about how close a wrong answer was. Use binary when correctness is unambiguous (test pass/fail, exact match). Use continuous when there's a meaningful notion of "almost right."
+
+**JudgeRubric basics.** When you need a judge, configure a `vf.JudgeRubric`<a href="../../reference/glossary.md#judgerubric">⁶</a> with a `judge_model` and optionally a `judge_prompt` template. The rubric exposes a `judge` callable to your reward functions. Write the prompt like a grading rubric: enumerate what good and bad answers look like. Vague prompts produce noisy scores, and noise in the reward is noise in the gradient.
+
+**Reward hacking.** Expect it, don't hope to avoid it. Classic examples: a keyword bonus the model learns to stuff into every response, a judge that rewards verbosity, a length reward that accidentally flips the gradient. The fix is always the same: sort rollouts by reward, read the top-scoring ones, and ask whether a human would agree. If the highest-rewarded rollout is obviously bad, your reward is broken.
+
+**Metrics vs. rewards.** Not every signal should affect training. Use `rubric.add_metric()` to register reward functions with `weight=0`. They track response length, format compliance, tool-call count, or whatever you want to monitor without injecting signal into the gradient. These show up in rollout metrics and make hacking easier to spot: if training reward climbs but your weight-0 quality metric is flat, something is wrong.
 
 ## Troubleshooting & QA
 
-Status: TODO
-
 Before you push an environment or launch training, run a small QA pass.
-
-TODO: turn this into a real checklist with copy-pasteable commands.
 
 - **Smoke-eval first.** Run `prime eval run <env> -m <small model> -n 5 -r 2` and open the rollouts. If the model gets every example right or every example wrong, the environment is not ready.
 - **Read the rollouts, not just the score.** Look for: prompt shape (system + user as expected), reward matches your judgment, tasks the model can't possibly solve, tasks the model trivially solves.

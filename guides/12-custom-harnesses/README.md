@@ -89,7 +89,3 @@ Use a custom harness when:
 - you want the same Taskset to run against multiple harnesses
 
 Do not add a custom harness just to expose a tool or change a system prompt. The default harness already handles those cases.
-
-## Next
-
-In [Advanced Tasksets and Harnesses](../13-advanced-tasksets-and-harnesses/README.md), you will go deeper on reusable Tasksets, reusable Harnesses, config sections, nested calls, and lower-level composition.

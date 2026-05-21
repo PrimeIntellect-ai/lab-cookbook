@@ -44,7 +44,7 @@ This is the smallest useful sandbox pattern: one task, one Python tool, one isol
 
 `opencode-harbor` runs a real coding agent inside a sandbox. Each task comes from Harbor: an instruction, files or setup scripts, a Docker image, and tests that determine reward.
 
-Run a small eval using `configs/06/opencode-harbor.toml` (model `openai/gpt-5.4-mini`, environment defaults for everything else):
+Run a small eval using [`configs/06/opencode-harbor.toml`](../../configs/06/opencode-harbor.toml) (model `openai/gpt-5.4-mini`, environment defaults for everything else):
 
 ```bash
 prime eval run configs/06/opencode-harbor.toml

@@ -279,7 +279,7 @@ async def solved(task, state) -> float:
 
 Assistant content is *usually* a string, but some providers return it as a list of typed parts even when there's no image. The branch reads the text-typed parts only and joins them.
 
-`extract_boxed_answer(..., strict=True)` returns the contents of the *last* `\boxed{}` in the text, or `""` if there isn't one. Strict mode is important: it collapses "wrong answer" and "no commit" into the same 0.0 reward, which matches what the system prompt asked the model to produce. A more granular reward could break that out into a separate metric — see the [Rewards guide](../03-rewards/README.md) for the pattern.
+`extract_boxed_answer(..., strict=True)` returns the contents of the *last* `\boxed{}` in the text, or `""` if there isn't one. Strict mode is important: it collapses "wrong answer" and "no commit" into the same 0.0 reward, which matches what the system prompt asked the model to produce. A more granular reward could break that out into a separate metric — see [Designing Rewards](../02-building-your-first-environment/README.md#designing-rewards) for the pattern.
 
 ## Loader
 
@@ -383,7 +383,3 @@ A few v1 details that came up while building `shape_detective` aren't obvious fr
 - **Custom `info` round-trips through `info["task"]`.** `Taskset._dataset_row` serializes the whole task into the dataset row's `info["task"]` field, and `to_task` deserializes it on the other side — which is why custom fields placed in `info` survive even though the Dataset's `info` column is overwritten. **Suggested doc fix:** document that `info["task"]` is a reserved key (and that user-defined fields inside `info` survive serialization because of the round-trip).
 - **`state["completion"]` is `list[dict]`, not `list[Message]`.** The harness writes dumped dicts (`message.model_dump(exclude_none=True)`) into completion at the end of each turn. Reward functions and user callbacks can index it directly. **Suggested doc fix:** clarify the runtime type of `state["completion"]` vs. `state["trajectory"]` in the State reference.
 - **Config subclasses are the only way to expose tunables.** `load_environment` takes one argument — `config: vf.EnvConfig`. Anything configurable goes on a `*TasksetConfig` (or `*HarnessConfig`<a href="../../reference/glossary.md#harnessconfig">⁸</a>) subclass and is accessed via the subclass constructor (`SubclassConfig(config.taskset)`), so the CLI's `-x '{...}'` and TOML `-c config.toml` both flow through the same typed surface. Avoid adding `**kwargs` or extra positional args to `load_environment`.
-
-## Next
-
-In [Browser Environments](../09-browser-environments/README.md), you will work with environments where the agent observes and acts on live pages.
