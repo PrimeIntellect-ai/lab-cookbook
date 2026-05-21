@@ -71,7 +71,7 @@ Here are the factors to think through when selecting a model:
 
 **Multimodal support.** Most models on the platform are text-only. If your tasks involve images, screenshots, or diagrams, check that your model accepts vision input before designing the eval around it. See the [Multimodal Environments](../10-multimodal-environments/README.md) guide for how to build environments that pass non-text observations.
 
-**Open vs. closed.** Every model on the platform is open-weights, meaning the eval you build today can become the reward signal for RL training tomorrow. If you also want to benchmark against a closed frontier model (GPT-4o, Claude, Gemini) to establish a performance ceiling, design your environment to work with both from the start. See [Training with RL](../03-training-with-rl/README.md) for how to connect a training-compatible model to the same environments.
+**Open vs. closed.** Every model on the platform is open-weights, meaning the eval you build today can become the reward signal for RL training tomorrow. If you also want to benchmark against a closed frontier model (GPT-4o, Claude, Gemini) to establish a performance ceiling, design your environment to work with both from the start. See [Training with RL](../03-training-with-rl/README.md#choose-a-training-model) for how to connect a training-compatible model to the same environments.
 
 ## Run a Small Suite
 
