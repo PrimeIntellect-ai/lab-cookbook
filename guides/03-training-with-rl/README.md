@@ -92,18 +92,19 @@ For a first run, the config below is intentionally small. Once it works, these a
 
 ## Write a Training Config
 
-Create `configs/rl/reverse-text.toml`:
+Use [`configs/rl/llama.toml`](../../configs/rl/llama.toml) as a small reverse-text starter:
 
 ```toml
-model = "openai/gpt-oss-20b"
-max_steps = 100
+# Llama 3.2 models. Uncomment exactly one model.
+model = "meta-llama/Llama-3.2-1B-Instruct"
+# model = "meta-llama/Llama-3.2-3B-Instruct"
 
+max_steps = 100
 batch_size = 128
 rollouts_per_example = 8
 
 [sampling]
-max_tokens = 512
-reasoning_effort = "medium"
+max_tokens = 1024
 
 [[env]]
 id = "primeintellect/reverse-text"
@@ -140,7 +141,7 @@ The main pattern is that text-only runs on the smallest models can stay well und
 Start the run:
 
 ```bash
-prime train configs/rl/reverse-text.toml
+prime train configs/rl/llama.toml
 ```
 
 The command prints a run ID along with the command for streaming logs from the new Hosted Training run. Follow logs with:

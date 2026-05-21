@@ -16,7 +16,7 @@ skills/      # agent guidance used by Lab workflows
 ## Notes
 
 - `guides/` should be the first path for new users.
-- `configs/` should remain close to the actual Lab setup output.
+- [`configs/`](../configs/) should remain close to the actual Lab setup output.
 - `recipes/` should contain runnable examples that guides can reference.
 - `reference/` should avoid duplicating product docs that change often.
 - `tracks/` should only link into guides and recipes.

@@ -40,7 +40,7 @@ prime gepa run primeintellect/wordle -m openai/gpt-5.5
 
 The command prints optimization progress and a results directory containing the best prompt artifacts.
 
-For a reusable run, create `configs/gepa/wordle.toml`:
+For a reusable run, create a new GEPA config in [`configs/gepa/`](../../configs/gepa/), for example `wordle.toml`:
 
 ```toml
 model = "openai/gpt-5.5"
@@ -74,7 +74,7 @@ That file contains the optimized system prompt. With `save_to_environment = true
 
 ## Evaluate the Optimized Prompt
 
-Create `configs/eval/wordle-gepa.toml`:
+Create a new eval config in [`configs/eval/`](../../configs/eval/), for example `wordle-gepa.toml`:
 
 ```toml
 model = "openai/gpt-5.5"

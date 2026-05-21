@@ -33,7 +33,7 @@ You do not need to export `PRIME_API_KEY` just to run `prime eval run` against a
 
 ## Workspace Endpoint Aliases
 
-`configs/endpoints.toml` in a Lab workspace maps short aliases (`gpt-5-mini`, `qwen3-30b-i`, `sonnet`) to provider, model id, base URL, and the env var that holds the key. Aliases are how evals and GEPA refer to models without repeating provider URLs.
+[`configs/endpoints.toml`](../configs/endpoints.toml) in a Lab workspace maps short aliases (`gpt-5-mini`, `qwen3-30b-i`, `sonnet`) to provider, model id, base URL, and the env var that holds the key. Aliases are how evals and GEPA refer to models without repeating provider URLs.
 
 ```toml
 [[endpoint]]
@@ -44,7 +44,7 @@ key = "PRIME_API_KEY"
 type = "openai_chat_completions"
 ```
 
-Add new aliases here when bringing in a third-party provider, and export the corresponding `*_API_KEY` in your shell before running anything that resolves to it. The CLI reads `endpoints.toml` directly — no `prime lab sync` step is needed.
+Add new aliases here when bringing in a third-party provider, and export the corresponding `*_API_KEY` in your shell before running anything that resolves to it. The CLI reads [`endpoints.toml`](../configs/endpoints.toml) directly — no `prime lab sync` step is needed.
 
 ## Environment Variables and Secrets
 
@@ -179,7 +179,7 @@ prime lab sync       # pull upstream Lab skills + agent guidance into this works
 prime lab doctor     # validate the workspace; print active account, team, CLI version
 ```
 
-`sync` refreshes `.prime/skills/` and the local agent docs (`AGENTS.md`, `CLAUDE.md`, `environments/AGENTS.md`) from the version of Lab the CLI ships. Reach for it after `prime upgrade`, or when the bundled skills or guidance feel out of date — not after editing your own files in `configs/`. Use `--skip-docs` to refresh skills without touching agent docs, or `--skip-agent` to refresh shared Lab assets without configuring coding-agent skill roots.
+`sync` refreshes `.prime/skills/` and the local agent docs (`AGENTS.md`, `CLAUDE.md`, `environments/AGENTS.md`) from the version of Lab the CLI ships. Reach for it after `prime upgrade`, or when the bundled skills or guidance feel out of date — not after editing your own files in [`configs/`](../configs/). Use `--skip-docs` to refresh skills without touching agent docs, or `--skip-agent` to refresh shared Lab assets without configuring coding-agent skill roots.
 
 Run `doctor` first when a hosted run misbehaves — it surfaces the most common causes (wrong team context, missing API key, outdated CLI) before you start digging into env code.
 

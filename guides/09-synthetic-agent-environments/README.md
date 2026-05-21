@@ -193,7 +193,7 @@ Before launching RL on a synthetic environment, check:
 - failures look like genuine reasoning mistakes, not environment bugs or formatting issues
 - the score-check budget and turn limit are tight enough to discourage brute-force search
 
-When those conditions hold, training works the same as in earlier guides. A minimal config:
+When those conditions hold, training works the same as in earlier guides. A minimal config to save under [`configs/rl/`](../../configs/rl/):
 
 ```toml
 model = "Qwen/Qwen3-30B-A3B-Instruct-2507"

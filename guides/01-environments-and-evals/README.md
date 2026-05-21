@@ -77,7 +77,7 @@ Here are the factors to think through when selecting a model:
 
 Once you want to run more than one environment in a single pass, move the eval settings into a config file. This keeps the model, sampling settings, and environment arguments together.
 
-Create `configs/00/first-eval-suite.toml`:
+Use [`configs/01/first-eval-suite.toml`](../../configs/01/first-eval-suite.toml):
 
 ```toml
 model = "openai/gpt-5-nano"
@@ -101,7 +101,7 @@ The `save_results`<a href="../../reference/glossary.md#save-results">¹⁰</a> f
 Run the suite:
 
 ```bash
-prime eval run configs/00/first-eval-suite.toml
+prime eval run configs/01/first-eval-suite.toml
 ```
 
 Expected output:

@@ -48,7 +48,7 @@ Then set up the workspace and choose which coding agents to configure:
 prime lab setup --agents codex,claude
 ```
 
-The command initializes the workspace, installs the Verifiers dependency, prepares `configs/`, refreshes Lab guidance, and prints a short "get started" panel with next commands.
+The command initializes the workspace, installs the Verifiers dependency, prepares [`configs/`](../../configs/), refreshes Lab guidance, and prints a short "get started" panel with next commands.
 
 This adds project structure, example configs, and agent guidance covering environment workflows and best practices.
 
@@ -66,12 +66,12 @@ Sync refreshes the managed Lab skills, templates, and agent guidance in the curr
 
 After setup, your workspace contains a few key pieces:
 
-- `configs/` holds example configs for evaluation, training, and related workflows.
+- [`configs/`](../../configs/) holds example configs for evaluation, training, and related workflows.
 - `environments/` is where your local environment packages live.
 - `AGENTS.md` (and/or `CLAUDE.md`) tells coding agents how to navigate Lab.
 - `.prime/` stores Lab metadata and other local assets.
 
-Most day-to-day work happens in `configs/` and `environments/`; the other files keep Lab and your coding agents in sync with the workspace.
+Most day-to-day work happens in [`configs/`](../../configs/) and `environments/`; the other files keep Lab and your coding agents in sync with the workspace.
 
 ## Check the CLI
 
