@@ -28,7 +28,7 @@ venv/
 /environments/*/dist/
 /environments/*/*.egg-info/
 /environments/*/__pycache__/
-
+.prime/
 
 # Agents
 .claude/
