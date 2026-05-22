@@ -13,7 +13,7 @@ This pattern is a good fit when you want:
 
 The same recipe extends well beyond calendars. The world being simulated can just as easily be a database the agent queries and updates, a spreadsheet it edits cell-by-cell, a website backend it drives through HTTP-like tools, a filesystem, a ticketing system, a CRM, or any other service whose state you can hold in memory. Once you can generate problems and grade solutions, the surface presented to the agent is a design choice.
 
-This guide uses [`prime/calendar-scheduling`](https://app.primeintellect.ai/dashboard/environments/prime/calendar-scheduling) as the worked example. The model is asked to schedule a meeting across a set of attendees with busy calendars, hard constraints (required attendees, hard local-time bounds, room availability, exact duration), and soft penalties (early/late local hours, day preferences, back-to-back blocks, missing optional attendees). Difficulty is controlled by `easy` / `medium` / `hard` knobs that map to ranges over attendee count, window length, constraint tightness, and constraint mix.
+This guide uses [prime/calendar-scheduling](https://app.primeintellect.ai/dashboard/environments/prime/calendar-scheduling) as the worked example. The model is asked to schedule a meeting across a set of attendees with busy calendars, hard constraints (required attendees, hard local-time bounds, room availability, exact duration), and soft penalties (early/late local hours, day preferences, back-to-back blocks, missing optional attendees). Difficulty is controlled by `easy` / `medium` / `hard` knobs that map to ranges over attendee count, window length, constraint tightness, and constraint mix.
 
 ## Try the Hub Environment First
 
@@ -39,7 +39,7 @@ Inspect:
 - which tools the model called and in what order
 - whether it read attendee constraints before proposing a window
 - whether the proposed window respects required attendees and hard local-time bounds
-- whether the final score is close to the oracle<a href="../../reference/glossary.md#oracle">¹</a> best for that task
+- whether the final score is close to the oracle best for that task
 - whether failures came from running out of turns, picking conflicting windows, or formatting the submission wrong
 
 The environment ships a standalone visualizer that renders the generated problem as a TUI similar to a meeting app. Use it to develop intuition for what the agent sees:
@@ -49,7 +49,7 @@ uv run --project environments/calendar_scheduling \
   calendar-scheduling-tui --show-oracle --difficulty medium --seed 5
 ```
 
-The visualizer shows attendees, time zones, busy blocks, hard and soft constraints, oracle best windows, and the random-baseline score. If the oracle score is high and the random baseline<a href="../../reference/glossary.md#random-baseline">²</a> is low, the task has signal: there are valid solutions and they are not trivially common.
+The visualizer shows attendees, time zones, busy blocks, hard and soft constraints, oracle best windows, and the random-baseline score. If the oracle score is high and the random baseline is low, the task has signal: there are valid solutions and they are not trivially common.
 
 ## The Synthetic Pattern
 
@@ -97,7 +97,7 @@ Two design choices keep the environment honest:
 - **Budget the oracle.** `check_window` is the agent's view of the oracle. Bound the number of calls per rollout (the TUI shows the budget as `Score-check budget`) so the agent cannot brute-force the search space. The remaining budget should be visible in every tool result.
 - **Surface remaining turns.** Tool results include the remaining turn count. The agent learns to plan instead of exploring exhaustively.
 
-This is the same Toolset pattern from [Tool Use and Search](../07-tool-use-and-search/README.md), with one extra requirement: the per-rollout state<a href="../../reference/glossary.md#per-rollout-state">³</a> owns the generated world, not just a session handle into an external one. Wire tools that need per-rollout context through `state` rather than module globals; the v1 `vf.Toolset` runs each tool with `task` and `state` in scope.
+This is the same Toolset pattern from [Tool Use and Search](../07-tool-use-and-search/README.md), with one extra requirement: the per-rollout state owns the generated world, not just a session handle into an external one. Wire tools that need per-rollout context through `state` rather than module globals; the v1 `vf.Toolset` runs each tool with `task` and `state` in scope.
 
 ## Designing the Reward
 
@@ -193,7 +193,7 @@ Before launching RL on a synthetic environment, check:
 - failures look like genuine reasoning mistakes, not environment bugs or formatting issues
 - the score-check budget and turn limit are tight enough to discourage brute-force search
 
-When those conditions hold, training works the same as in earlier guides. A minimal config to save under [`configs/rl/`](../../configs/rl/):
+When those conditions hold, training works the same as in earlier guides. A minimal config to save under [configs/rl/](../../configs/rl/):
 
 ```toml
 model = "Qwen/Qwen3-30B-A3B-Instruct-2507"

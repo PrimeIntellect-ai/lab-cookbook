@@ -366,7 +366,7 @@ All rubrics in a group are executed in parallel, and the final reward is the sum
 
 For simple cases, metrics can be added directly to a rubric via `add_metric()` as shown above. Monitor rubrics extend this pattern by packaging metrics into separate rubrics that are combined via `add_rubric()`. This allows each environment type in a class hierarchy to contribute its own metrics automatically.
 
-Many environment types automatically include a monitor rubric<a href="../reference/glossary.md#monitor-rubric">¹</a> that tracks metrics specific to their level of the environment class hierarchy:
+Many environment types automatically include a monitor rubric that tracks metrics specific to their level of the environment class hierarchy:
 
 | Environment | Tracked Metrics |
 |-------------|-----------------|
@@ -446,7 +446,7 @@ During rollouts, the model can call tools, receive results, and continue reasoni
 
 ### MCP Tool Environments
 
-For tools implemented as MCP<a href="../reference/glossary.md#mcp">²</a> (Model Context Protocol) servers, `MCPEnv` extends `ToolEnv` to provide an integration that automatically connects to MCP servers and exposes their tools to the model:
+For tools implemented as MCP (Model Context Protocol) servers, `MCPEnv` extends `ToolEnv` to provide an integration that automatically connects to MCP servers and exposes their tools to the model:
 
 ```python
 mcp_servers = [
@@ -563,7 +563,7 @@ Several other methods can optionally be overridden for more control in complex c
 
 ### Stop Conditions
 
-Rollouts continue until a stop condition<a href="../reference/glossary.md#stop-condition">³</a> is met, checked after each model response. Custom stop conditions are defined with the `@vf.stop` decorator:
+Rollouts continue until a stop condition is met, checked after each model response. Custom stop conditions are defined with the `@vf.stop` decorator:
 
 ```python
 class MyGameEnv(vf.MultiTurnEnv):

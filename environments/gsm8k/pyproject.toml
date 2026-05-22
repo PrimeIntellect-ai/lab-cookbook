@@ -1,0 +1,20 @@
+[project]
+name = "gsm8k"
+version = "0.2.0"
+description = "GSM8K environment"
+tags = ["gsm8k", "single-turn", "math", "train", "eval"]
+requires-python = ">=3.11"
+dependencies = [
+    "verifiers>=0.1.15.dev4",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = ["gsm8k.py", "pyproject.toml"]
+
+[tool.verifiers.eval]
+num_examples = 20
+rollouts_per_example = 5

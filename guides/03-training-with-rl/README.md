@@ -1,14 +1,14 @@
 # Training with RL
 
-Launch a Hosted Training<a href="../../reference/glossary.md#hosted-training">¹</a> run with an environment.
+Launch a Hosted Training run with an environment.
 
-RL is useful once an environment has a reward signal you trust. The model samples multiple rollouts for each task, the environment scores those rollouts, and the trainer updates the model's policy<a href="../../reference/glossary.md#policy">²</a> toward higher-reward behavior.
+RL is useful once an environment has a reward signal you trust. The model samples multiple rollouts for each task, the environment scores those rollouts, and the trainer updates the model's policy toward higher-reward behavior.
 
 For the first run, use the Hub version of the reverse-text environment. If you built a local version in the previous guide, using the Hub copy keeps training stable while you keep iterating on your local copy.
 
 ## Check the Baseline
 
-Run a small eval before training to establish the baseline<a href="../../reference/glossary.md#baseline">³</a>:
+Run a small eval before training to establish the baseline:
 
 ```bash
 prime eval run primeintellect/reverse-text \
@@ -64,7 +64,7 @@ reasoning_effort = "medium" # gpt-oss: low, medium, high
 
 For `gpt-oss`, `reasoning_effort` can be `"low"`, `"medium"`, or `"high"`. The default is `"medium"`.
 
-For Nemotron 3 and Qwen 3.5 / 3.6, use `enable_thinking`<a href="../../reference/glossary.md#enable-thinking">⁴</a>:
+For Nemotron 3 and Qwen 3.5 / 3.6, use enable_thinking:
 
 ```toml
 [sampling]
@@ -78,21 +78,21 @@ The default is `true`. Set it to `false` when you want shorter, more direct resp
 
 For a first run, the config below is intentionally small. Once it works, these are the knobs that change run behavior most, in roughly the order you'll want to think about them. Below is more information on the components of the config.
 
-**`rollouts_per_example`.**<a href="../../reference/glossary.md#rollouts-per-example">⁵</a> This controls how many attempts the trainer samples per task. RL learns from advantage<a href="../../reference/glossary.md#advantage">⁶</a> across rollouts in the same group, so this can't be 1. Typical values fall between 4 and 16. Higher values produce a cleaner gradient<a href="../../reference/glossary.md#gradient">⁷</a> signal but cost more compute per step. Drop it when rollouts are expensive (long contexts, sandboxes); raise it when the reward is noisy or the model is exploring<a href="../../reference/glossary.md#exploration">⁸</a>.
+**rollouts_per_example.** This controls how many attempts the trainer samples per task. RL learns from advantage across rollouts in the same group, so this can't be 1. Typical values fall between 4 and 16. Higher values produce a cleaner gradient signal but cost more compute per step. Drop it when rollouts are expensive (long contexts, sandboxes); raise it when the reward is noisy or the model is exploring.
 
-**`batch_size`.**<a href="../../reference/glossary.md#batch-size">⁹</a> This is the total number of rollouts consumed per training step. Bigger batches stabilize learning and make reward curves smoother; smaller batches step faster but noisier. Keep `batch_size` a multiple of `rollouts_per_example` so sample throughput<a href="../../reference/glossary.md#sample-throughput">¹⁰</a> stays predictable.
+**batch_size.** This is the total number of rollouts consumed per training step. Bigger batches stabilize learning and make reward curves smoother; smaller batches step faster but noisier. Keep `batch_size` a multiple of `rollouts_per_example` so sample throughput stays predictable.
 
-**`learning_rate`.**<a href="../../reference/glossary.md#learning-rate">¹¹</a> This sets the learning rate for the LoRA adapter and defaults to `1e-4`. The default is usually right. If reward collapses or oscillates wildly in the first 20 steps, the learning rate is too high. If it plateaus from the start and never moves, it may be too low.
+**learning_rate.** This sets the learning rate for the LoRA adapter and defaults to `1e-4`. The default is usually right. If reward collapses or oscillates wildly in the first 20 steps, the learning rate is too high. If it plateaus from the start and never moves, it may be too low.
 
-**`max_tokens` and thinking mode.** Under `[sampling]`, `max_tokens` sets the maximum number of tokens the model can generate per response turn. Models that support thinking mode need enough budget to reason through the problem and produce the answer. If completions are getting truncated mid-answer, raise `max_tokens`<a href="../../reference/glossary.md#max-tokens">¹⁶</a> before changing anything else. Thinking mode is toggled via `[sampling].enable_thinking` — it produces extended chain-of-thought reasoning before the final answer, which helps on multi-step tasks at the cost of longer outputs.
+**`max_tokens` and thinking mode.** Under `[sampling]`, `max_tokens` sets the maximum number of tokens the model can generate per response turn. Models that support thinking mode need enough budget to reason through the problem and produce the answer. If completions are getting truncated mid-answer, raise max_tokens before changing anything else. Thinking mode is toggled via `[sampling].enable_thinking` — it produces extended chain-of-thought reasoning before the final answer, which helps on multi-step tasks at the cost of longer outputs.
 
-**Eval cadence.**<a href="../../reference/glossary.md#eval-cadence">¹⁸</a> The `[eval].interval` field controls how often a held-out eval<a href="../../reference/glossary.md#held-out-eval">¹⁹</a> runs during training. Set it frequent enough to catch regressions but sparse enough to not dominate cost. Configure under `[eval]` once the basic training loop is working.
+**Eval cadence.** The `[eval].interval` field controls how often a held-out eval runs during training. Set it frequent enough to catch regressions but sparse enough to not dominate cost. Configure under `[eval]` once the basic training loop is working.
 
-**Difficulty filtering and oversampling.** When most tasks are too easy or too hard, the training signal<a href="../../reference/glossary.md#training-signal">²⁰</a> is wasted. The `[buffer]` section exposes `online_difficulty_filtering`<a href="../../reference/glossary.md#online-difficulty-filtering">²¹</a>, which filters out examples above an `easy_threshold` or below a `hard_threshold`, focusing compute on examples where the model can meaningfully improve. The `oversampling_factor`<a href="../../reference/glossary.md#oversampling">²²</a> (default `2.0`) generates more rollouts than needed per batch to ensure sufficient data after filtering.
+**Difficulty filtering and oversampling.** When most tasks are too easy or too hard, the training signal is wasted. The `[buffer]` section exposes online_difficulty_filtering, which filters out examples above an `easy_threshold` or below a `hard_threshold`, focusing compute on examples where the model can meaningfully improve. The oversampling_factor (default `2.0`) generates more rollouts than needed per batch to ensure sufficient data after filtering.
 
 ## Write a Training Config
 
-Use [`configs/rl/llama.toml`](../../configs/rl/llama.toml) as a small reverse-text starter:
+Use [configs/rl/llama.toml](../../configs/rl/llama.toml) as a small reverse-text starter:
 
 ```toml
 # Llama 3.2 models. Uncomment exactly one model.
@@ -119,7 +119,7 @@ The main fields are:
 - `[sampling]`: generation settings used during rollout collection, including reasoning controls.
 - `[[env]]`: the environment or environments used for training.
 
-For a first run, keep the config small. Bigger batches, more rollouts, validation<a href="../../reference/glossary.md#validation">²³</a>, evals, W&B, and checkpoint<a href="../../reference/glossary.md#checkpoint">²⁴</a> policies can come later once the basic learning loop is working.
+For a first run, keep the config small. Bigger batches, more rollouts, validation, evals, W&B, and checkpoint policies can come later once the basic learning loop is working.
 
 ## Example Run Costs
 
@@ -178,7 +178,7 @@ Once the basic run is learning, the same config can be extended with a few commo
 
 ### Sampling Temperature
 
-Set `temperature`<a href="../../reference/glossary.md#temperature">²⁵</a> under `[sampling]`<a href="../../reference/glossary.md#sampling">²⁶</a> to control rollout diversity. The default is `1.0`; raise it slightly to encourage exploration when rollouts within a group look too similar.
+Set temperature under [sampling] to control rollout diversity. The default is `1.0`; raise it slightly to encourage exploration when rollouts within a group look too similar.
 
 ```toml
 [sampling]
@@ -188,7 +188,7 @@ temperature = 1.1
 
 ### Multiple Environments
 
-Add more `[[env]]` sections to train across environments at once, and use `[buffer].env_ratios`<a href="../../reference/glossary.md#env-ratios">²⁷</a> to set the mix:
+Add more `[[env]]` sections to train across environments at once, and use [buffer].env_ratios to set the mix:
 
 ```toml
 [[env]]

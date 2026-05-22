@@ -243,9 +243,7 @@ def load_patents(config: PatentTechnicalTasksetConfig) -> PatentIndex:
         patent_id_to_title[patent_id] = str(raw_row["title"])
         patent_id_to_content[patent_id] = content
         metadata = raw_row.get("metadata") or {}
-        patent_id_to_metadata[patent_id] = {
-            str(key): str(value) for key, value in metadata.items()
-        }
+        patent_id_to_metadata[patent_id] = {str(key): str(value) for key, value in metadata.items()}
         patent_id_to_abstract[patent_id] = extract_abstract(content)
         patent_id_to_claims[patent_id] = extract_claims_text(content)
         patent_id_to_description[patent_id] = extract_description(content)
@@ -462,9 +460,7 @@ def load_taskset(config: PatentTechnicalTasksetConfig) -> PatentTechnicalTaskset
             return content[:20000] + "\n\n[TRUNCATED - content continues...]"
         return content
 
-    async def compare_patents(
-        patent_id_1: str, patent_id_2: str
-    ) -> dict[str, dict[str, str]]:
+    async def compare_patents(patent_id_1: str, patent_id_2: str) -> dict[str, dict[str, str]]:
         """Get side-by-side comparison data for two patents.
 
         Args:

@@ -19,8 +19,10 @@ async def lcs_reward(task: vf.Task, state: vf.State) -> float:
 
 
 def source():
-    for index, row in enumerate(load_dataset(DATASET_NAME, split="train")):
-        text = str(row["prompt"])
+    ds = load_dataset(DATASET_NAME, split="train")
+    for index, row in enumerate(ds):
+        assert isinstance(row, dict), "Dataset rows must be dicts."
+        text = str(row.get("prompt", "") or "")
         yield {
             "example_id": index,
             "prompt": [{"role": "user", "content": text}],

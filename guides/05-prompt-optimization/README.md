@@ -1,10 +1,10 @@
 # Prompt Optimization
 
-Use GEPA<a href="../../reference/glossary.md#gepa">¹</a> to improve an environment prompt before changing model weights.
+Use GEPA to improve an environment prompt before changing model weights.
 
 RL changes the model. GEPA changes the prompt. It is useful when the environment already has a meaningful scoring signal, but the model behavior depends heavily on the system prompt, tool instructions, output format, or task strategy.
 
-This guide uses [`primeintellect/wordle`](https://app.primeintellect.ai/dashboard/environments/primeintellect/wordle), because its behavior is easy to inspect: the model sees game state, chooses guesses, and is scored on whether it solves the puzzle.
+This guide uses [primeintellect/wordle](https://app.primeintellect.ai/dashboard/environments/primeintellect/wordle), because its behavior is easy to inspect: the model sees game state, chooses guesses, and is scored on whether it solves the puzzle.
 
 ## Check the Baseline
 
@@ -40,7 +40,7 @@ prime gepa run primeintellect/wordle -m openai/gpt-5.5
 
 The command prints optimization progress and a results directory containing the best prompt artifacts.
 
-For a reusable run, create a new GEPA config in [`configs/gepa/`](../../configs/gepa/), for example `wordle.toml`:
+For a reusable run, create a new GEPA config in [configs/gepa/](../../configs/gepa/), for example `wordle.toml`:
 
 ```toml
 model = "openai/gpt-5.5"
@@ -58,7 +58,7 @@ prime gepa run configs/gepa/wordle.toml
 
 Use the printed results directory to inspect GEPA artifacts after the run.
 
-GEPA evaluates prompt candidates<a href="../../reference/glossary.md#prompt-candidate">²</a> against environment feedback and writes artifacts to a results directory:
+GEPA evaluates prompt candidates against environment feedback and writes artifacts to a results directory:
 
 ```text
 Saving results to /path/to/results/
@@ -70,11 +70,11 @@ The most important artifact is:
 /path/to/results/system_prompt.txt
 ```
 
-That file contains the optimized system prompt. With `save_to_environment = true`<a href="../../reference/glossary.md#save-to-environment">³</a>, GEPA also saves the prompt into the environment's `prompts/` folder when the environment is available locally.
+That file contains the optimized system prompt. With save_to_environment = true, GEPA also saves the prompt into the environment's `prompts/` folder when the environment is available locally.
 
 ## Evaluate the Optimized Prompt
 
-Create a new eval config in [`configs/eval/`](../../configs/eval/), for example `wordle-gepa.toml`:
+Create a new eval config in [configs/eval/](../../configs/eval/), for example `wordle-gepa.toml`:
 
 ```toml
 model = "openai/gpt-5.5"
@@ -88,7 +88,7 @@ sampling_args = { max_tokens = 1024, temperature = 0.7 }
 env_args = { path_to_system_prompt = "environments/wordle/prompts/system_prompt.txt" }
 ```
 
-The `env_args`<a href="../../reference/glossary.md#env-args">⁴</a> map passes environment-specific settings into the run.
+The env_args map passes environment-specific settings into the run.
 
 Run the eval:
 
@@ -115,7 +115,7 @@ Look for:
 - more consistent task strategy
 - fewer formatting or tool-use mistakes
 - higher score on examples the baseline could plausibly solve
-- no new shortcuts that exploit the metric without solving the task, which is a common form of reward hacking<a href="../../reference/glossary.md#reward-hacking">⁵</a>
+- no new shortcuts that exploit the metric without solving the task, which is a common form of reward hacking
 
 If the prompt helps, use it in future eval or training configs by passing the same environment argument. If it does not help, inspect the GEPA artifacts and baseline failures before spending a larger optimization budget.
 

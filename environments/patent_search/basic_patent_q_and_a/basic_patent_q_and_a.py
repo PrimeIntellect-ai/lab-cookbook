@@ -129,9 +129,7 @@ def load_patents(config: BasicPatentTasksetConfig) -> PatentIndex:
         patent_id_to_title[patent_id] = str(raw_row["title"])
         patent_id_to_content[patent_id] = str(raw_row["content"])
         metadata = raw_row.get("metadata") or {}
-        patent_id_to_metadata[patent_id] = {
-            str(key): str(value) for key, value in metadata.items()
-        }
+        patent_id_to_metadata[patent_id] = {str(key): str(value) for key, value in metadata.items()}
 
     openai_ef = embedding_functions.OpenAIEmbeddingFunction(
         model_name=config.embed_model,

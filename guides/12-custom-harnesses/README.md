@@ -37,7 +37,7 @@ The important part is `state.get_endpoint_config(api="chat")`. It gives the fram
 
 ## Deep Agents
 
-[`langchain-deep-agents-env`](https://app.primeintellect.ai/dashboard/environments/primeintellect/langchain-deep-agents-env) is the clearest first example. The Taskset uses GSM8K rows and a numeric-answer reward. The Harness runs a LangChain Deep Agents program with `deepagents.create_deep_agent`.
+[primeintellect/langchain-deep-agents-env](https://app.primeintellect.ai/dashboard/environments/primeintellect/langchain-deep-agents-env) is the clearest first example. The Taskset uses GSM8K rows and a numeric-answer reward. The Harness runs a LangChain Deep Agents program with `deepagents.create_deep_agent`.
 
 Run a small eval:
 
@@ -63,7 +63,7 @@ The source package is `langchain_deep_agents_env`. It builds a LangChain chat mo
 
 ## DSPy
 
-[`dspy-rlm`](https://app.primeintellect.ai/dashboard/environments/primeintellect/dspy-rlm) shows the same pattern with DSPy. The Taskset again owns GSM8K rows and reward logic. The Harness runs a DSPy RLM program and routes DSPy's LM through the rollout endpoint config.
+[primeintellect/dspy-rlm](https://app.primeintellect.ai/dashboard/environments/primeintellect/dspy-rlm) shows the same pattern with DSPy. The Taskset again owns GSM8K rows and reward logic. The Harness runs a DSPy RLM program and routes DSPy's LM through the rollout endpoint config.
 
 Run a small eval:
 

@@ -33,7 +33,7 @@ You do not need to export `PRIME_API_KEY` just to run `prime eval run` against a
 
 ## Workspace Endpoint Aliases
 
-[`configs/endpoints.toml`](../configs/endpoints.toml) in a Lab workspace maps short aliases (`gpt-5-mini`, `qwen3-30b-i`, `sonnet`) to provider, model id, base URL, and the env var that holds the key. Aliases are how evals and GEPA refer to models without repeating provider URLs.
+[configs/endpoints.toml](../configs/endpoints.toml) in a Lab workspace maps short aliases (`gpt-5-mini`, `qwen3-30b-i`, `sonnet`) to provider, model id, base URL, and the env var that holds the key. Aliases are how evals and GEPA refer to models without repeating provider URLs.
 
 ```toml
 [[endpoint]]
@@ -44,7 +44,7 @@ key = "PRIME_API_KEY"
 type = "openai_chat_completions"
 ```
 
-Add new aliases here when bringing in a third-party provider, and export the corresponding `*_API_KEY` in your shell before running anything that resolves to it. The CLI reads [`endpoints.toml`](../configs/endpoints.toml) directly — no `prime lab sync` step is needed.
+Add new aliases here when bringing in a third-party provider, and export the corresponding `*_API_KEY` in your shell before running anything that resolves to it. The CLI reads [endpoints.toml](../configs/endpoints.toml) directly — no `prime lab sync` step is needed.
 
 ## Environment Variables and Secrets
 
@@ -96,9 +96,9 @@ References: [Create](https://docs.primeintellect.ai/tutorials-environments/creat
 
 ## Hosted Evaluations
 
-Hub-driven evals, also called hosted evals<a href="glossary.md#hosted-eval">¹</a>, run on Prime infrastructure instead of your machine. Open the env in the Hub, click **Run Hosted Evaluation**, pick a model, set `num_examples` and `rollouts_per_example`, and optionally add `env_args`. Credits cover model tokens; secrets and variables auto-inject. Results show up in the env's **Evaluations** tab alongside CLI-launched runs.
+Hub-driven evals, also called hosted evals, run on Prime infrastructure instead of your machine. Open the env in the Hub, click **Run Hosted Evaluation**, pick a model, set `num_examples` and `rollouts_per_example`, and optionally add `env_args`. Credits cover model tokens; secrets and variables auto-inject. Results show up in the env's **Evaluations** tab alongside CLI-launched runs.
 
-Reach for hosted evals when the model is large enough that local concurrency is the bottleneck, or when you want a reproducible run pinned to a specific Hub version<a href="glossary.md#hub-version">²</a> of the env. For everything else, `prime eval run` from your workspace is still faster to iterate on.
+Reach for hosted evals when the model is large enough that local concurrency is the bottleneck, or when you want a reproducible run pinned to a specific Hub version of the env. For everything else, `prime eval run` from your workspace is still faster to iterate on.
 
 Reference: [Hosted Evaluations](https://docs.primeintellect.ai/tutorials-environments/hosted-evaluations).
 
@@ -143,7 +143,7 @@ Reference: [Hosted Training: Advanced Configs](https://docs.primeintellect.ai/ho
 
 ## Inference Deployments
 
-Prime Inference exposes an OpenAI-compatible API at `https://api.pinference.ai/api/v1`. Base models are always-on; LoRA adapters from a training run must be deployed before they can be queried through inference deployments<a href="glossary.md#inference-deployment">³</a>.
+Prime Inference exposes an OpenAI-compatible API at `https://api.pinference.ai/api/v1`. Base models are always-on; LoRA adapters from a training run must be deployed before they can be queried through inference deployments.
 
 ```bash
 prime deployments list
@@ -179,7 +179,7 @@ prime lab sync       # pull upstream Lab skills + agent guidance into this works
 prime lab doctor     # validate the workspace; print active account, team, CLI version
 ```
 
-`sync` refreshes `.prime/skills/` and the local agent docs (`AGENTS.md`, `CLAUDE.md`, `environments/AGENTS.md`) from the version of Lab the CLI ships. Reach for it after `prime upgrade`, or when the bundled skills or guidance feel out of date — not after editing your own files in [`configs/`](../configs/). Use `--skip-docs` to refresh skills without touching agent docs, or `--skip-agent` to refresh shared Lab assets without configuring coding-agent skill roots.
+`sync` refreshes `.prime/skills/` and the local agent docs (`AGENTS.md`, `CLAUDE.md`, `environments/AGENTS.md`) from the version of Lab the CLI ships. Reach for it after `prime upgrade`, or when the bundled skills or guidance feel out of date — not after editing your own files in [configs/](../configs/). Use `--skip-docs` to refresh skills without touching agent docs, or `--skip-agent` to refresh shared Lab assets without configuring coding-agent skill roots.
 
 Run `doctor` first when a hosted run misbehaves — it surfaces the most common causes (wrong team context, missing API key, outdated CLI) before you start digging into env code.
 

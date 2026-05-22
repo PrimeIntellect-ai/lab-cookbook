@@ -1148,6 +1148,48 @@ wheels = [
 ]
 
 [[package]]
+name = "lab-cookbook"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "datasets" },
+    { name = "openai" },
+    { name = "scikit-learn", version = "1.7.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "scikit-learn", version = "1.8.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "verifiers" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pre-commit" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "ruff" },
+    { name = "ty" },
+]
+policy = [
+    { name = "semgrep" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "datasets", specifier = ">=2.0" },
+    { name = "openai", specifier = ">=1.0" },
+    { name = "scikit-learn", specifier = ">=1.3" },
+    { name = "verifiers", specifier = ">=0.1.15.dev6" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pre-commit" },
+    { name = "pytest", specifier = ">=7.0" },
+    { name = "pytest-asyncio", specifier = ">=0.21" },
+    { name = "ruff" },
+    { name = "ty", specifier = ">=0.0.1a29,<0.0.22" },
+]
+policy = [{ name = "semgrep", specifier = ">=1.150.0" }]
+
+[[package]]
 name = "latex2sympy2-extended"
 version = "1.11.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2089,48 +2131,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/8e/22/2de9408ac81acbb8a
 wheels = [
     { url = "https://files.pythonhosted.org/packages/80/6e/4b28b62ecb6aae56769c34a8ff1d661473ec1e9519e2d5f8b2c150086b26/pre_commit-4.6.0-py2.py3-none-any.whl", hash = "sha256:e2cf246f7299edcabcf15f9b0571fdce06058527f0a06535068a86d38089f29b", size = 226472, upload-time = "2026-04-21T20:31:40.092Z" },
 ]
-
-[[package]]
-name = "prime-cookbook"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "datasets" },
-    { name = "openai" },
-    { name = "scikit-learn", version = "1.7.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "scikit-learn", version = "1.8.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "verifiers" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pre-commit" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "ruff" },
-    { name = "ty" },
-]
-policy = [
-    { name = "semgrep" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "datasets", specifier = ">=2.0" },
-    { name = "openai", specifier = ">=1.0" },
-    { name = "scikit-learn", specifier = ">=1.3" },
-    { name = "verifiers", specifier = ">=0.1.15.dev6" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pre-commit" },
-    { name = "pytest", specifier = ">=7.0" },
-    { name = "pytest-asyncio", specifier = ">=0.21" },
-    { name = "ruff" },
-    { name = "ty", specifier = ">=0.0.1a29,<0.0.22" },
-]
-policy = [{ name = "semgrep", specifier = ">=1.150.0" }]
 
 [[package]]
 name = "prime-sandboxes"

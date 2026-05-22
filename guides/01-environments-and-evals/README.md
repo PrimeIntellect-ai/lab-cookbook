@@ -1,14 +1,14 @@
 # Environments and Evals
 
-In Lab, evals<a href="../../reference/glossary.md#eval">¹</a> are environments<a href="../../reference/glossary.md#environment">²</a>.
+In Lab, evals are environments.
 
-If you've run or read about a benchmark like GSM8K, MMLU, or SWE-bench, you already have the mental model: an eval is a collection of tasks<a href="../../reference/glossary.md#task">³</a> plus a way to score a model's attempts on them. An *environment* is that same unit — tasks and scoring — packaged behind a single entry point so anything in Lab can load it and run rollouts<a href="../../reference/glossary.md#rollout">⁴</a> against it. The name is borrowed from reinforcement learning, where tasks and a reward signal<a href="../../reference/glossary.md#reward-signal">⁵</a> are what a model *trains* against; the choice is deliberate, because in Lab the package you use to grade a model is the same package you'd use to train one. No need to rewrite your evals.
+If you've run or read about a benchmark like GSM8K, MMLU, or SWE-bench, you already have the mental model: an eval is a collection of tasks plus a way to score a model's attempts on them. An *environment* is that same unit — tasks and scoring — packaged behind a single entry point so anything in Lab can load it and run rollouts against it. The name is borrowed from reinforcement learning, where tasks and a reward signal are what a model *trains* against; the choice is deliberate, because in Lab the package you use to grade a model is the same package you'd use to train one. No need to rewrite your evals.
 
-An environment packages the work you want a model or agent to do. It samples tasks, produces rollouts, and computes metrics<a href="../../reference/glossary.md#metric">⁶</a> from the results. The same environment can be used for benchmarking models and prompts, generating synthetic data, optimizing harnesses<a href="../../reference/glossary.md#harness">⁷</a>, and training with RL or other algorithms.
+An environment packages the work you want a model or agent to do. It samples tasks, produces rollouts, and computes metrics from the results. The same environment can be used for benchmarking models and prompts, generating synthetic data, optimizing harnesses, and training with RL or other algorithms.
 
-Environments can live locally in your workspace or on the Environments Hub. This guide uses [`primeintellect/gsm8k`](https://app.primeintellect.ai/dashboard/environments/primeintellect/gsm8k), a [Hub](https://app.primeintellect.ai/dashboard/environments) environment.
+Environments can live locally in your workspace or on the Environments Hub. This guide uses [primeintellect/gsm8k](https://app.primeintellect.ai/dashboard/environments/primeintellect/gsm8k), a [Hub](https://app.primeintellect.ai/dashboard/environments) environment.
 
-Later guides also use [`primeintellect/wordle`](https://app.primeintellect.ai/dashboard/environments/primeintellect/wordle), a Hub game environment with clear task state and simple success criteria.
+Later guides also use [primeintellect/wordle](https://app.primeintellect.ai/dashboard/environments/primeintellect/wordle), a Hub game environment with clear task state and simple success criteria.
 
 We'll focus on the two pieces you need first: tasks and metrics. In GSM8K, the tasks are math questions with expected final answers. The metric checks whether each rollout reaches the right answer, and that same score can serve as a reward signal during later optimization.
 
@@ -22,32 +22,39 @@ Run a small eval:
 
 ```bash
 prime eval run primeintellect/gsm8k \
-  -m openai/gpt-5-nano \
+  -m openai/gpt-5.4-nano \
   -n 5 \
   -r 2
 ```
 
 This evaluates 5 examples with 2 rollouts per example. Results are saved automatically.
 
-The terminal summary includes the model, rollout count, average reward, token usage, error rate, and local results path:
+This can also be done with a config file:
 
-![GSM8K eval terminal summary](../../assets/expected-output/gsm8k-eval-summary.png)
+```toml
+# [configs/01/first-eval.toml](../../configs/01/first-eval.toml)
+model = "openai/gpt-5.4-nano"
+save_results = true
 
-Open the Lab viewer to inspect eval results:
-
-```bash
-prime lab view --evals
+[[eval]]
+env_id = "primeintellect/gsm8k"
+num_examples = 5
+rollouts_per_example = 2
 ```
 
-This opens the eval results view in Lab.
+```bash
+prime eval run configs/01/first-eval.toml
+```
+The terminal summary includes metrics like average reward, token usage, and error rate, as well as an example rollout.
+
+You can also view full results in the terminal:
+```bash
+prime eval view
+```
 
 ## Read the Rollouts
 
-Open a few individual rollouts before focusing on the aggregate score. Each rollout shows one model attempt, including the prompt, completion<a href="../../reference/glossary.md#completion">⁸</a>, score, and any task data captured by the environment.
-
-In the rollout view, expect to see the prompt, completion, reward, reward distribution, metrics, and token usage together:
-
-![GSM8K rollout and metrics view](../../assets/expected-output/gsm8k-rollout-metrics.png)
+Open a few individual rollouts before focusing on the aggregate score. Each rollout shows one model attempt, including the prompt, completion, score, and any task data captured by the environment. The eval viewer also shows distribution-level metrics, timing, and other details.
 
 As you read, check whether:
 
@@ -57,7 +64,7 @@ As you read, check whether:
 - the score matches your judgment
 - any task needs clearer data, constraints, or scoring
 
-This is the basic eval loop: evaluate a model, read the rollouts, and decide whether the task, prompt, model, or metric needs to change.
+This is the basic eval loop: evaluate a model, read the rollouts, and decide whether the task, prompt, harness, model, or metric needs to change.
 
 ## Choosing a Model
 
@@ -77,36 +84,33 @@ Here are the factors to think through when selecting a model:
 
 Once you want to run more than one environment in a single pass, move the eval settings into a config file. This keeps the model, sampling settings, and environment arguments together.
 
-Use [`configs/01/first-eval-suite.toml`](../../configs/01/first-eval-suite.toml):
+Use [configs/01/first-eval-suite.toml](../../configs/01/first-eval-suite.toml):
 
 ```toml
-model = "openai/gpt-5-nano"
+# [configs/01/first-eval-suite.toml](../../configs/01/first-eval-suite.toml)
+model = "openai/gpt-5.4-nano"
 save_results = true
 
 [[eval]]
 env_id = "primeintellect/gsm8k"
 num_examples = 20
-rollouts_per_example = 2
+rollouts_per_example = 1
 sampling_args = { max_tokens = 1024 }
 
 [[eval]]
 env_id = "primeintellect/wordle"
-num_examples = 20
-rollouts_per_example = 1
-sampling_args = { max_tokens = 1024, temperature = 0.7 }
+num_examples = 10
+rollouts_per_example = 2
+sampling_args = { max_tokens = 1024 }
 ```
-The `save_results`<a href="../../reference/glossary.md#save-results">¹⁰</a> field keeps the run visible after it finishes.
 
+The save_results field keeps the run visible after it finishes.
 
 Run the suite:
 
 ```bash
 prime eval run configs/01/first-eval-suite.toml
 ```
-
-Expected output:
-
-![First eval suite terminal summary](../../assets/expected-output/first-eval-suite-summary.png)
 
 Use this pattern when you want to compare model behavior across environments, compare a base model to a trained adapter, or re-run the same checks after changing a prompt or config.
 

@@ -68,14 +68,16 @@ class EthicsDebateEnvConfig(vf.EnvConfig):
 class EthicsDebateTaskset(vf.Taskset):
     config_type = EthicsDebateTasksetConfig
 
-    def __init__(self, *, config: vf.TasksetConfig | None = None, **kwargs: object) -> None:
+    def __init__(self, *, config: vf.TasksetConfig | None = None) -> None:
         cfg = EthicsDebateTasksetConfig.from_config(config)
-        kwargs.setdefault("source", lambda: source(cfg))
-        kwargs.setdefault("system_prompt", SYSTEM_PROMPT)
-        kwargs.setdefault("user", debate_user)
-        kwargs.setdefault("setups", [setup_debate])
-        kwargs.setdefault("rewards", [argument_quality])
-        super().__init__(config=cfg, **kwargs)
+        super().__init__(
+            config=cfg,
+            source=lambda: source(cfg),
+            system_prompt=SYSTEM_PROMPT,
+            user=debate_user,
+            setups=[setup_debate],
+            rewards=[argument_quality],
+        )
 
 
 def content_text(content: str | list | None, separator: str = "\n") -> str:
