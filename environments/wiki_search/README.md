@@ -44,12 +44,6 @@ Keys are validated by a Pydantic `model_validator` on `WikiSearchTasksetConfig`,
 
 ## Quickstart
 
-Install the environment:
-
-```bash
-prime env install wiki-search
-```
-
 Run an eval with defaults:
 
 ```bash

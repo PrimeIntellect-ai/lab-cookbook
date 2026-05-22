@@ -15,20 +15,37 @@ Both modes are good fits for small native-multimodal models like `Qwen/Qwen3.5-2
 
 ## Run It
 
-Install and run:
+Run a small eval:
 
 ```bash
-prime env install shape-detective
-prime eval run shape-detective -m Qwen/Qwen3.5-2B -x '{"mode": "multi"}'
+prime eval run shape-detective \
+  -m Qwen/Qwen3.5-2B \
+  -n 5 \
+  -r 3 \
+  -t 1024 \
+  -x '{"mode": "multi"}'
 ```
 
-The bare invocation uses the env's packaged smoke defaults (`num_examples = 5`, `rollouts_per_example = 3`). Switch to single-turn with `-x '{"mode": "single"}'`. Open the trajectory in `prime lab view --evals` and look for:
+Or run with a config file:
 
-- whether the model references specific tile contents and positions (signal that the image is being consumed) or hallucinates from the clues alone
-- whether reasoning ends in one boxed tile index, such as `\boxed{N}`
-- in multi-turn: whether the candidate set genuinely shrinks each turn, or whether the model commits early and only gets lucky if the final shape clue happens to disambiguate alone
+```toml
+# [configs/10/shape-detective-eval.toml](../../configs/10/shape-detective-eval.toml)
+model = "Qwen/Qwen3.5-2B"
+save_results = true
 
-Now the file. The walkthrough below follows [environments/shape_detective/shape_detective.py](../../environments/shape_detective/shape_detective.py) top to bottom.
+[[eval]]
+env_id = "shape-detective"
+num_examples = 5
+rollouts_per_example = 3
+sampling_args = { max_tokens = 1024 }
+env_args = { mode = "multi" }
+```
+
+```bash
+prime eval run configs/10/shape-detective-eval.toml
+```
+
+Switch to single-turn with `-x '{"mode": "single"}'`. The walkthrough below follows [environments/shape_detective/shape_detective.py](../../environments/shape_detective/shape_detective.py) top to bottom.
 
 ## Constants and Palette
 
@@ -383,3 +400,7 @@ A few v1 details that came up while building `shape_detective` aren't obvious fr
 - **Custom `info` round-trips through `info["task"]`.** `Taskset._dataset_row` serializes the whole task into the dataset row's `info["task"]` field, and `to_task` deserializes it on the other side — which is why custom fields placed in `info` survive even though the Dataset's `info` column is overwritten. **Suggested doc fix:** document that `info["task"]` is a reserved key (and that user-defined fields inside `info` survive serialization because of the round-trip).
 - **`state["completion"]` is `list[dict]`, not `list[Message]`.** The harness writes dumped dicts (`message.model_dump(exclude_none=True)`) into completion at the end of each turn. Reward functions and user callbacks can index it directly. **Suggested doc fix:** clarify the runtime type of `state["completion"]` vs. `state["trajectory"]` in the State reference.
 - **Config subclasses are the only way to expose tunables.** `load_environment` takes one argument — `config: vf.EnvConfig`. Anything configurable goes on a `*TasksetConfig` (or *HarnessConfig) subclass and is accessed via the subclass constructor (`SubclassConfig(config.taskset)`), so the CLI's `-x '{...}'` and TOML `-c config.toml` both flow through the same typed surface. Avoid adding `**kwargs` or extra positional args to `load_environment`.
+
+## Next
+
+In [Custom Harnesses](../12-custom-harnesses/README.md), you will run third-party agent libraries through the program pattern.

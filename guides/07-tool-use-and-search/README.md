@@ -11,33 +11,32 @@ This guide uses [primeintellect/wiki-search](https://app.primeintellect.ai/dashb
 Run a small eval:
 
 ```bash
-prime eval run primeintellect/wiki-search \
-  -m openai/gpt-5-nano \
+prime eval run prime/wiki-search \
+  -m openai/gpt-5.4-nano \
   -n 5 \
   -r 2 \
   -t 2048
 ```
 
-Expect the standard eval summary. The first run may spend extra time building or loading the search index before rollouts begin.
+Or run with a config file:
 
-Open the eval results:
+```toml
+# [configs/07/wiki-search-eval.toml](../../configs/07/wiki-search-eval.toml)
+model = "openai/gpt-5.4-nano"
+save_results = true
 
-```bash
-prime lab view --evals
+[[eval]]
+env_id = "prime/wiki-search"
+num_examples = 5
+rollouts_per_example = 2
+sampling_args = { max_tokens = 2048 }
 ```
 
-This opens the eval results view in Lab.
+```bash
+prime eval run configs/07/wiki-search-eval.toml
+```
 
-For tool-use environments, inspect the full trajectory. The final answer matters, but the tool calls explain how the model got there.
-
-Look for:
-
-- the first search query
-- which pages the model opens
-- which sections it reads
-- whether the final answer uses retrieved evidence
-- whether failed rollouts failed at search, reading, reasoning, or answer formatting
-- whether the reward matches what you see in the trajectory
+The first run may spend extra time building or loading the search index before rollouts begin.
 
 ## The Search Pattern
 
@@ -116,11 +115,10 @@ Keep those as metrics until you are confident they should affect training. A met
 
 Once the eval shows that the environment is healthy, train against the same Hub environment.
 
-Use [configs/rl/gpt-oss.toml](../../configs/rl/gpt-oss.toml) as a wiki-search starter. To keep this first run smaller, switch the active model line to `openai/gpt-oss-20b`:
+Use [configs/07/wiki-search-rl.toml](../../configs/07/wiki-search-rl.toml):
 
 ```toml
-# gpt-oss models. Uncomment exactly one model.
-# model = "openai/gpt-oss-120b"
+# [configs/07/wiki-search-rl.toml](../../configs/07/wiki-search-rl.toml)
 model = "openai/gpt-oss-20b"
 
 max_steps = 100
@@ -132,15 +130,17 @@ max_tokens = 2048
 reasoning_effort = "low"
 
 [[env]]
-id = "primeintellect/wiki-search"
+id = "prime/wiki-search"
 ```
 
-Launch training:
-
 ```bash
-prime train configs/rl/gpt-oss.toml
+prime train configs/07/wiki-search-rl.toml
 ```
 
 The command starts a Hosted Training run and prints a run id plus the command for streaming logs.
 
 During training, watch both reward and trajectories. A good run should show the model searching more directly, reading fewer irrelevant sections, and answering from evidence more consistently.
+
+## Next
+
+In [Synthetic Agent Environments](../09-synthetic-agent-environments/README.md), you will simulate a small world in memory and have an agent interact with it through tools.

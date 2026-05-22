@@ -49,15 +49,23 @@ prime eval run primeintellect/langchain-deep-agents-env \
   -t 2048
 ```
 
-Expect the standard eval summary. In Lab, the useful fields are the framework's final answer, any saved framework trace, and the reward from the Taskset.
+Or run with a config file:
 
-Inspect:
+```toml
+# [configs/12/deep-agents-eval.toml](../../configs/12/deep-agents-eval.toml)
+model = "openai/gpt-5.4-nano"
+save_results = true
 
-- the task question
-- the framework's final answer
-- any framework trace or agent result saved into state
-- whether the final answer format matches the reward
-- whether the reward failure is a framework issue, answer issue, or scoring issue
+[[eval]]
+env_id = "prime/langchain-deep-agents-env"
+num_examples = 5
+rollouts_per_example = 1
+sampling_args = { max_tokens = 2048 }
+```
+
+```bash
+prime eval run configs/12/deep-agents-eval.toml
+```
 
 The source package is `langchain_deep_agents_env`. It builds a LangChain chat model from `state.get_endpoint_config(api="chat")`, creates a Deep Agent, runs it on the task, and writes the final output back into Lab state.
 
@@ -75,6 +83,24 @@ prime eval run primeintellect/dspy-rlm \
   -t 2048
 ```
 
+Or run with a config file:
+
+```toml
+# [configs/12/dspy-rlm-eval.toml](../../configs/12/dspy-rlm-eval.toml)
+model = "openai/gpt-5.4-nano"
+save_results = true
+
+[[eval]]
+env_id = "prime/dspy-rlm"
+num_examples = 5
+rollouts_per_example = 1
+sampling_args = { max_tokens = 2048 }
+```
+
+```bash
+prime eval run configs/12/dspy-rlm-eval.toml
+```
+
 The source package is `dspy_rlm`. The program creates a DSPy LM from the Lab endpoint config, runs the DSPy module, stores the answer in state, and lets the Taskset reward score the result.
 
 For a more domain-specific DSPy example, use `dspy-flights`, whose source package is `dspy_flights`.
@@ -89,3 +115,7 @@ Use a custom harness when:
 - you want the same Taskset to run against multiple harnesses
 
 Do not add a custom harness just to expose a tool or change a system prompt. The default harness already handles those cases.
+
+## Next
+
+See [Lab Configuration](../../reference/lab-configuration.md) for accounts, secrets, Hub workflows, hosted runs, and inference deployments.

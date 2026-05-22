@@ -50,11 +50,13 @@ Add new aliases here when bringing in a third-party provider, and export the cor
 
 Three knobs control runtime config for an environment on the Hub. Pick by sensitivity and reuse:
 
-| Knob | Sensitive? | Scope | Use for |
-| --- | --- | --- | --- |
-| Environment variable | No | one env | model id, difficulty, feature flag |
-| Direct secret | Yes | one env | env-specific API key |
-| Linked global secret | Yes | many envs | shared key reused across envs |
+
+| Knob                 | Sensitive? | Scope     | Use for                            |
+| -------------------- | ---------- | --------- | ---------------------------------- |
+| Environment variable | No         | one env   | model id, difficulty, feature flag |
+| Direct secret        | Yes        | one env   | env-specific API key               |
+| Linked global secret | Yes        | many envs | shared key reused across envs      |
+
 
 Names are `[A-Z][A-Z0-9_]*`; the platform blocks collisions across all three types in a single environment.
 
@@ -185,11 +187,14 @@ Run `doctor` first when a hosted run misbehaves — it surfaces the most common 
 
 ## Where to Look Next
 
-| Topic | Public docs |
-| --- | --- |
-| CLI commands and flags | [/cli-reference/environments](https://docs.primeintellect.ai/cli-reference/environments), [/cli-reference/config-cli](https://docs.primeintellect.ai/cli-reference/config-cli) |
-| Environments Hub end-to-end | [/tutorials-environments/getting-started](https://docs.primeintellect.ai/tutorials-environments/getting-started) |
-| Verifiers reference | [/verifiers/reference](https://docs.primeintellect.ai/verifiers/reference) |
-| Training models, pricing, recovery | [/hosted-training](https://docs.primeintellect.ai/hosted-training/getting-started) |
-| Inference API | [/inference](https://docs.primeintellect.ai/inference/overview) |
-| API surface | [/API/api-references](https://docs.primeintellect.ai/API/api-references) |
+
+| Topic                              | Public docs                                                                                                                                                                    |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| CLI commands and flags             | [/cli-reference/environments](https://docs.primeintellect.ai/cli-reference/environments), [/cli-reference/config-cli](https://docs.primeintellect.ai/cli-reference/config-cli) |
+| Environments Hub end-to-end        | [/tutorials-environments/getting-started](https://docs.primeintellect.ai/tutorials-environments/getting-started)                                                               |
+| Verifiers reference                | [/verifiers/reference](https://docs.primeintellect.ai/verifiers/reference)                                                                                                     |
+| Training models, pricing, recovery | [/hosted-training](https://docs.primeintellect.ai/hosted-training/getting-started)                                                                                             |
+| Inference API                      | [/inference](https://docs.primeintellect.ai/inference/overview)                                                                                                                |
+| API surface                        | [/API/api-references](https://docs.primeintellect.ai/API/api-references)                                                                                                       |
+
+

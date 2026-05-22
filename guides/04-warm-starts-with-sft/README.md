@@ -1,10 +1,10 @@
 # Warm Starts with SFT
 
+**SFT in Lab is currently in beta and will roll out to all users shortly.**
+
 Use SFT to give a model a better starting policy before RL.
 
 SFT is useful when the model needs examples of the right behavior before reward optimization becomes efficient. Instead of bringing a separate dataset, Lab can generate demonstrations from an environment using a stronger teacher model, then train the target model on those demonstrations.
-
-SFT in Lab is currently in beta and will roll out to all users shortly. If `loss = "sft"` is not enabled for your account yet, the config shape below is still the intended public flow.
 
 ## When to Use It
 
@@ -18,32 +18,30 @@ Do not use SFT to paper over broken rewards. If the environment gives high score
 
 ## Write an SFT Config
 
-Create a new config in [configs/](../../configs/), for example `sft-oss-20b.toml`:
+Configure the `loss` field to `"sft"` and choose a teacher model:
 
 ```toml
+# [configs/04/sft-wordle.toml](../../configs/04/sft-wordle.toml)
 model = "openai/gpt-oss-20b"
-loss = "sft" # default = "rl"
+loss = "sft"
 
 [teacher]
 model = "openai/gpt-oss-120b"
-save = true
-replay = false
 
 [teacher.sampling]
 max_tokens = 2048
 reasoning_effort = "medium"
 
 [[env]]
-id = "primeintellect/wordle"
+id = "prime/wordle"
 ```
 
-This config trains `openai/gpt-oss-20b` with SFT on demonstrations generated from `primeintellect/wordle`.
+This config trains `openai/gpt-oss-20b` with SFT on demonstrations generated from `prime/wordle`.
 
 The key fields are:
 
 - loss = "sft" switches the run from RL to SFT.
 - `[teacher].model` selects the model that generates demonstrations.
-- `[teacher].save` keeps generated demonstrations available for inspection and reuse.
 - [teacher].replay controls whether the run reuses saved demonstrations instead of generating fresh ones.
 - `[teacher.sampling]` controls teacher generation.
 - `[[env]]` points to the environment that defines tasks and scoring.
@@ -53,26 +51,14 @@ The key fields are:
 Start the run:
 
 ```bash
-prime train configs/sft-oss-20b.toml
+prime train configs/04/sft-wordle.toml
 ```
 
-When SFT is enabled for your account, the command starts a Hosted Training run and prints a run id plus a log-streaming command.
-
-Follow logs:
+The command prints a run ID along with the command for streaming logs from the new Hosted Training run. Follow logs with:
 
 ```bash
 prime train logs <run_id> -f
 ```
-
-The logs should show teacher demonstration generation before the target model trains on those demonstrations.
-
-Open the Lab viewer:
-
-```bash
-prime lab view --training
-```
-
-This opens the Hosted Training view in Lab.
 
 ## Inspect the Warm Start
 
@@ -84,9 +70,10 @@ After SFT, evaluate the adapter against the same environment. If it improves bas
 
 RL uses the same config shape. To train on top of an existing LoRA, set `model` to the adapter you want to start from and omit `loss`, since RL is the default.
 
-Create a new RL config in [configs/rl/](../../configs/rl/), for example `wordle-from-sft.toml`:
+Use [configs/04/wordle-from-sft.toml](../../configs/04/wordle-from-sft.toml):
 
 ```toml
+# [configs/04/wordle-from-sft.toml](../../configs/04/wordle-from-sft.toml)
 model = "openai/gpt-oss-20b:my-sft-lora-distilled-from-oss-120b-distill"
 
 [sampling]
@@ -94,13 +81,11 @@ max_tokens = 512
 reasoning_effort = "medium"
 
 [[env]]
-id = "primeintellect/wordle"
+id = "prime/wordle"
 ```
 
-Then launch RL from that adapter:
-
 ```bash
-prime train configs/rl/wordle-from-sft.toml
+prime train configs/04/wordle-from-sft.toml
 ```
 
 The run should behave like a normal RL training job, but with the SFT adapter as the starting model.

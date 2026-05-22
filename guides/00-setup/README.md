@@ -18,17 +18,13 @@ Install the Prime CLI:
 uv tool install prime
 ```
 
-Expected output:
-
-Prime CLI install terminal output
-
 Authenticate with Prime:
 
 ```bash
 prime login
 ```
 
-You can skip this step for now, but most Lab workflows require an authenticated Prime account.
+Most Lab workflows require an authenticated Prime account. To run hosted workflows, you will also need to set a username in your [profile](https://app.primeintellect.ai/dashboard/profile).
 
 ## Create a Workspace
 
@@ -53,14 +49,11 @@ The command initializes the workspace, installs the Verifiers dependency, prepar
 This adds project structure, example configs, and agent guidance covering environment workflows and best practices.
 
 You can also run `prime lab setup` without flags to configure coding agents interactively.
-image.png
-To refresh Lab-provided configs and guidance later, run:
 
+To update your workspace with the latest Lab-provided configs and guidance, run:
 ```bash
 prime lab sync
 ```
-
-Sync refreshes the managed Lab skills, templates, and agent guidance in the current workspace.
 
 ## Workspace Layout
 
@@ -89,4 +82,6 @@ prime train models
 
 You should see a Hosted Training model table with model names, availability, inference pricing, and training pricing.
 
-Then continue to [Environments and Evals](../01-environments-and-evals/README.md) to explore evaluating models using environments.
+## Next
+
+In [Environments and Evals](../01-environments-and-evals/README.md), you will run a benchmark, inspect rollouts, and learn how Lab thinks about environments.

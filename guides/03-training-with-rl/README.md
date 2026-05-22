@@ -1,39 +1,11 @@
 # Training with RL
 
-Launch a Hosted Training run with an environment.
+Launch RL runs in your environment with Hosted Training.
 
-RL is useful once an environment has a reward signal you trust. The model samples multiple rollouts for each task, the environment scores those rollouts, and the trainer updates the model's policy toward higher-reward behavior.
+Reinforcement learning is useful for improving a model's behavior once an environment has a reward signal you trust. The model samples multiple rollouts for each task, the environment scores those rollouts, and the trainer updates the model's policy toward higher-reward behavior.
 
-For the first run, use the Hub version of the reverse-text environment. If you built a local version in the previous guide, using the Hub copy keeps training stable while you keep iterating on your local copy.
 
-## Check the Baseline
-
-Run a small eval before training to establish the baseline:
-
-```bash
-prime eval run primeintellect/reverse-text \
-  -m openai/gpt-5-nano \
-  -n 10 \
-  -r 2 \
-  -t 512
-```
-
-Expect the same eval summary shape as the local reverse-text eval: a run id, rollout progress, reward metrics, token usage, cost, and a saved results path. This baseline is useful when the reward is neither already perfect nor completely uninformative.
-
-Open the eval results:
-
-```bash
-prime lab view --evals
-```
-
-This opens the eval results view in Lab.
-
-Look for two things before launching training:
-
-- the reward is not already perfect
-- the rollouts show fixable mistakes, not broken prompts or broken scoring
-
-If the model gets every example right, there is little to learn. If every score is zero and the rollouts look unrelated to the task, fix the environment or prompt before training.
+Run the reverse-text eval from [Building Your First Environment](../02-building-your-first-environment/README.md#evaluate-it) before launching training. Ensure your environment shows rewards with some variance in scores across rollouts before starting training.
 
 ## Choose a Training Model
 
@@ -43,15 +15,11 @@ See the current Hosted Training models with:
 prime train models
 ```
 
-The command prints the current Hosted Training model table:
-
-![Hosted Training models terminal output](../../assets/expected-output/hosted-training-models.png)
-
 Hosted Training currently supports these model families:
 
-- **gpt-oss**: reasoning MoE models with effort control.
-- **Qwen 3.5 / 3.6**: dense and MoE models; natively multimodal.
-- **Nemotron 3**: hybrid reasoning MoE models.
+- **gpt-oss**: MoE models with `reasoning_effort` control.
+- **Qwen 3.5 / 3.6**: dense and MoE models with `enable_thinking` control; natively multimodal.
+- **Nemotron 3**: MoE models with `enable_thinking` control.
 - **Llama 3.2 Instruct**: dense instruct models.
 
 Reasoning controls go directly under `[sampling]`:
@@ -59,10 +27,10 @@ Reasoning controls go directly under `[sampling]`:
 ```toml
 [sampling]
 max_tokens = 512
-reasoning_effort = "medium" # gpt-oss: low, medium, high
+enable_thinking = false
 ```
 
-For `gpt-oss`, `reasoning_effort` can be `"low"`, `"medium"`, or `"high"`. The default is `"medium"`.
+For `gpt-oss` models, `reasoning_effort` can be `"low"`, `"medium"`, or `"high"`. The default is `"medium"`.
 
 For Nemotron 3 and Qwen 3.5 / 3.6, use enable_thinking:
 
@@ -82,22 +50,19 @@ For a first run, the config below is intentionally small. Once it works, these a
 
 **batch_size.** This is the total number of rollouts consumed per training step. Bigger batches stabilize learning and make reward curves smoother; smaller batches step faster but noisier. Keep `batch_size` a multiple of `rollouts_per_example` so sample throughput stays predictable.
 
-**learning_rate.** This sets the learning rate for the LoRA adapter and defaults to `1e-4`. The default is usually right. If reward collapses or oscillates wildly in the first 20 steps, the learning rate is too high. If it plateaus from the start and never moves, it may be too low.
+**learning_rate.** This sets the learning rate for the LoRA adapter and defaults to `1e-4`. The default is usually a decent starting point for tasks with rewards between 0 and 1. If reward collapses or oscillates wildly in the first 20 steps, the learning rate is too high. If it plateaus from the start and never moves, it may be too low.
 
-**`max_tokens` and thinking mode.** Under `[sampling]`, `max_tokens` sets the maximum number of tokens the model can generate per response turn. Models that support thinking mode need enough budget to reason through the problem and produce the answer. If completions are getting truncated mid-answer, raise max_tokens before changing anything else. Thinking mode is toggled via `[sampling].enable_thinking` — it produces extended chain-of-thought reasoning before the final answer, which helps on multi-step tasks at the cost of longer outputs.
+**`max_tokens` and thinking mode.** Under `[sampling]`, `max_tokens` sets the maximum number of tokens the model can generate per response turn. Models that support thinking need enough budget to reason through the problem and produce the answer. If completions are getting truncated mid-answer, raise max_tokens before changing anything else. Thinking is toggled for hybrid reasoning models (`Qwen`, `Nemotron`) via `[sampling].enable_thinking` — it produces extended chain-of-thought reasoning before the final answer, which helps on multi-step tasks at the cost of longer outputs. Note that `gpt-oss` models instead support `reasoning_effort` (`low`, `medium`, `high`) under `[sampling]`.
 
 **Eval cadence.** The `[eval].interval` field controls how often a held-out eval runs during training. Set it frequent enough to catch regressions but sparse enough to not dominate cost. Configure under `[eval]` once the basic training loop is working.
 
-**Difficulty filtering and oversampling.** When most tasks are too easy or too hard, the training signal is wasted. The `[buffer]` section exposes online_difficulty_filtering, which filters out examples above an `easy_threshold` or below a `hard_threshold`, focusing compute on examples where the model can meaningfully improve. The oversampling_factor (default `2.0`) generates more rollouts than needed per batch to ensure sufficient data after filtering.
-
 ## Write a Training Config
 
-Use [configs/rl/llama.toml](../../configs/rl/llama.toml) as a small reverse-text starter:
+Use [configs/03/reverse-text-rl.toml](../../configs/03/reverse-text-rl.toml) as a small reverse-text starter:
 
 ```toml
-# Llama 3.2 models. Uncomment exactly one model.
+# [configs/03/reverse-text-rl.toml](../../configs/03/reverse-text-rl.toml)
 model = "meta-llama/Llama-3.2-1B-Instruct"
-# model = "meta-llama/Llama-3.2-3B-Instruct"
 
 max_steps = 100
 batch_size = 128
@@ -107,7 +72,7 @@ rollouts_per_example = 8
 max_tokens = 1024
 
 [[env]]
-id = "primeintellect/reverse-text"
+id = "prime/reverse-text"
 ```
 
 The main fields are:
@@ -127,12 +92,12 @@ The table below shows observed costs from small Hosted Training runs. Treat thes
 
 | Environment | Model | What it shows | Observed cost |
 |---|---|---|---:|
-| `primeintellect/reverse-text` | `meta-llama/Llama-3.2-1B-Instruct` | Cheapest baseline text-only RL run | $0.14 |
-| `primeintellect/reverse-text` | `Qwen/Qwen3.5-0.8B` | Same task on a similarly small Qwen model | $0.14 |
-| `primeintellect/reverse-text` | `meta-llama/Llama-3.2-3B-Instruct` | Same task on the next Llama size up | $0.35 |
-| `primeintellect/reverse-text` | `Qwen/Qwen3.5-2B` | Same task on a small dense Qwen model | $0.54 |
+| `prime/reverse-text` | `meta-llama/Llama-3.2-1B-Instruct` | Cheapest baseline text-only RL run | $0.14 |
+| `prime/reverse-text` | `Qwen/Qwen3.5-0.8B` | Same task on a similarly small Qwen model | $0.14 |
+| `prime/reverse-text` | `meta-llama/Llama-3.2-3B-Instruct` | Same task on the next Llama size up | $0.35 |
+| `prime/reverse-text` | `Qwen/Qwen3.5-2B` | Same task on a small dense Qwen model | $0.54 |
 | `primeintellect/wordle` | `meta-llama/Llama-3.2-1B-Instruct` | Same small model on a multi-turn game | $0.73 |
-| `primeintellect/reverse-text` | `Qwen/Qwen3.5-4B` | Same task on a larger dense Qwen model | $3.24 |
+| `prime/reverse-text` | `Qwen/Qwen3.5-4B` | Same task on a larger dense Qwen model | $3.24 |
 
 The main pattern is that text-only runs on the smallest models can stay well under a dollar, while multi-turn environments and larger models move the cost up quickly. For the current per-token model prices, run `prime train models` before launching a larger experiment.
 
@@ -141,7 +106,7 @@ The main pattern is that text-only runs on the smallest models can stay well und
 Start the run:
 
 ```bash
-prime train configs/rl/llama.toml
+prime train configs/03/reverse-text-rl.toml
 ```
 
 The command prints a run ID along with the command for streaming logs from the new Hosted Training run. Follow logs with:
@@ -192,10 +157,10 @@ Add more `[[env]]` sections to train across environments at once, and use [buffe
 
 ```toml
 [[env]]
-id = "primeintellect/reverse-text"
+id = "prime/reverse-text"
 
 [[env]]
-id = "primeintellect/wordle"
+id = "prime/wordle"
 
 [buffer]
 env_ratios = [0.5, 0.5]
@@ -215,7 +180,7 @@ rollouts_per_example = 1
 eval_base_model = true
 
 [[eval.env]]
-id = "primeintellect/reverse-text"
+id = "prime/reverse-text"
 ```
 
 Results show up alongside training metrics in `prime lab view --training`. Use `eval_base_model = true` on the first run with a new environment to anchor the curve against the untrained model.

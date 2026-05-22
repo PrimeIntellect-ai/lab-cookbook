@@ -34,7 +34,6 @@ exactly matches the target index, else `0.0`.
 ## Run
 
 ```bash
-prime env install shape-detective
 prime eval run shape-detective \
     --model Qwen/Qwen3.5-2B \
     --provider prime \

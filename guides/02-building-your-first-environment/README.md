@@ -14,9 +14,7 @@ From your Lab workspace, scaffold a local environment package:
 prime env init reverse-text
 ```
 
-The scaffold command may return quietly. Check that it created `environments/reverse_text/` with a starter `reverse_text.py`, `pyproject.toml`, and README.
-
-This creates `environments/reverse_text/` with a starter `reverse_text.py` and `pyproject.toml`. Open `reverse_text.py` — you will replace its contents as you go.
+The scaffold command may return quietly. Check that it created `environments/reverse_text/` with a starter `reverse_text.py`, `pyproject.toml`, and README. Open `reverse_text.py` — you will replace its contents as you go.
 
 ## Define Your Tasks
 
@@ -31,82 +29,85 @@ Build a chat-style `prompt` from the text and pair it with the reversed `answer`
 ```python
 from datasets import load_dataset
 
-
 DATASET_NAME = "PrimeIntellect/Reverse-Text-RL"
 
 
 def source():
-    rows = []
-    for row in load_dataset(DATASET_NAME, split="train"):
-        text = row["prompt"]
-        rows.append({
+    ds = load_dataset(DATASET_NAME, split="train")
+    for index, row in enumerate(ds):
+        assert isinstance(row, dict), "Dataset rows must be dicts."
+        text = str(row.get("prompt", "") or "")
+        yield {
+            "example_id": index,
             "prompt": [{"role": "user", "content": text}],
             "answer": text[::-1],
-        })
-    return rows
+        }
 ```
 
-The taskset will call `source` once and cache the rows.
+The taskset consumes `source` as a row iterator.
 
 ## Add a Reward
 
 Tell the model where to put its answer with a system prompt:
 
 ```python
-SYSTEM_PROMPT = (
-    "Reverse the text character-by-character. Put your answer in "
-    "<reversed_text> tags."
-)
+SYSTEM_PROMPT = "Reverse the text character-by-character. Put your answer in <reversed_text> tags."
 ```
 
-A reward is an `async` function decorated with `@vf.reward`. It receives the immutable `task` and the state produced by the rollout, and returns a float. Pull the tagged answer out of the model's reply and score it against the true reversal with a longest-common-subsequence ratio, so partial answers get partial credit:
+A reward is an `async` function decorated with `@vf.reward`. It receives the immutable `task` as well as the state produced by the rollout, and returns a float. Read the latest assistant message from `state["completion"]`, pull the tagged answer out, and score it against the true reversal with a longest-common-subsequence ratio so partial answers get partial credit:
 
 ```python
 from difflib import SequenceMatcher
 
-import verifiers.v1 as vf
+import verifiers as vf
 
 
 @vf.reward(weight=1.0)
-async def lcs_reward(task, state) -> float:
-    text = state["completion"][-1]["content"]
+async def lcs_reward(task: vf.Task, state: vf.State) -> float:
+    text = ""
+    for message in reversed(state.get("completion") or []):
+        if message.get("role") == "assistant":
+            text = str(message.get("content") or "")
+            break
     response = text.split("<reversed_text>", 1)[-1].split("</reversed_text>", 1)[0].strip()
-    return SequenceMatcher(None, response, task["answer"]).ratio()
+    return SequenceMatcher(None, response, str(task["answer"])).ratio()
 ```
 
 If either tag is missing, the splits fall through to the raw completion.
 
 ## Wire It Together
 
-A single `load_environment` ties the pieces together. It takes one argument — `config: vf.EnvConfig` — and wires the taskset and harness in one expression:
+Split taskset construction into `load_taskset` and keep `load_environment` as the package entrypoint:
 
 ```python
-def load_environment(config: vf.EnvConfig) -> vf.Env:
-    return vf.Env(
-        taskset=vf.Taskset(
-            source=source,
-            system_prompt=SYSTEM_PROMPT,
-            rewards=[lcs_reward],
-            config=config.taskset,
-        ),
-        harness=vf.Harness(config=config.harness),
+def load_taskset(config: vf.TasksetConfig) -> vf.Taskset:
+    return vf.Taskset(
+        source=source,
+        system_prompt=SYSTEM_PROMPT,
+        rewards=[lcs_reward],
+        config=config,
     )
+
+
+def load_environment(config: vf.EnvConfig) -> vf.Env:
+    return vf.Env(taskset=load_taskset(config=config.taskset))
 ```
 
-By default, `vf.Env` sends each prompt to the model and hands the response back to the taskset for scoring. `vf.Harness` accepts the harness slice of the run-time config (sampling, max turns, etc.) so per-run knobs flow through evaluation/RL TOMLs.
+By default, `vf.Env` sends each prompt to the model and hands the response back to the taskset for scoring. Per-run sampling and turn limits flow through the default harness from eval and RL configs.
 
 ## Check the Package
 
-Make sure `environments/reverse_text/pyproject.toml` declares the entrypoint and dependencies:
+Make sure `environments/reverse_text/pyproject.toml` declares the correct dependencies:
 
 ```toml
 [project]
 name = "reverse-text"
-version = "0.1.0"
 description = "Reverse text character by character."
+tags = ["single-turn", "text", "train", "eval"]
+version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
-    "verifiers",
+    "verifiers>=0.1.15.dev7",
     "datasets",
 ]
 
@@ -115,25 +116,13 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build]
-include = ["reverse_text.py", "pyproject.toml"]
-
-[project.entry-points."verifiers.environments"]
-reverse-text = "reverse_text:load_environment"
+include = ["reverse_text.py", "pyproject.toml", "README.md"]
 
 [tool.verifiers.eval]
-num_examples = 20
-rollouts_per_example = 2
+num_examples = 5
+rollouts_per_example = 3
 ```
-
-Install the environment into your workspace:
-
-```bash
-prime env install reverse-text
-```
-
-Expected output:
-
-![Reverse-text install terminal output](../../assets/expected-output/reverse-text-install-output.png)
+The `[tool.verifiers.eval]` section allows configuration of per-environment default settings for evaluations.
 
 ## Evaluate It
 
@@ -141,27 +130,33 @@ Run a small eval:
 
 ```bash
 prime eval run reverse-text \
-  -m openai/gpt-5-nano \
-  -n 5 \
+  -m openai/gpt-5.4-nano \
+  -n 10 \
   -r 2 \
   -t 512
 ```
 
-The exact reward will vary by model and sample, but the summary should show saved results, rollout count, reward metrics, usage, cost, and any error rate:
+Or run with a config file:
 
-![Reverse-text eval terminal summary](../../assets/expected-output/reverse-text-eval-summary.png)
+```toml
+# [configs/02/reverse-text-eval.toml](../../configs/02/reverse-text-eval.toml)
+model = "openai/gpt-5.4-nano"
+save_results = true
 
-The rollout view is useful because it shows the prompt, completion, reward distribution, and reward-specific metrics together:
-
-![Reverse-text rollout and metrics view](../../assets/expected-output/reverse-text-rollout-metrics.png)
-
-Open the Lab viewer:
-
-```bash
-prime lab view --evals
+[[eval]]
+env_id = "prime/reverse-text"
+num_examples = 10
+rollouts_per_example = 2
+sampling_args = { max_tokens = 512 }
 ```
 
-This opens the eval results view in Lab.
+```bash
+prime eval run configs/02/reverse-text-eval.toml
+```
+
+```bash
+prime eval view
+```
 
 Read a few rollouts. For reverse-text, check whether the model copied the string forward, reversed only words, dropped punctuation, or produced the right characters in the wrong order. `lcs_reward` tells you how close it got.
 
@@ -196,8 +191,6 @@ Before you push an environment or launch training, run a small QA pass.
 - **Spread of rewards.** Across the smoke eval, you want a spread, not all-0 or all-1. If the distribution is collapsed, fix the task difficulty or the reward before training.
 - **Re-run on a second model.** Confirm the environment isn't accidentally tuned to one model family's quirks.
 
-When all of the above looks clean, the environment is ready for [Training with RL](../03-training-with-rl/README.md).
-
 ## Why This Environment Works
 
 Reverse-text has a clear task, a deterministic answer, and a graded reward. That makes it a good first training target:
@@ -206,4 +199,6 @@ Reverse-text has a clear task, a deterministic answer, and a graded reward. That
 - failures are easy to inspect
 - partial credit gives the model a learning signal even before it fully solves the task
 
-The next guide uses this same environment to launch an RL run and watch reward improve.
+## Next
+
+In [Training with RL](../03-training-with-rl/README.md), you will train the reverse-text environment and watch reward improve.

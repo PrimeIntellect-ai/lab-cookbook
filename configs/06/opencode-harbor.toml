@@ -2,4 +2,4 @@ model = "openai/gpt-5.4-mini"
 save_results = true
 
 [[eval]]
-env_id = "primeintellect/opencode-harbor"
+env_id = "prime/opencode-harbor"

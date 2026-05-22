@@ -17,30 +17,35 @@ This guide uses [prime/calendar-scheduling](https://app.primeintellect.ai/dashbo
 
 ## Try the Hub Environment First
 
-Run a small eval to see what a rollout looks like before reading any code:
+Run a small eval:
 
 ```bash
 prime eval run prime/calendar-scheduling \
-  -m openai/gpt-5-nano \
+  -m openai/gpt-5.4-nano \
   -n 5 \
   -r 2 \
   -t 2048 \
   -a '{"difficulty": "medium"}'
 ```
 
-Open the results:
+Or run with a config file:
 
-```bash
-prime lab view --evals
+```toml
+# [configs/09/calendar-scheduling-eval.toml](../../configs/09/calendar-scheduling-eval.toml)
+model = "openai/gpt-5.4-nano"
+save_results = true
+
+[[eval]]
+env_id = "prime/calendar-scheduling"
+num_examples = 5
+rollouts_per_example = 2
+sampling_args = { max_tokens = 2048 }
+env_args = { difficulty = "medium" }
 ```
 
-Inspect:
-
-- which tools the model called and in what order
-- whether it read attendee constraints before proposing a window
-- whether the proposed window respects required attendees and hard local-time bounds
-- whether the final score is close to the oracle best for that task
-- whether failures came from running out of turns, picking conflicting windows, or formatting the submission wrong
+```bash
+prime eval run configs/09/calendar-scheduling-eval.toml
+```
 
 The environment ships a standalone visualizer that renders the generated problem as a TUI similar to a meeting app. Use it to develop intuition for what the agent sees:
 
@@ -193,12 +198,13 @@ Before launching RL on a synthetic environment, check:
 - failures look like genuine reasoning mistakes, not environment bugs or formatting issues
 - the score-check budget and turn limit are tight enough to discourage brute-force search
 
-When those conditions hold, training works the same as in earlier guides. A minimal config to save under [configs/rl/](../../configs/rl/):
+When those conditions hold, training works the same as in earlier guides. Use [configs/09/calendar-scheduling-rl.toml](../../configs/09/calendar-scheduling-rl.toml):
 
 ```toml
+# [configs/09/calendar-scheduling-rl.toml](../../configs/09/calendar-scheduling-rl.toml)
 model = "Qwen/Qwen3-30B-A3B-Instruct-2507"
-max_steps = 100
 
+max_steps = 100
 batch_size = 128
 rollouts_per_example = 8
 
@@ -210,10 +216,8 @@ id = "prime/calendar-scheduling"
 args = { difficulty = "medium", num_train = 512, num_eval = 128, max_turns = 18 }
 ```
 
-Launch:
-
 ```bash
-prime train configs/rl/calendar-scheduling.toml
+prime train configs/09/calendar-scheduling-rl.toml
 ```
 
 Watch early rollouts as much as the reward curve. The first sign of learning on a synthetic env is usually a shift in tool usage — the model starts viewing constraints before proposing, then spends its `check_window` budget more deliberately, then converges on windows near the oracle.

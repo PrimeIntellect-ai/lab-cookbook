@@ -1,23 +1,10 @@
 import re
 from collections.abc import Mapping
-from pathlib import Path
 
 import verifiers.v1 as vf
-from textarena_taskset import TextArenaTaskset, TextArenaTasksetConfig
-
-WORDLE_SYSTEM_PROMPT = """You are a competitive game player. \
-Make sure you read the game instructions carefully, and always follow the required format.
-
-In each turn, think step-by-step, then give your guess inside <guess>...</guess> tags."""
+from textarena_taskset import TextArenaTasksetConfig, load_taskset
 
 GUESS_PATTERN = re.compile(r"<guess>(.*?)</guess>", re.DOTALL)
-
-
-def wordle_feedback(observation: str) -> str:
-    latest_observation = observation.split("[GAME]")[-1].strip()
-    if "Feedback:" in latest_observation:
-        return latest_observation.split("Feedback:")[-1]
-    return latest_observation
 
 
 @vf.reward(weight=1.0)
@@ -106,22 +93,9 @@ async def format_reward(task: vf.Task, state: vf.State) -> float:
 
 
 def load_environment(config: vf.EnvConfig) -> vf.Env:
-    taskset_config = TextArenaTasksetConfig.from_config(config.taskset)
-    if taskset_config.path_to_system_prompt:
-        system_prompt = Path(taskset_config.path_to_system_prompt).expanduser().read_text()
-    elif taskset_config.system_prompt:
-        assert isinstance(taskset_config.system_prompt, str)
-        system_prompt = taskset_config.system_prompt
-    else:
-        system_prompt = WORDLE_SYSTEM_PROMPT
-    assert system_prompt
-    taskset_config = taskset_config.model_copy(
-        update={"system_prompt": system_prompt},
-    )
-    return vf.Env(
-        taskset=TextArenaTaskset(
-            config=taskset_config,
-            feedback_fn=wordle_feedback,
-            rewards=(correct_answer, partial_answer, length_bonus, format_reward),
-        ),
-    )
+    taskset_config = config.taskset
+    assert isinstance(taskset_config, TextArenaTasksetConfig)
+    taskset = load_taskset(taskset_config)
+    for reward in (correct_answer, partial_answer, length_bonus, format_reward):
+        taskset.add_reward(reward)
+    return vf.Env(taskset=taskset)

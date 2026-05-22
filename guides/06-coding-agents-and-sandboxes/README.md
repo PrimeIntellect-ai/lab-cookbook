@@ -13,30 +13,30 @@ This guide starts with [primeintellect/math-python](https://app.primeintellect.a
 Run a small eval:
 
 ```bash
-prime eval run primeintellect/math-python \
-  -m openai/gpt-5-nano \
+prime eval run prime/math-python \
+  -m openai/gpt-5.4-nano \
   -n 5 \
   -r 2 \
   -t 1024
 ```
 
-Expect the standard eval summary plus tool-use metrics and saved sandbox logs for any rollout that executed code.
+Or run with a config file:
 
-Open the eval results:
+```toml
+# [configs/06/math-python-eval.toml](../../configs/06/math-python-eval.toml)
+model = "openai/gpt-5.4-nano"
+save_results = true
 
-```bash
-prime lab view --evals
+[[eval]]
+env_id = "prime/math-python"
+num_examples = 5
+rollouts_per_example = 2
+sampling_args = { max_tokens = 1024 }
 ```
 
-This opens the eval results view in Lab.
-
-Inspect:
-
-- the Python code the model ran
-- any command errors or tracebacks
-- whether the final answer is boxed
-- whether symbolic verification matches your judgment
-- how many tool calls the model needed
+```bash
+prime eval run configs/06/math-python-eval.toml
+```
 
 This is the smallest useful sandbox pattern: one task, one Python tool, one isolated runtime, and a deterministic reward.
 
@@ -44,32 +44,28 @@ This is the smallest useful sandbox pattern: one task, one Python tool, one isol
 
 `opencode-harbor` runs a real coding agent inside a sandbox. Each task comes from Harbor: an instruction, files or setup scripts, a Docker image, and tests that determine reward.
 
-Run a small eval using [configs/06/opencode-harbor.toml](../../configs/06/opencode-harbor.toml) (model `openai/gpt-5.4-mini`, environment defaults for everything else):
+Run a small eval:
+
+```bash
+prime eval run prime/opencode-harbor -m openai/gpt-5.4-mini
+```
+
+Or run with a config file:
+
+```toml
+# [configs/06/opencode-harbor.toml](../../configs/06/opencode-harbor.toml)
+model = "openai/gpt-5.4-mini"
+save_results = true
+
+[[eval]]
+env_id = "prime/opencode-harbor"
+```
 
 ```bash
 prime eval run configs/06/opencode-harbor.toml
 ```
 
-Expect a longer eval than the text-only examples. The useful output is the saved results path, error rate, cost, and pointers to agent/test logs.
-
-A baseline run of this config (5 examples × 3 rollouts, the env's defaults from `pyproject.toml`) cost roughly **$3.04** end-to-end against `gpt-5.4-mini`.
-
-Open the eval results:
-
-```bash
-prime lab view --evals
-```
-
-This opens the eval results view in Lab.
-
-Inspect:
-
-- the task instruction
-- the files and working directory available to the agent
-- the OpenCode log
-- commands run inside the sandbox
-- test output and reward
-- whether the agent timed out, failed setup, or failed the task itself
+A baseline run of this config (5 examples × 3 rollouts, the env's defaults from `pyproject.toml`) cost roughly **$3.04** end-to-end against `gpt-5.4-mini`. Expect a longer eval than the text-only examples.
 
 The reward comes from the task tests, not from judging the final message. That makes coding-agent environments useful for training, but it also means broken tests, missing dependencies, or unrealistic timeouts can dominate results.
 

@@ -6,28 +6,22 @@ If you've run or read about a benchmark like GSM8K, MMLU, or SWE-bench, you alre
 
 An environment packages the work you want a model or agent to do. It samples tasks, produces rollouts, and computes metrics from the results. The same environment can be used for benchmarking models and prompts, generating synthetic data, optimizing harnesses, and training with RL or other algorithms.
 
-Environments can live locally in your workspace or on the Environments Hub. This guide uses [primeintellect/gsm8k](https://app.primeintellect.ai/dashboard/environments/primeintellect/gsm8k), a [Hub](https://app.primeintellect.ai/dashboard/environments) environment.
+Environments live in your workspace as well as on the [Environments Hub](https://app.primeintellect.ai/dashboard/environments). This guide uses the [gsm8k](https://app.primeintellect.ai/dashboard/environments/prime/gsm8k) and [wordle](https://app.primeintellect.ai/dashboard/environments/prime/wordle) environments, which are available on the Hub and are also provided locally in the `environments/` directory.
 
-Later guides also use [primeintellect/wordle](https://app.primeintellect.ai/dashboard/environments/primeintellect/wordle), a Hub game environment with clear task state and simple success criteria.
-
-We'll focus on the two pieces you need first: tasks and metrics. In GSM8K, the tasks are math questions with expected final answers. The metric checks whether each rollout reaches the right answer, and that same score can serve as a reward signal during later optimization.
-
-Tools, sandboxes, browser sessions, user simulators, and custom harnesses make environments more powerful, but they are not part of this first eval.
+In GSM8K, tasks are math questions with expected integer answers, and the model must return the answer in a `\boxed{}` format in a single turn. In Wordle, the model is given up to 6 turns to guess a 5-letter word, and the environment provides feedback after each guess.
 
 ## Evaluate GSM8K
-
-GSM8K is a familiar math eval. It is also a Lab environment, which means you can evaluate any compatible model against it from the CLI.
 
 Run a small eval:
 
 ```bash
-prime eval run primeintellect/gsm8k \
+prime eval run prime/gsm8k \
   -m openai/gpt-5.4-nano \
-  -n 5 \
+  -n 10 \
   -r 2
 ```
 
-This evaluates 5 examples with 2 rollouts per example. Results are saved automatically.
+This evaluates 10 examples with 2 rollouts per example. Results are saved automatically.
 
 This can also be done with a config file:
 
@@ -37,17 +31,17 @@ model = "openai/gpt-5.4-nano"
 save_results = true
 
 [[eval]]
-env_id = "primeintellect/gsm8k"
-num_examples = 5
+env_id = "prime/gsm8k"
+num_examples = 10
 rollouts_per_example = 2
 ```
 
 ```bash
 prime eval run configs/01/first-eval.toml
 ```
+
 The terminal summary includes metrics like average reward, token usage, and error rate, as well as an example rollout.
 
-You can also view full results in the terminal:
 ```bash
 prime eval view
 ```
@@ -68,17 +62,21 @@ This is the basic eval loop: evaluate a model, read the rollouts, and decide whe
 
 ## Choosing a Model
 
-Here are the factors to think through when selecting a model:
+There are several factors to consider when selecting a model:
 
-**Size vs. cost vs. latency.** Start small. `Qwen/Qwen3.5-0.8B` or `meta-llama/Llama-3.2-1B-Instruct` cost fractions of a cent per million tokens and return results fast — use them to validate that your environment and reward function work at all. Once they do, move to a mid-range MoE like `Qwen/Qwen3.5-35B-A3B`, which gives strong capability at low active-parameter cost. Reserve the large models (`Qwen/Qwen3.5-397B-A17B`, `nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16`) for production runs and ceiling checks. A useful diagnostic: if swapping from a 0.8B to a 35B model doesn't improve scores, the bottleneck is your environment or tasks, not the model.
+**Open vs. closed.** Lab supports both open-weights and closed-weights models for running evaluations, prompt optimization, and other non-training workflows. Evaluations support the standard API protocols for OpenAI and Anthropic compatible model endpoints:
+- `/v1/responses` (OpenAI)
+- `/v1/chat/completions` (OpenAI)
+- `/v1/completions` (OpenAI)
+- `/v1/messages` (Anthropic)
+The same environments you use for evaluating closed frontier models can be used for training your own models on top of an open base model. See [Training with RL](../03-training-with-rl/README.md#choose-a-training-model) for how to connect a training-compatible model to the same environments.
 
-**Reasoning controls.** Qwen3.5, Nemotron, and the gpt-oss models all support thinking mode — extended chain-of-thought before the final answer, toggled via `[sampling].enable_thinking`. This helps on multi-step tasks (math, code, logic) but inflates output length and cost. Plain instruct models like the Llama 3.2 family don't have this knob. If you're comparing across families, test thinking models at multiple effort levels so you understand the cost-performance curve, not just the peak.
+**Cost, speed, and capability.** Start with a cheap, fast model — `openai/gpt-5.4-nano`, `anthropic/claude-haiku-4.5`, or a small open model like `Qwen/Qwen3.5-0.8B` — to confirm the environment and scoring work, then step up when you're iterating on prompts or checking the ceiling. Many evals use OpenAI or Anthropic models: pass a Prime Inference id to `-m` as above, or an alias from [configs/endpoints.toml](../../configs/endpoints.toml) with your own API key. Run `prime inference models` if you want to browse options or compare pricing. If a bigger model doesn't move scores, the bottleneck is probably the environment, not the model.
 
-**Tool-use and JSON reliability.** If your environment involves tool calls or structured output, test your chosen model on a small batch with your actual schemas before scaling up. Some models hallucinate extra fields, wrap JSON in markdown fences, or narrate a tool call in prose instead of emitting structured output. These issues are often fixable with prompt tweaks or a retry wrapper, but you need to know they exist — otherwise your eval measures JSON compliance, not task capability.
+**Reasoning controls.** Many model families, including `Qwen3.5` / `Qwen3.6`, `Nemotron`, `gpt-oss`, support thinking mode — extended chain-of-thought before the final answer, toggled via `[sampling].enable_thinking` (or `reasoning_effort` for `gpt-oss`). This helps on multi-step tasks (math, code, logic) but inflates output length and cost. When comparing models, try a few reasoning settings so you see the cost-performance tradeoffs, not just the best-case score.
 
-**Multimodal support.** Most models on the platform are text-only. If your tasks involve images, screenshots, or diagrams, check that your model accepts vision input before designing the eval around it. See the [Multimodal Environments](../10-multimodal-environments/README.md) guide for how to build environments that pass non-text observations.
+**Multimodal support.** Many open-source models are text-only. If your tasks involve images, screenshots, or diagrams, you will need to choose a model family that supports multimodal input. As of May 2026, we recommend the `Qwen3.5`/`Qwen3.6` family for evaluation and training with multimodal support. Closed frontier models from OpenAI, Anthropic, and Google all support multimodal input for evaluation, as well as some flagship open models. See the [Multimodal Environments](../10-multimodal-environments/README.md) guide for how to build environments that pass non-text observations.
 
-**Open vs. closed.** Every model on the platform is open-weights, meaning the eval you build today can become the reward signal for RL training tomorrow. If you also want to benchmark against a closed frontier model (GPT-4o, Claude, Gemini) to establish a performance ceiling, design your environment to work with both from the start. See [Training with RL](../03-training-with-rl/README.md#choose-a-training-model) for how to connect a training-compatible model to the same environments.
 
 ## Run a Small Suite
 
@@ -92,20 +90,17 @@ model = "openai/gpt-5.4-nano"
 save_results = true
 
 [[eval]]
-env_id = "primeintellect/gsm8k"
-num_examples = 20
-rollouts_per_example = 1
-sampling_args = { max_tokens = 1024 }
-
-[[eval]]
-env_id = "primeintellect/wordle"
+env_id = "prime/gsm8k"
 num_examples = 10
 rollouts_per_example = 2
 sampling_args = { max_tokens = 1024 }
+
+[[eval]]
+env_id = "prime/wordle"
+num_examples = 20
+rollouts_per_example = 1
+sampling_args = { max_tokens = 1024 }
 ```
-
-The save_results field keeps the run visible after it finishes.
-
 Run the suite:
 
 ```bash

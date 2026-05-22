@@ -5,7 +5,7 @@ tags = ["textarena", "multi-turn", "reasoning", "game", "train", "eval", "v1", "
 version = "0.2.0"
 requires-python = ">=3.11"
 dependencies = [
-    "verifiers>=0.1.15.dev4",
+    "verifiers>=0.1.15.dev7",
     "nltk>=3.9.2",
     "textarena==0.7.4",
 ]
