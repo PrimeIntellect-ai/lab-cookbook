@@ -77,6 +77,10 @@ class SimpleJudgeTasksetConfig(vf.TasksetConfig):
 
 
 class SimpleJudgeTaskset(vf.Taskset[SimpleJudgeTasksetConfig]):
+    def __init__(self, config: vf.ConfigSource = None) -> None:
+        super().__init__(config=config)
+        vf.ensure_keys([self.config.judge_api_key_var])
+
     def load_tasks(self) -> vf.Tasks:
         for row in TOY_TASKS:
             yield row
@@ -127,6 +131,4 @@ def load_taskset(config: SimpleJudgeTasksetConfig) -> vf.Taskset:
 
 
 def load_environment(config: vf.EnvConfig) -> vf.Env:
-    cfg = SimpleJudgeTasksetConfig(config.taskset)
-    vf.ensure_keys([cfg.judge_api_key_var])
     return vf.Env(taskset=vf.load_taskset(config=config.taskset))
