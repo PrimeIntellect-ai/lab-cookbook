@@ -1,0 +1,8 @@
+model = "openai/gpt-4.1-mini"
+save_results = true
+
+[[eval]]
+env_id = "simple-judge"
+num_examples = 6
+rollouts_per_example = 2
+sampling_args = { max_tokens = 256 }

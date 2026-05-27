@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Visual deduction game: identify a hidden tile in a 4x4 grid from shape/color/pattern clues."
 requires-python = ">=3.11"
 dependencies = [
-    "verifiers",
+    "verifiers>=0.1.15.dev11",
     "Pillow>=10.0.0",
 ]
 

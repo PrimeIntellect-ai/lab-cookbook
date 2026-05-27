@@ -1,0 +1,21 @@
+[project]
+name = "simple-judge"
+description = "Toy instruction-following environment scored by a trivial LLM judge."
+tags = ["single-turn", "judge", "instruction-following", "eval"]
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "verifiers>=0.1.15.dev11",
+    "openai>=1.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = ["simple_judge.py", "pyproject.toml", "README.md"]
+
+[tool.verifiers.eval]
+num_examples = 6
+rollouts_per_example = 2

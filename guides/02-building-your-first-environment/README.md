@@ -2,19 +2,61 @@
 
 Build a local environment and evaluate it with Lab.
 
-The task is simple to state and surprisingly hard to solve: given a piece of text, return the characters in reverse order. Even capable models drop characters or reverse word-by-word, and accuracy falls sharply without chain-of-thought. The payoff is a clean continuous reward — longest-common-subsequence between the model's answer and the true reversal — that is robust to reward hacking and trains quickly under RL.
+The first task we'll examine is simple to state, yet surprisingly hard for models to solve: given a piece of text, return the characters in reverse order. Many capable models drop characters, garble words, or use long chains of thought to carefully spell out the reversal character-by-character. 
+
+The payoff is a clean continuous reward — longest-common-subsequence between the model's answer and the true reversal — that is robust to reward hacking and trains quickly under RL.
 
 You will build this as `reverse-text`. You can also inspect the finished Hub environment at [primeintellect/reverse-text](https://app.primeintellect.ai/dashboard/environments/primeintellect/reverse-text).
 
 ## Create the Package
 
-From your Lab workspace, scaffold a local environment package:
+From your Lab workspace, initialize a local environment package:
 
 ```bash
 prime env init reverse-text
 ```
 
-The scaffold command may return quietly. Check that it created `environments/reverse_text/` with a starter `reverse_text.py`, `pyproject.toml`, and README. Open `reverse_text.py` — you will replace its contents as you go.
+This creates `environments/reverse_text/` with `reverse_text.py`, `pyproject.toml`, and a README. Every environment package created with `prime env init` follows the same shape. Open `reverse_text.py`:
+
+```python
+import verifiers as vf
+
+
+class ReverseTextTasksetConfig(vf.TasksetConfig):
+    pass
+
+
+class ReverseTextTaskset(vf.Taskset[ReverseTextTasksetConfig]):
+    def load_system_prompt(self) -> vf.SystemPrompt:
+        raise NotImplementedError("Load the system prompt for reverse-text.")
+
+    def load_tasks(self) -> vf.Tasks:
+        raise NotImplementedError("Load task rows for reverse-text.")
+
+    @vf.reward(weight=1.0)
+    async def correct_answer(self, task: vf.Task, state: vf.State) -> float:
+        raise NotImplementedError("Score a completed rollout for reverse-text.")
+
+
+def load_taskset(config: ReverseTextTasksetConfig) -> ReverseTextTaskset:
+    return ReverseTextTaskset(config=config)
+
+
+def load_environment(config: vf.EnvConfig) -> vf.Env:
+    return vf.Env(taskset=vf.load_taskset(config=config.taskset))
+```
+
+The key pieces to include are:
+
+- `ReverseTextTasksetConfig` — user-tunable fields (dataset split, judge model, turn limits, …). 
+- `load_tasks` — loader for task rows (`prompt`, `answer`, `info`, …).
+- `load_system_prompt` — loader for the system message for each rollout.
+- `@vf.reward` methods — reward functions for completed rollouts.
+- `load_taskset` / `load_environment` — entrypoints used for Lab workflows.
+
+`pyproject.toml` declares the package name, dependencies, and optional defaults under `[tool.verifiers.eval]`.
+
+The rest of this guide fills in the stubs for reverse-text.
 
 ## Define Your Tasks
 
@@ -24,74 +66,57 @@ The first thing an environment needs is some tasks for the model to attempt. Her
 {"prompt": "The quick brown fox jumps over the lazy dog."}
 ```
 
-Build a chat-style `prompt` from the text and pair it with the reversed `answer` the model should produce:
-
-```python
-from datasets import load_dataset
-
-DATASET_NAME = "PrimeIntellect/Reverse-Text-RL"
-
-
-def source():
-    ds = load_dataset(DATASET_NAME, split="train")
-    for index, row in enumerate(ds):
-        assert isinstance(row, dict), "Dataset rows must be dicts."
-        text = str(row.get("prompt", "") or "")
-        yield {
-            "example_id": index,
-            "prompt": [{"role": "user", "content": text}],
-            "answer": text[::-1],
-        }
-```
-
-The taskset consumes `source` as a row iterator.
-
-## Add a Reward
-
-Tell the model where to put its answer with a system prompt:
-
-```python
-SYSTEM_PROMPT = "Reverse the text character-by-character. Put your answer in <reversed_text> tags."
-```
-
-A reward is an `async` function decorated with `@vf.reward`. It receives the immutable `task` as well as the state produced by the rollout, and returns a float. Read the latest assistant message from `state["completion"]`, pull the tagged answer out, and score it against the true reversal with a longest-common-subsequence ratio so partial answers get partial credit:
+Subclass `vf.Taskset` and implement loaders for tasks and the system prompt. Map the dataset in `load_tasks` and attach the reversed string as `answer`:
 
 ```python
 from difflib import SequenceMatcher
 
 import verifiers as vf
+from datasets import load_dataset
 
 
-@vf.reward(weight=1.0)
-async def lcs_reward(task: vf.Task, state: vf.State) -> float:
-    text = ""
-    for message in reversed(state.get("completion") or []):
-        if message.get("role") == "assistant":
-            text = str(message.get("content") or "")
-            break
-    response = text.split("<reversed_text>", 1)[-1].split("</reversed_text>", 1)[0].strip()
-    return SequenceMatcher(None, response, str(task["answer"])).ratio()
+class ReverseTextTasksetConfig(vf.TasksetConfig):
+    dataset_name: str = "PrimeIntellect/Reverse-Text-RL"
+    dataset_split: str = "train"
+
+
+class ReverseTextTaskset(vf.Taskset[ReverseTextTasksetConfig]):
+    def load_tasks(self) -> vf.Tasks:
+        ds = load_dataset(self.config.dataset_name, split=self.config.dataset_split).map(
+            lambda x: {"prompt": x["prompt"], "answer": x["prompt"][::-1]}
+        )
+        return ds
+
+    def load_system_prompt(self) -> vf.SystemPrompt:
+        return "Reverse the text character-by-character. Put your answer in <reversed_text> tags."
+
+    @vf.reward(weight=1.0)
+    async def lcs_reward(self, task: vf.Task, state: vf.State) -> float:
+        text = ""
+        for message in reversed(state.get("completion") or []):
+            if message.get("role") == "assistant":
+                text = str(message.get("content") or "")
+                break
+        response = text.split("<reversed_text>", 1)[-1].split("</reversed_text>", 1)[0].strip()
+        return SequenceMatcher(None, response, str(task["answer"])).ratio()
 ```
 
-If either tag is missing, the splits fall through to the raw completion.
+Rewards are `async` methods on the Taskset, decorated with `@vf.reward`. They receive the immutable `task` as well as the state produced by the rollout, and return a float. Read the latest assistant message from `state["completion"]`, pull the tagged answer out, and score it against the true reversal with a longest-common-subsequence ratio so partial answers get partial credit. If either tag is missing, the splits fall through to the raw completion.
 
 ## Wire It Together
 
-Split taskset construction into `load_taskset` and keep `load_environment` as the package entrypoint:
+Export `load_taskset` and `load_environment` as the package entrypoints:
 
 ```python
-def load_taskset(config: vf.TasksetConfig) -> vf.Taskset:
-    return vf.Taskset(
-        source=source,
-        system_prompt=SYSTEM_PROMPT,
-        rewards=[lcs_reward],
-        config=config,
-    )
+def load_taskset(config: ReverseTextTasksetConfig) -> vf.Taskset:
+    return ReverseTextTaskset(config=config)
 
 
 def load_environment(config: vf.EnvConfig) -> vf.Env:
-    return vf.Env(taskset=load_taskset(config=config.taskset))
+    return vf.Env(taskset=vf.load_taskset(config=config.taskset))
 ```
+
+The finished implementation lives in [environments/reverse_text/reverse_text.py](../../environments/reverse_text/reverse_text.py).
 
 By default, `vf.Env` sends each prompt to the model and hands the response back to the taskset for scoring. Per-run sampling and turn limits flow through the default harness from eval and RL configs.
 
@@ -107,7 +132,7 @@ tags = ["single-turn", "text", "train", "eval"]
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
-    "verifiers>=0.1.15.dev7",
+    "verifiers>=0.1.15.dev11",
     "datasets",
 ]
 
@@ -166,15 +191,15 @@ Read a few rollouts. For reverse-text, check whether the model copied the string
 
 **Rule-based vs. judged.** Use deterministic checks — string match, regex, math-verify, test execution — whenever you can. They're fast, free, and reproducible. Reach for an LLM judge only when correctness can't be reduced to a programmatic check: open-ended generation, style, or tasks where valid answers are too numerous to enumerate. If you can write a unit test for it, don't judge it.
 
-**Combining rewards.** A `vf.Rubric` can hold multiple reward functions with explicit weights. A common pattern is layering a cheap deterministic check (did it parse? did the tests pass?) with an expensive judged check (is the explanation clear?). Set weights so the deterministic signal dominates and the judge nudges — e.g. `weights=[1.0, 0.2]`. Invert this and the model learns to please the judge at the expense of being correct. For combining rubrics of different types — say a `vf.MathRubric` with a `vf.JudgeRubric` — wrap them in a vf.RubricGroup, which aggregates all rewards and metrics.
+**Combining rewards.** Add multiple `@vf.reward` methods on the Taskset with explicit weights. [wordle](../../environments/wordle/wordle.py) layers `correct_answer`, `length_bonus`, `partial_answer`, and a low-weight `format_reward` this way. Set weights so cheap deterministic checks dominate and expensive judges only nudge — e.g. `weight=1.0` on correctness and `weight=0.2` on a judge. Invert that and the model learns to please the judge at the expense of being correct.
 
 **Continuous vs. binary.** Continuous rewards like LCS give partial credit and produce smoother gradients. Binary rewards (1.0 or 0.0) are easier to interpret and harder to hack, but give the optimizer no signal about how close a wrong answer was. Use binary when correctness is unambiguous (test pass/fail, exact match). Use continuous when there's a meaningful notion of "almost right."
 
-**JudgeRubric basics.** When you need a judge, configure a vf.JudgeRubric with a `judge_model` and optionally a `judge_prompt` template. The rubric exposes a `judge` callable to your reward functions. Write the prompt like a grading rubric: enumerate what good and bad answers look like. Vague prompts produce noisy scores, and noise in the reward is noise in the gradient.
+**LLM judges.** Put judge settings on `TasksetConfig` and implement `@vf.reward` on the Taskset. See [Judges and Instruction Following](../07-judges-and-instruction-following/README.md). Write the judge prompt like a grading rubric: enumerate what good and bad answers look like. Vague prompts produce noisy scores, and noise in the reward is noise in the gradient.
 
 **Reward hacking.** Expect it, don't hope to avoid it. Classic examples: a keyword bonus the model learns to stuff into every response, a judge that rewards verbosity, a length reward that accidentally flips the gradient. The fix is always the same: sort rollouts by reward, read the top-scoring ones, and ask whether a human would agree. If the highest-rewarded rollout is obviously bad, your reward is broken.
 
-**Metrics vs. rewards.** Not every signal should affect training. Use `rubric.add_metric()` to register reward functions with `weight=0`. They track response length, format compliance, tool-call count, or whatever you want to monitor without injecting signal into the gradient. These show up in rollout metrics and make hacking easier to spot: if training reward climbs but your weight-0 quality metric is flat, something is wrong.
+**Metrics vs. rewards.** Not every signal should affect training. Use `@vf.reward(weight=0.0)` on additional Taskset methods to track response length, format compliance, tool-call count, or whatever you want to monitor without injecting signal into the gradient. These show up in rollout metrics and make hacking easier to spot: if training reward climbs but your weight-0 metric is flat, something is wrong.
 
 ## Troubleshooting & QA
 

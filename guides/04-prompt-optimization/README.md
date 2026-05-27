@@ -21,7 +21,7 @@ prime eval run prime/wordle \
 Or run with a config file:
 
 ```toml
-# [configs/05/wordle-eval.toml](../../configs/05/wordle-eval.toml)
+# [configs/04/wordle-eval.toml](../../configs/04/wordle-eval.toml)
 model = "openai/gpt-5.5"
 save_results = true
 
@@ -33,7 +33,7 @@ sampling_args = { max_tokens = 1024 }
 ```
 
 ```bash
-prime eval run configs/05/wordle-eval.toml
+prime eval run configs/04/wordle-eval.toml
 ```
 
 GEPA is most useful when the model is trying the task but needs better guidance. If the scoring is broken, the task is impossible, or the model cannot follow the environment loop at all, fix that before optimizing the prompt.
@@ -43,7 +43,7 @@ GEPA is most useful when the model is trying the task but needs better guidance.
 Run GEPA with a config file:
 
 ```toml
-# [configs/05/wordle-gepa.toml](../../configs/05/wordle-gepa.toml)
+# [configs/04/wordle-gepa.toml](../../configs/04/wordle-gepa.toml)
 model = "openai/gpt-5.5"
 reflection_model = "openai/gpt-5.5"
 save_to_environment = true
@@ -63,7 +63,7 @@ max_tokens = 1024
 ```
 
 ```bash
-prime gepa run configs/05/wordle-gepa.toml
+prime gepa run configs/04/wordle-gepa.toml
 ```
 
 The command prints optimization progress and a results directory containing the best prompt artifacts.
@@ -92,13 +92,13 @@ prime eval run prime/wordle \
   -n 20 \
   -r 1 \
   -t 1024 \
-  -a '{"path_to_system_prompt": "environments/wordle/prompts/system_prompt.txt"}'
+  -a '{"taskset": {"prompt_path": "environments/wordle/prompts/system_prompt.txt"}}'
 ```
 
 Or run with a config file:
 
 ```toml
-# [configs/05/wordle-gepa-eval.toml](../../configs/05/wordle-gepa-eval.toml)
+# [configs/04/wordle-gepa-eval.toml](../../configs/04/wordle-gepa-eval.toml)
 model = "openai/gpt-5.5"
 save_results = true
 
@@ -107,28 +107,15 @@ env_id = "prime/wordle"
 num_examples = 20
 rollouts_per_example = 1
 sampling_args = { max_tokens = 1024, temperature = 0.7 }
-env_args = { path_to_system_prompt = "environments/wordle/prompts/system_prompt.txt" }
+taskset = { prompt_path = "environments/wordle/prompts/system_prompt.txt" }
 ```
 
 ```bash
-prime eval run configs/05/wordle-gepa-eval.toml
+prime eval run configs/04/wordle-gepa-eval.toml
 ```
 
-Keep the model, sample count, rollout count, and sampling settings fixed while comparing prompts. The only thing that should differ between runs is the system prompt loaded through `path_to_system_prompt`. Compare against the baseline with `prime eval view`.
-
-## Decide Whether to Keep It
-
-Adopt the optimized prompt if it improves the metric and the rollouts look better for the right reasons.
-
-Look for:
-
-- more consistent task strategy
-- fewer formatting or tool-use mistakes
-- higher score on examples the baseline could plausibly solve
-- no new shortcuts that exploit the metric without solving the task, which is a common form of reward hacking
-
-If the prompt helps, use it in future eval or training configs by passing the same environment argument. If it does not help, inspect the GEPA artifacts and baseline failures before spending a larger optimization budget.
+Keep the model, sample count, rollout count, and sampling settings fixed while comparing prompts. The only thing that should differ between runs is the system prompt loaded through `prompt_path` on the wordle taskset config.
 
 ## Next
 
-In [Coding Agents and Sandboxes](../06-coding-agents-and-sandboxes/README.md), you will evaluate environments where the model writes or runs code inside a sandbox.
+In [Warm Starts with SFT](../05-warm-starts-with-sft/README.md), you will use SFT to give a model a stronger starting policy before further RL.

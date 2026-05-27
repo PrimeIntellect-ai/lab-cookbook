@@ -23,13 +23,13 @@ prime eval run shape-detective \
   -n 5 \
   -r 3 \
   -t 1024 \
-  -x '{"mode": "multi"}'
+  -a '{"taskset": {"mode": "multi"}}'
 ```
 
 Or run with a config file:
 
 ```toml
-# [configs/10/shape-detective-eval.toml](../../configs/10/shape-detective-eval.toml)
+# [configs/08/shape-detective-eval.toml](../../configs/08/shape-detective-eval.toml)
 model = "Qwen/Qwen3.5-2B"
 save_results = true
 
@@ -38,14 +38,14 @@ env_id = "shape-detective"
 num_examples = 5
 rollouts_per_example = 3
 sampling_args = { max_tokens = 1024 }
-env_args = { mode = "multi" }
+taskset = { mode = "multi" }
 ```
 
 ```bash
-prime eval run configs/10/shape-detective-eval.toml
+prime eval run configs/08/shape-detective-eval.toml
 ```
 
-Switch to single-turn with `-x '{"mode": "single"}'`. The walkthrough below follows [environments/shape_detective/shape_detective.py](../../environments/shape_detective/shape_detective.py) top to bottom.
+Switch to single-turn with `-a '{"taskset": {"mode": "single"}}'`. The walkthrough below follows [environments/shape_detective/shape_detective.py](../../environments/shape_detective/shape_detective.py) top to bottom.
 
 ## Constants and Palette
 
@@ -83,7 +83,7 @@ The system prompt does three things at once: defines the game, fixes the coordin
 
 ## clue_line
 
-The only standalone helper in the file. Used three times — once in `source` for the multi-turn intro (clue 1) and twice in the user callback (clues 2 and 3) — so it earns a name. Everything else used once lives inline at its call site, which keeps the env file readable top-to-bottom and means there's no scaffolding to learn before you can read what it does.
+The only standalone helper in the file. Used in `load_tasks` for the multi-turn intro (clue 1) and in the user callback (clues 2 and 3).
 
 ```python
 def clue_line(target: Tile, prop: str, clue_index: int) -> str:
@@ -95,20 +95,43 @@ def clue_line(target: Tile, prop: str, clue_index: int) -> str:
 
 The article handling is purely cosmetic — "the target is a circle" reads better than "the target is circle"; "the target is red" reads better than "the target is a red".
 
-## source
+## Taskset Shape
 
-`source(mode, num_rows, seed)` is the body of the env. It returns a zero-arg `build()` closure (the form `vf.Taskset.source` accepts) that produces one row per task. Inside, every row is built in five inline steps — scene generation, image rendering, base64 encoding, prompt composition, row assembly.
+`ShapeDetectiveTaskset` subclasses `vf.Taskset` like [reverse-text](../02-building-your-first-environment/README.md). Config, task generation, the user callback, and the reward live on the class:
 
 ```python
-def source(mode: Mode, num_rows: int, seed: int):
-    def build() -> list[dict[str, object]]:
-        rng = random.Random(seed)
-        rows: list[dict[str, object]] = []
-        for _ in range(num_rows):
-            ...
+class ShapeDetectiveTasksetConfig(vf.TasksetConfig):
+    mode: Mode = "multi"
+    num_rows: int = 12
+    seed: int = 0
+
+
+class ShapeDetectiveTaskset(vf.Taskset[ShapeDetectiveTasksetConfig]):
+    def load_system_prompt(self) -> vf.SystemPrompt:
+        return "You are playing Shape Detective..."
+
+    def load_tasks(self) -> vf.Tasks:
+        ...
+
+    async def shape_detective_user(self, task: vf.Task, state: vf.State) -> list[vf.ConfigData]:
+        ...
+
+    @vf.reward(weight=1.0)
+    async def solved(self, task: vf.Task, state: vf.State) -> float:
+        ...
+
+
+def load_environment(config: vf.EnvConfig) -> vf.Env:
+    return vf.Env(taskset=vf.load_taskset(config=config.taskset))
 ```
 
-`random.Random(seed)` makes the whole taskset deterministic given `seed`. Reusing the env with the same seed always yields the same scenes, the same targets, and the same image bytes — useful for caching and for stable eval comparisons across runs.
+In multi-turn mode, the Taskset sets `self.user = self.shape_detective_user` in `__init__` when `mode == "multi"`.
+
+## load_tasks
+
+`load_tasks` generates each row inline: sample tiles, reject ambiguous scenes, render the grid with PIL, base64-encode to a `data:image/png` URL, compose the intro text, and yield task dicts.
+
+`random.Random(seed)` makes the taskset deterministic for a given config seed.
 
 ### Scene generation (inline)
 
@@ -212,7 +235,7 @@ else:
     info = {"mode": "multi", "target": target, "target_tile": target_tile}
     max_turns = 3
 
-rows.append({
+    yield {
     "prompt": [{"role": "user", "content": [
         {"type": "text", "text": intro},
         {"type": "image_url", "image_url": {"url": image_url}},
@@ -220,7 +243,7 @@ rows.append({
     "answer": str(target),
     "info": info,
     "max_turns": max_turns,
-})
+}
 ```
 
 Two practical notes on the message shape:
@@ -260,71 +283,32 @@ async def shape_detective_user(task, state):
     return []
 ```
 
-The user callback is a `(task, state) → list[message]` function that the harness calls *between* assistant turns. It's wired into the Taskset via `vf.Taskset(..., user=shape_detective_user)`.
+The user callback is a method on the Taskset that the harness calls between assistant turns. In multi-turn mode, `ShapeDetectiveTaskset.__init__` assigns `self.user = self.shape_detective_user`.
 
 Three things make this work cleanly:
 
 1. **The harness counts turns for us via `state["completion"]`.** That list grows as the conversation progresses: after assistant turn 1 it contains one assistant message; after the harness appends our user-callback output it contains two messages; after assistant turn 2 it contains three; and so on. Counting just the assistant messages gives us a clean turn index.
 2. **Returning `[]` ends the rollout.** When the callback returns no messages on turn 3, the harness sets `stop_condition = "no_tools"` and exits the loop. Combined with `max_turns=3`, this gives us a clean stop condition either way (the model can also be cut off by `max_turns_reached` if it kept calling tools, but this env has no tools).
-3. **Per-row `info` is the carrier for rollout-time data.** Anything the callback (or the reward) needs at rollout time — clue values, candidate sets, target metadata — goes in `info`. The harness round-trips it through serialization, so accessing `task["info"]["target_tile"]` inside the callback returns the same dict we put in at source-build time.
+3. **Per-row `info` is the carrier for rollout-time data.** Anything the callback (or the reward) needs at rollout time goes in `info`. The harness round-trips it through serialization, so `task["info"]["target_tile"]` inside the callback matches what `load_tasks` wrote.
 
-The dispatch on `info["mode"] != "multi"` lets us register the same callback on both variants of the Taskset without behavioural surprises — single-mode rows simply skip the callback entirely. The Taskset loader keys it on mode:
-
-```python
-user=shape_detective_user if mode == "multi" else None,
-```
-
-Passing `user=None` is the explicit "no user callback" signal; without it, the harness treats every assistant turn that has no tool calls as the end of the rollout.
+Single-mode rows skip the callback because `self.user` is only set when `mode == "multi"`.
 
 ## Reward
 
 ```python
 @vf.reward(weight=1.0)
-async def solved(task, state) -> float:
-    last = state["completion"][-1]
-    if last["role"] != "assistant":
+async def solved(self, task: vf.Task, state: vf.State) -> float:
+    last = completion[-1]
+    if not isinstance(last, vf.AssistantMessage):
         return 0.0
-    content = last["content"]
-    text = (
-        content
-        if isinstance(content, str)
-        else " ".join(part["text"] for part in content if part.get("type") == "text")
-    )
+    ...
     answer = extract_boxed_answer(text, strict=True).strip()
     return 1.0 if answer == str(task["answer"]) else 0.0
 ```
 
-Assistant content is *usually* a string, but some providers return it as a list of typed parts even when there's no image. The branch reads the text-typed parts only and joins them.
+Use `vf.AssistantMessage` and `vf.TextContentPart` when reading `state["completion"]`.
 
 `extract_boxed_answer(..., strict=True)` returns the contents of the *last* `\boxed{}` in the text, or `""` if there isn't one. Strict mode is important: it collapses "wrong answer" and "no commit" into the same 0.0 reward, which matches what the system prompt asked the model to produce. A more granular reward could break that out into a separate metric — see [Designing Rewards](../02-building-your-first-environment/README.md#designing-rewards) for the pattern.
-
-## Loader
-
-`mode`, `num_rows`, and `seed` are env-specific knobs, so they live on a TasksetConfig subclass. `load_environment` takes only config: vf.EnvConfig, builds the typed config with the subclass constructor, and inlines the taskset construction:
-
-```python
-class ShapeDetectiveTasksetConfig(vf.TasksetConfig):
-    mode: Mode = "multi"
-    num_rows: int = 12
-    seed: int = 0
-
-
-def load_environment(config: vf.EnvConfig) -> vf.Env:
-    cfg = ShapeDetectiveTasksetConfig(config.taskset)
-    return vf.Env(
-        taskset=vf.Taskset(
-            source=source(cfg.mode, cfg.num_rows, cfg.seed),
-            system_prompt=SYSTEM_PROMPT,
-            rewards=[solved],
-            user=shape_detective_user if cfg.mode == "multi" else None,
-            config=cfg,
-        )
-    )
-```
-
-`ShapeDetectiveTasksetConfig(config.taskset)` is the Pydantic-style subclass constructor — it accepts the loosely-typed `config.taskset` (a `BaseModel`, a raw mapping, or `None`) and returns a strict, typed object. The runtime CLI value flows through the same way: `prime eval run -x '{"mode": "single"}'` populates the field on `config.taskset` and the subclass picks it up.
-
-`source(cfg.mode, cfg.num_rows, cfg.seed)` returns the `build()` closure, which `vf.Taskset` calls on first iteration. The `Literal["single", "multi"]` annotation on `mode` is enforced by Pydantic at construction, so no separate runtime check is needed.
 
 ## Pick a Model
 
@@ -382,7 +366,7 @@ The implementation above is a working template. The pattern is:
 
 Two upgrades that pay back quickly:
 
-- **Cache encoded images.** If your scenes are deterministic given a seed, the encoded base64 is too — save the rendered PNGs (or the full row dicts) and skip re-rendering on every eval. For larger tasksets, wrap source loading in a DatasetBuilder so the work happens on first access, not at module load.
+- **Cache encoded images.** If scenes are deterministic given a seed, cache rendered PNGs or row dicts and skip re-rendering on every eval.
 - **Stratify your eval set.** Mix easy, medium, and hard rows. A flat random sample hides which capability the model is missing. For shape-detective specifically, vary `seed` across eval splits and check that performance is stable across them — not just on the seed you developed against.
 
 ## Training Notes
@@ -393,14 +377,14 @@ The eval workflow above is the same shape RL uses, so a clean shape-detective ev
 
 ## Framework Notes
 
-A few v1 details that came up while building `shape_detective` aren't obvious from the published Environments docs. Flagging them here so future author guides can pull them upstream:
+A few details from building `shape_detective` that are easy to miss:
 
-- **Per-row `max_turns`.** Setting `"max_turns"` on a row in `Taskset.source` overrides the harness default at rollout time (`task.py` validates the field and `harness.py:setup_state` reads `task["max_turns"]` into `state["runtime"]`). This is the cleanest way to mix single-turn and multi-turn rows in one taskset, but it's not in the BYO Harness or Environments page. **Suggested doc fix:** add a "Per-task overrides" subsection to the Environments page listing the task-level fields the harness reads (`max_turns`, `tools`, `program`, `sandbox`).
-- **User-callback signature is duck-typed.** The runtime calls the callback with `maybe_call_with_named_args(fn, task=task, state=state, ...)`, so any subset of `(task, state, transcript)` works. **Suggested doc fix:** name the supported parameters in the Tasksets/User section so authors don't have to read `runtime.py` to learn which arguments are injected.
-- **Custom `info` round-trips through `info["task"]`.** `Taskset._dataset_row` serializes the whole task into the dataset row's `info["task"]` field, and `to_task` deserializes it on the other side — which is why custom fields placed in `info` survive even though the Dataset's `info` column is overwritten. **Suggested doc fix:** document that `info["task"]` is a reserved key (and that user-defined fields inside `info` survive serialization because of the round-trip).
-- **`state["completion"]` is `list[dict]`, not `list[Message]`.** The harness writes dumped dicts (`message.model_dump(exclude_none=True)`) into completion at the end of each turn. Reward functions and user callbacks can index it directly. **Suggested doc fix:** clarify the runtime type of `state["completion"]` vs. `state["trajectory"]` in the State reference.
-- **Config subclasses are the only way to expose tunables.** `load_environment` takes one argument — `config: vf.EnvConfig`. Anything configurable goes on a `*TasksetConfig` (or *HarnessConfig) subclass and is accessed via the subclass constructor (`SubclassConfig(config.taskset)`), so the CLI's `-x '{...}'` and TOML `-c config.toml` both flow through the same typed surface. Avoid adding `**kwargs` or extra positional args to `load_environment`.
+- **Per-row `max_turns`.** Set `"max_turns"` on each task row to override the harness default. This is the cleanest way to mix single-turn and multi-turn rows in one taskset.
+- **User callbacks** are Taskset methods assigned to `self.user`. The harness calls them between assistant turns with `task` and `state`.
+- **Custom `info` round-trips** through serialization — fields you set in `load_tasks` are available on `task["info"]` in callbacks and rewards.
+- **`state["completion"]` is `list[vf.Message]`.** Prefer `vf.AssistantMessage` and related types over dict access.
+- **Config subclasses expose tunables.** Put `mode`, `num_rows`, and `seed` on `ShapeDetectiveTasksetConfig`; override via `taskset` in eval configs or `-a`.
 
 ## Next
 
-In [Custom Harnesses](../12-custom-harnesses/README.md), you will run third-party agent libraries through the program pattern.
+In [Coding Agents and Sandboxes](../10-coding-agents-and-sandboxes/README.md), you will evaluate environments where the model writes or runs code inside a sandbox.

@@ -102,3 +102,4 @@ Class and API names keep Verifiers capitalization; lowercase entries describe ro
 - **hosted training**: A training run executed on Prime infrastructure.
 - **inference deployment**: A served model or adapter that can be queried through an inference API.
 - **Hub version**: An immutable published version of an environment on the Environments Hub.
+

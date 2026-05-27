@@ -4,7 +4,7 @@ import math
 import random
 from typing import Literal
 
-import verifiers.v1 as vf
+import verifiers as vf
 from PIL import Image, ImageDraw
 from verifiers.utils.data_utils import extract_boxed_answer
 
@@ -38,22 +38,36 @@ Mode = Literal["single", "multi"]
 Tile = dict[str, str]
 
 
-SYSTEM_PROMPT = (
-    "You are playing Shape Detective. You see a 4x4 grid of tiles numbered 0-15 "
-    "(left-to-right, top-to-bottom). Each tile has a shape (circle, square, "
-    "triangle, star), a color (red, blue, green, yellow), and a pattern (solid, "
-    "striped, dotted). You are told clues that narrow down a single target tile. "
-    "When asked to commit your final answer, reply with the tile index in \\boxed{N}."
-)
-
-
 def clue_line(target: Tile, prop: str, clue_index: int) -> str:
     article = "a " if prop == "shape" else ""
     return f"Clue {clue_index + 1} — {prop}: the target is {article}**{target[prop]}**."
 
 
-def source(mode: Mode, num_rows: int, seed: int):
-    def build() -> list[vf.ConfigData]:
+class ShapeDetectiveTasksetConfig(vf.TasksetConfig):
+    mode: Mode = "multi"
+    num_rows: int = 12
+    seed: int = 0
+
+
+class ShapeDetectiveTaskset(vf.Taskset[ShapeDetectiveTasksetConfig]):
+    def __init__(self, config: ShapeDetectiveTasksetConfig | None = None) -> None:
+        super().__init__(config=config)
+        if self.config.mode == "multi" and "user" not in self.config.model_fields_set:
+            self.user = self.shape_detective_user
+
+    def load_system_prompt(self) -> vf.SystemPrompt:
+        return (
+            "You are playing Shape Detective. You see a 4x4 grid of tiles numbered 0-15 "
+            "(left-to-right, top-to-bottom). Each tile has a shape (circle, square, "
+            "triangle, star), a color (red, blue, green, yellow), and a pattern (solid, "
+            "striped, dotted). You are told clues that narrow down a single target tile. "
+            "When asked to commit your final answer, reply with the tile index in \\boxed{N}."
+        )
+
+    def load_tasks(self) -> vf.Tasks:
+        mode = self.config.mode
+        num_rows = self.config.num_rows
+        seed = self.config.seed
         rng = random.Random(seed)
         rows: list[vf.ConfigData] = []
         for _ in range(num_rows):
@@ -183,93 +197,56 @@ def source(mode: Mode, num_rows: int, seed: int):
             )
         return rows
 
-    return build
+    async def shape_detective_user(self, task: vf.Task, state: vf.State) -> list[vf.ConfigData]:
+        info = task["info"]
+        if info["mode"] != "multi":
+            return []
+        target_tile: Tile = info["target_tile"]
+        assistant_turns = sum(1 for m in state["completion"] if m["role"] == "assistant")
 
-
-async def shape_detective_user(task: vf.Task, state: vf.State) -> list[vf.ConfigData]:
-    info = task["info"]
-    if info["mode"] != "multi":
+        if assistant_turns == 1:
+            return [
+                {
+                    "role": "user",
+                    "content": (
+                        f"{clue_line(target_tile, 'color', 1)}\n\n"
+                        "Narrow the candidates again. Still do NOT submit your answer."
+                    ),
+                }
+            ]
+        if assistant_turns == 2:
+            return [
+                {
+                    "role": "user",
+                    "content": (
+                        f"{clue_line(target_tile, 'shape', 2)}\n\n"
+                        "Commit your answer now as \\boxed{N}."
+                    ),
+                }
+            ]
         return []
-    target_tile: Tile = info["target_tile"]
-    assistant_turns = sum(1 for m in state["completion"] if m["role"] == "assistant")
 
-    if assistant_turns == 1:
-        return [
-            {
-                "role": "user",
-                "content": (
-                    f"{clue_line(target_tile, 'color', 1)}\n\n"
-                    "Narrow the candidates again. Still do NOT submit your answer."
-                ),
-            }
-        ]
-    if assistant_turns == 2:
-        return [
-            {
-                "role": "user",
-                "content": (
-                    f"{clue_line(target_tile, 'shape', 2)}\n\n"
-                    "Commit your answer now as \\boxed{N}."
-                ),
-            }
-        ]
-    return []
+    @vf.reward(weight=1.0)
+    async def solved(self, task: vf.Task, state: vf.State) -> float:
+        completion = state.get("completion")
+        assert isinstance(completion, list)
+        last = completion[-1]
+        if not isinstance(last, vf.AssistantMessage):
+            return 0.0
+        content = last.content
+        if isinstance(content, str):
+            text = content
+        elif isinstance(content, list):
+            text = " ".join(part.text for part in content if isinstance(part, vf.TextContentPart))
+        else:
+            text = ""
+        answer = extract_boxed_answer(text, strict=True).strip()
+        return 1.0 if answer == str(task["answer"]) else 0.0
 
 
-@vf.reward(weight=1.0)
-async def solved(task: vf.Task, state: vf.State) -> float:
-    last = state["completion"][-1]
-    if last["role"] != "assistant":
-        return 0.0
-    content = last["content"]
-    text = (
-        content
-        if isinstance(content, str)
-        else " ".join(part["text"] for part in content if part.get("type") == "text")
-    )
-    answer = extract_boxed_answer(text, strict=True).strip()
-    return 1.0 if answer == str(task["answer"]) else 0.0
-
-
-class ShapeDetectiveTasksetConfig(vf.TasksetConfig):
-    mode: Mode = "multi"
-    num_rows: int = 12
-    seed: int = 0
-
-
-class ShapeDetectiveEnvConfig(vf.EnvConfig):
-    taskset: ShapeDetectiveTasksetConfig
-    harness: vf.HarnessConfig
-
-
-class ShapeDetectiveTaskset(vf.Taskset):
-    config_type = ShapeDetectiveTasksetConfig
-
-    def __init__(self, *, config: vf.TasksetConfig | None = None) -> None:
-        cfg = ShapeDetectiveTasksetConfig.from_config(config)
-        if cfg.mode == "multi":
-            super().__init__(
-                config=cfg,
-                source=source(cfg.mode, cfg.num_rows, cfg.seed),
-                system_prompt=SYSTEM_PROMPT,
-                rewards=[solved],
-                user=shape_detective_user,
-            )
-            return
-        super().__init__(
-            config=cfg,
-            source=source(cfg.mode, cfg.num_rows, cfg.seed),
-            system_prompt=SYSTEM_PROMPT,
-            rewards=[solved],
-        )
-
-
-def load_taskset(config: ShapeDetectiveTasksetConfig) -> ShapeDetectiveTaskset:
+def load_taskset(config: ShapeDetectiveTasksetConfig) -> vf.Taskset:
     return ShapeDetectiveTaskset(config=config)
 
 
-def load_environment(config: ShapeDetectiveEnvConfig) -> vf.Env:
-    return vf.Env(
-        taskset=load_taskset(config=config.taskset),
-        harness=vf.Harness(config=config.harness),
-    )
+def load_environment(config: vf.EnvConfig) -> vf.Env:
+    return vf.Env(taskset=vf.load_taskset(config=config.taskset))

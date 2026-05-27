@@ -6,4 +6,4 @@ env_id = "prime/calendar-scheduling"
 num_examples = 5
 rollouts_per_example = 2
 sampling_args = { max_tokens = 2048 }
-env_args = { difficulty = "medium" }
+taskset = { difficulty = "medium" }

@@ -25,13 +25,13 @@ prime eval run prime/calendar-scheduling \
   -n 5 \
   -r 2 \
   -t 2048 \
-  -a '{"difficulty": "medium"}'
+  -a '{"taskset": {"difficulty": "medium"}}'
 ```
 
 Or run with a config file:
 
 ```toml
-# [configs/09/calendar-scheduling-eval.toml](../../configs/09/calendar-scheduling-eval.toml)
+# [configs/11/calendar-scheduling-eval.toml](../../configs/11/calendar-scheduling-eval.toml)
 model = "openai/gpt-5.4-nano"
 save_results = true
 
@@ -40,11 +40,11 @@ env_id = "prime/calendar-scheduling"
 num_examples = 5
 rollouts_per_example = 2
 sampling_args = { max_tokens = 2048 }
-env_args = { difficulty = "medium" }
+taskset = { difficulty = "medium" }
 ```
 
 ```bash
-prime eval run configs/09/calendar-scheduling-eval.toml
+prime eval run configs/11/calendar-scheduling-eval.toml
 ```
 
 The environment ships a standalone visualizer that renders the generated problem as a TUI similar to a meeting app. Use it to develop intuition for what the agent sees:
@@ -102,7 +102,7 @@ Two design choices keep the environment honest:
 - **Budget the oracle.** `check_window` is the agent's view of the oracle. Bound the number of calls per rollout (the TUI shows the budget as `Score-check budget`) so the agent cannot brute-force the search space. The remaining budget should be visible in every tool result.
 - **Surface remaining turns.** Tool results include the remaining turn count. The agent learns to plan instead of exploring exhaustively.
 
-This is the same Toolset pattern from [Tool Use and Search](../07-tool-use-and-search/README.md), with one extra requirement: the per-rollout state owns the generated world, not just a session handle into an external one. Wire tools that need per-rollout context through `state` rather than module globals; the v1 `vf.Toolset` runs each tool with `task` and `state` in scope.
+This is the same Toolset pattern from [Tool Use and Search](../08-tool-use-and-search/README.md), with one extra requirement: the per-rollout state owns the generated world, not just a session handle into an external one. Wire tools that need per-rollout context through `state` rather than module globals; `vf.Toolset` runs each tool with `task` and `state` in scope.
 
 ## Designing the Reward
 
@@ -151,7 +151,7 @@ Degrees of freedom:
 - Types of constraints
 - Tightness of constraints
 
-Use the v1 `vf.Taskset` + `vf.Toolset` pattern with per-rollout state for the calendar + attendee information. The agent should have tools for things like:
+Use the `vf.Taskset` + `vf.Toolset` pattern with per-rollout state for the calendar + attendee information. The agent should have tools for things like:
 
 - Checking attendee calendars
 - Viewing attendee constraints
@@ -198,10 +198,10 @@ Before launching RL on a synthetic environment, check:
 - failures look like genuine reasoning mistakes, not environment bugs or formatting issues
 - the score-check budget and turn limit are tight enough to discourage brute-force search
 
-When those conditions hold, training works the same as in earlier guides. Use [configs/09/calendar-scheduling-rl.toml](../../configs/09/calendar-scheduling-rl.toml):
+When those conditions hold, training works the same as in earlier guides. Use [configs/11/calendar-scheduling-rl.toml](../../configs/11/calendar-scheduling-rl.toml):
 
 ```toml
-# [configs/09/calendar-scheduling-rl.toml](../../configs/09/calendar-scheduling-rl.toml)
+# [configs/11/calendar-scheduling-rl.toml](../../configs/11/calendar-scheduling-rl.toml)
 model = "Qwen/Qwen3-30B-A3B-Instruct-2507"
 
 max_steps = 100
@@ -217,11 +217,9 @@ args = { difficulty = "medium", num_train = 512, num_eval = 128, max_turns = 18 
 ```
 
 ```bash
-prime train configs/09/calendar-scheduling-rl.toml
+prime train configs/11/calendar-scheduling-rl.toml
 ```
-
-Watch early rollouts as much as the reward curve. The first sign of learning on a synthetic env is usually a shift in tool usage — the model starts viewing constraints before proposing, then spends its `check_window` budget more deliberately, then converges on windows near the oracle.
 
 ## Next
 
-In [Multimodal Environments](../10-multimodal-environments/README.md), you will work with environments that include image inputs and multimodal scoring.
+In [Custom Harnesses](../12-custom-harnesses/README.md), you will run third-party agent libraries through the program pattern.

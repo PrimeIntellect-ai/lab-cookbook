@@ -6,4 +6,4 @@ env_id = "shape-detective"
 num_examples = 5
 rollouts_per_example = 3
 sampling_args = { max_tokens = 1024 }
-env_args = { mode = "multi" }
+taskset = { mode = "multi" }

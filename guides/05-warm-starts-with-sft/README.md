@@ -2,7 +2,7 @@
 
 **SFT in Lab is currently in beta and will roll out to all users shortly.**
 
-Use SFT to give a model a better starting policy before RL.
+Use SFT to give a model a better starting policy before further RL or as a standalone warm start.
 
 SFT is useful when the model needs examples of the right behavior before reward optimization becomes efficient. Instead of bringing a separate dataset, Lab can generate demonstrations from an environment using a stronger teacher model, then train the target model on those demonstrations.
 
@@ -21,7 +21,7 @@ Do not use SFT to paper over broken rewards. If the environment gives high score
 Configure the `loss` field to `"sft"` and choose a teacher model:
 
 ```toml
-# [configs/04/sft-wordle.toml](../../configs/04/sft-wordle.toml)
+# [configs/05/wordle-sft.toml](../../configs/05/wordle-sft.toml)
 model = "openai/gpt-oss-20b"
 loss = "sft"
 
@@ -51,7 +51,7 @@ The key fields are:
 Start the run:
 
 ```bash
-prime train configs/04/sft-wordle.toml
+prime train configs/05/wordle-sft.toml
 ```
 
 The command prints a run ID along with the command for streaming logs from the new Hosted Training run. Follow logs with:
@@ -60,20 +60,10 @@ The command prints a run ID along with the command for streaming logs from the n
 prime train logs <run_id> -f
 ```
 
-## Inspect the Warm Start
-
-For an SFT warm start, inspect both the generated demonstrations and the trained model's rollouts. The run is doing useful work if the target model starts to copy the teacher's task strategy, answer format, and interaction pattern.
-
-After SFT, evaluate the adapter against the same environment. If it improves baseline behavior without breaking the reward contract, use the checkpoint as the starting point for an RL run.
-
-## Continue with RL
-
-RL uses the same config shape. To train on top of an existing LoRA, set `model` to the adapter you want to start from and omit `loss`, since RL is the default.
-
-Use [configs/04/wordle-from-sft.toml](../../configs/04/wordle-from-sft.toml):
+After SFT, evaluate the adapter on the same environment. For on-policy distillation from the SFT adapter, see [On-Policy Distillation](../06-on-policy-distillation/README.md). To skip straight to RL, use [configs/05/wordle-rl.toml](../../configs/05/wordle-rl.toml):
 
 ```toml
-# [configs/04/wordle-from-sft.toml](../../configs/04/wordle-from-sft.toml)
+# [configs/05/wordle-rl.toml](../../configs/05/wordle-rl.toml)
 model = "openai/gpt-oss-20b:my-sft-lora-distilled-from-oss-120b-distill"
 
 [sampling]
@@ -85,13 +75,9 @@ id = "prime/wordle"
 ```
 
 ```bash
-prime train configs/04/wordle-from-sft.toml
+prime train configs/05/wordle-rl.toml
 ```
-
-The run should behave like a normal RL training job, but with the SFT adapter as the starting model.
-
-This keeps the environment fixed while changing the starting policy: SFT teaches the model what good behavior looks like, and RL optimizes that behavior against the environment reward.
 
 ## Next
 
-In [Prompt Optimization](../05-prompt-optimization/README.md), you will improve an environment prompt without changing model weights.
+In [On-Policy Distillation](../06-on-policy-distillation/README.md), you will refine the SFT adapter with dense teacher feedback on the student's own rollouts.

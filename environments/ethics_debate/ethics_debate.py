@@ -1,27 +1,11 @@
 import re
 
-import verifiers.v1 as vf
+import verifiers as vf
 from datasets import load_dataset
 from openai import AsyncOpenAI
 
 ARGUER = "arguer"
 CRITIC = "critic"
-
-SYSTEM_PROMPT = (
-    "You are participating in a structured ethics debate. Follow the current "
-    "role assignment in each user message and end every turn with the requested "
-    "XML tag."
-)
-
-ARGUER_PROMPT = (
-    "You are arguing an ethics question. Present a clear position with reasoning. "
-    "When critiqued, address the weaknesses and strengthen your argument."
-)
-
-CRITIC_PROMPT = (
-    "You are critiquing an ethical argument. Identify gaps, logical fallacies, "
-    "and missing perspectives. Be specific and constructive."
-)
 
 JUDGE_SYSTEM = (
     "You are a philosophy professor grading ethics arguments. "
@@ -58,26 +42,6 @@ class EthicsDebateTasksetConfig(vf.TasksetConfig):
     dataset_name: str = "ergotts/ethics_questions"
     dataset_split: str = "train"
     num_rounds: int = 2
-
-
-class EthicsDebateEnvConfig(vf.EnvConfig):
-    taskset: EthicsDebateTasksetConfig
-    harness: vf.HarnessConfig
-
-
-class EthicsDebateTaskset(vf.Taskset):
-    config_type = EthicsDebateTasksetConfig
-
-    def __init__(self, *, config: vf.TasksetConfig | None = None) -> None:
-        cfg = EthicsDebateTasksetConfig.from_config(config)
-        super().__init__(
-            config=cfg,
-            source=lambda: source(cfg),
-            system_prompt=SYSTEM_PROMPT,
-            user=debate_user,
-            setups=[setup_debate],
-            rewards=[argument_quality],
-        )
 
 
 def content_text(content: str | list | None, separator: str = "\n") -> str:
@@ -122,114 +86,133 @@ def turn_contract(tag: str) -> str:
 
 
 def arguer_message(question: str) -> str:
-    return f"{ARGUER_PROMPT}\n\nQuestion: {question}\n\n{turn_contract('argument')}"
+    return (
+        "You are arguing an ethics question. Present a clear position with reasoning. "
+        "When critiqued, address the weaknesses and strengthen your argument.\n\n"
+        f"Question: {question}\n\n{turn_contract('argument')}"
+    )
 
 
 def critic_message(question: str, argument: str) -> str:
     return (
-        f"{CRITIC_PROMPT}\n\nQuestion: {question}\n\n"
-        f"Argument to critique:\n{argument}\n\n{turn_contract('critique')}"
+        "You are critiquing an ethical argument. Identify gaps, logical fallacies, "
+        "and missing perspectives. Be specific and constructive.\n\n"
+        f"Question: {question}\n\nArgument to critique:\n{argument}\n\n"
+        f"{turn_contract('critique')}"
     )
 
 
 def refine_message(critique: str) -> str:
     return (
-        f"{ARGUER_PROMPT}\n\nCritique received:\n{critique}\n\n"
-        f"Refine your argument.\n\n{turn_contract('argument')}"
+        "You are arguing an ethics question. Present a clear position with reasoning. "
+        "When critiqued, address the weaknesses and strengthen your argument.\n\n"
+        f"Critique received:\n{critique}\n\nRefine your argument.\n\n"
+        f"{turn_contract('argument')}"
     )
 
 
-def source(config: EthicsDebateTasksetConfig):
-    dataset = load_dataset(config.dataset_name, split=config.dataset_split)
-    for index, row in enumerate(dataset):
-        question = str(row["question"])
-        yield {
-            "example_id": index,
-            "question": question,
-            "num_rounds": config.num_rounds,
-            "prompt": [{"role": "user", "content": arguer_message(question)}],
-            "max_turns": 2 * config.num_rounds + 1,
-        }
+class EthicsDebateTaskset(vf.Taskset[EthicsDebateTasksetConfig]):
+    def __init__(self, config: EthicsDebateTasksetConfig | None = None) -> None:
+        super().__init__(config=config)
+        if "user" not in self.config.model_fields_set:
+            self.user = self.debate_user
 
+    def load_system_prompt(self) -> vf.SystemPrompt:
+        return (
+            "You are participating in a structured ethics debate. Follow the current "
+            "role assignment in each user message and end every turn with the requested "
+            "XML tag."
+        )
 
-@vf.setup
-async def setup_debate(task: vf.Task, state: vf.State) -> None:
-    _ = task
-    state["debate_actor"] = ARGUER
-    state["handoff_history"] = []
-    state["current_argument"] = None
-    state["current_critique"] = None
-    state["final_argument"] = None
-    state["rollout_completed_cleanly"] = True
+    def load_tasks(self) -> vf.Tasks:
+        dataset = load_dataset(self.config.dataset_name, split=self.config.dataset_split)
+        num_rounds = self.config.num_rounds
+        for index, row in enumerate(dataset):
+            if not isinstance(row, dict):
+                raise TypeError("Dataset rows must be dicts.")
+            question = str(row["question"])
+            yield {
+                "example_id": index,
+                "question": question,
+                "num_rounds": num_rounds,
+                "prompt": [{"role": "user", "content": arguer_message(question)}],
+                "max_turns": 2 * num_rounds + 1,
+            }
 
+    @vf.setup
+    async def setup_debate(self, task: vf.Task, state: vf.State) -> None:
+        del task
+        state["debate_actor"] = ARGUER
+        state["handoff_history"] = []
+        state["current_argument"] = None
+        state["current_critique"] = None
+        state["final_argument"] = None
+        state["rollout_completed_cleanly"] = True
 
-async def debate_user(
-    task: vf.Task,
-    state: vf.State,
-    transcript: list[vf.Message],
-) -> list[dict[str, str]]:
-    actor = str(state.get("debate_actor") or ARGUER)
-    handoff = parse_handoff(actor, last_assistant_text(transcript))
-    if handoff is None:
-        tag = handoff_tag(actor)
-        state["rollout_completed_cleanly"] = False
-        state["malformed_handoff"] = {
-            "actor": actor,
-            "reason": f"Expected <{tag}>...</{tag}>.",
-        }
-        return []
-
-    history = list(state.get("handoff_history") or [])
-    history.append({"actor": actor, "handoff": {handoff_tag(actor): handoff}})
-    state["handoff_history"] = history
-    question = str(task["question"])
-    num_rounds = int(task["num_rounds"])
-
-    if actor == ARGUER:
-        state["current_argument"] = handoff
-        if len(history) >= 2 * num_rounds + 1:
-            state["final_argument"] = handoff
-            state["final_env_response"] = "Debate complete."
+    async def debate_user(
+        self,
+        task: vf.Task,
+        state: vf.State,
+        transcript: list[vf.Message],
+    ) -> list[dict[str, str]]:
+        actor = str(state.get("debate_actor") or ARGUER)
+        handoff = parse_handoff(actor, last_assistant_text(transcript))
+        if handoff is None:
+            tag = handoff_tag(actor)
+            state["rollout_completed_cleanly"] = False
+            state["malformed_handoff"] = {
+                "actor": actor,
+                "reason": f"Expected <{tag}>...</{tag}>.",
+            }
             return []
-        state["debate_actor"] = CRITIC
-        return [{"role": "user", "content": critic_message(question, handoff)}]
 
-    state["current_critique"] = handoff
-    state["debate_actor"] = ARGUER
-    return [{"role": "user", "content": refine_message(handoff)}]
+        history = list(state.get("handoff_history") or [])
+        history.append({"actor": actor, "handoff": {handoff_tag(actor): handoff}})
+        state["handoff_history"] = history
+        question = str(task["question"])
+        num_rounds = int(task["num_rounds"])
+
+        if actor == ARGUER:
+            state["current_argument"] = handoff
+            if len(history) >= 2 * num_rounds + 1:
+                state["final_argument"] = handoff
+                state["final_env_response"] = "Debate complete."
+                return []
+            state["debate_actor"] = CRITIC
+            return [{"role": "user", "content": critic_message(question, handoff)}]
+
+        state["current_critique"] = handoff
+        state["debate_actor"] = ARGUER
+        return [{"role": "user", "content": refine_message(handoff)}]
+
+    @vf.reward(weight=1.0)
+    async def argument_quality(self, task: vf.Task, state: vf.State) -> float:
+        final_argument = state.get("final_argument")
+        if not final_argument:
+            return 0.0
+        endpoint = state.get_endpoint_config(api="chat")
+        client = AsyncOpenAI(api_key=endpoint["api_key"], base_url=endpoint["api_base"])
+        response = await client.chat.completions.create(
+            model=endpoint["model"],
+            messages=[
+                {"role": "system", "content": JUDGE_SYSTEM},
+                {
+                    "role": "user",
+                    "content": JUDGE_USER_TEMPLATE.format(
+                        question=task["question"],
+                        argument=final_argument,
+                    ),
+                },
+            ],
+        )
+        text = response.choices[0].message.content or ""
+        numbers = re.findall(r"\b(10|[0-9])\b", text)
+        return float(numbers[0]) / 10.0 if numbers else 0.0
 
 
-@vf.reward(weight=1.0)
-async def argument_quality(task: vf.Task, state: vf.State) -> float:
-    final_argument = state.get("final_argument")
-    if not final_argument:
-        return 0.0
-    endpoint = state.get_endpoint_config(api="chat")
-    client = AsyncOpenAI(api_key=endpoint["api_key"], base_url=endpoint["api_base"])
-    response = await client.chat.completions.create(
-        model=endpoint["model"],
-        messages=[
-            {"role": "system", "content": JUDGE_SYSTEM},
-            {
-                "role": "user",
-                "content": JUDGE_USER_TEMPLATE.format(
-                    question=task["question"],
-                    argument=final_argument,
-                ),
-            },
-        ],
-    )
-    text = response.choices[0].message.content or ""
-    numbers = re.findall(r"\b(10|[0-9])\b", text)
-    return float(numbers[0]) / 10.0 if numbers else 0.0
-
-
-def load_taskset(config: EthicsDebateTasksetConfig) -> EthicsDebateTaskset:
+def load_taskset(config: EthicsDebateTasksetConfig) -> vf.Taskset:
     return EthicsDebateTaskset(config=config)
 
 
-def load_environment(config: EthicsDebateEnvConfig) -> vf.Env:
-    return vf.Env(
-        taskset=load_taskset(config=config.taskset),
-        harness=vf.Harness(config=config.harness),
-    )
+def load_environment(config: vf.EnvConfig) -> vf.Env:
+    return vf.Env(taskset=vf.load_taskset(config=config.taskset))

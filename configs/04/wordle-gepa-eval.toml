@@ -6,4 +6,4 @@ env_id = "prime/wordle"
 num_examples = 20
 rollouts_per_example = 1
 sampling_args = { max_tokens = 1024, temperature = 0.7 }
-env_args = { path_to_system_prompt = "environments/wordle/prompts/system_prompt.txt" }
+taskset = { prompt_path = "environments/wordle/prompts/system_prompt.txt" }

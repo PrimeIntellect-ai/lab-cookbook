@@ -43,8 +43,7 @@ Taskset fields (via eval config or `-a`):
 | `num_eval_examples` | int | `20` | Number of evaluation episodes |
 | `seed` | int | `0` | Seed for sampling target words |
 | `game` | str | `Wordle-v0` | TextArena game id |
-| `system_prompt` | str | built-in | Override the system prompt |
-| `path_to_system_prompt` | str | `""` | Load system prompt from a file |
+| `system_prompt` | callable spec | `wordle:default_system_prompt` | Loader ref or `{ fn, ... }`; nested refs require `{ fn }` (see `reference/best-practices.md`) |
 
 ### Rewards
 
@@ -56,5 +55,4 @@ Taskset fields (via eval config or `-a`):
 | `format_reward` | `0.2` | `1.0` if each assistant turn contains exactly one `<guess>` tag |
 
 ### Layout
-- `wordle.py`: reward functions, `load_taskset`, `load_environment`
-- `textarena_taskset.py`: task rows, TextArena env wiring, user callback, system prompt
+- `wordle.py`: Wordle config, rewards, TextArena taskset subclass, loaders

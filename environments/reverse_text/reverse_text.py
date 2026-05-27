@@ -1,43 +1,40 @@
 from difflib import SequenceMatcher
 
-import verifiers.v1 as vf
+import verifiers as vf
 from datasets import load_dataset
 
-DATASET_NAME = "PrimeIntellect/Reverse-Text-RL"
-SYSTEM_PROMPT = "Reverse the text character-by-character. Put your answer in <reversed_text> tags."
+
+class ReverseTextTasksetConfig(vf.TasksetConfig):
+    dataset_name: str = "PrimeIntellect/Reverse-Text-RL"
+    dataset_split: str = "train"
 
 
-@vf.reward(weight=1.0)
-async def lcs_reward(task: vf.Task, state: vf.State) -> float:
-    text = ""
-    for message in reversed(state.get("completion") or []):
-        if message.get("role") == "assistant":
-            text = str(message.get("content") or "")
-            break
-    response = text.split("<reversed_text>", 1)[-1].split("</reversed_text>", 1)[0].strip()
-    return SequenceMatcher(None, response, str(task["answer"])).ratio()
+class ReverseTextTaskset(vf.Taskset[ReverseTextTasksetConfig]):
+    # loaders
+    def load_tasks(self) -> vf.Tasks:
+        ds = load_dataset(self.config.dataset_name, split=self.config.dataset_split).map(
+            lambda x: {"prompt": x["prompt"], "answer": x["prompt"][::-1]}
+        )
+        return ds
+
+    def load_system_prompt(self) -> vf.SystemPrompt:
+        return "Reverse the text character-by-character. Put your answer in <reversed_text> tags."
+
+    # rewards
+    @vf.reward(weight=1.0)
+    async def lcs_reward(self, task: vf.Task, state: vf.State) -> float:
+        text = ""
+        for message in reversed(state.get("completion") or []):
+            if message.get("role") == "assistant":
+                text = str(message.get("content") or "")
+                break
+        response = text.split("<reversed_text>", 1)[-1].split("</reversed_text>", 1)[0].strip()
+        return SequenceMatcher(None, response, str(task["answer"])).ratio()
 
 
-def source():
-    ds = load_dataset(DATASET_NAME, split="train")
-    for index, row in enumerate(ds):
-        assert isinstance(row, dict), "Dataset rows must be dicts."
-        text = str(row.get("prompt", "") or "")
-        yield {
-            "example_id": index,
-            "prompt": [{"role": "user", "content": text}],
-            "answer": text[::-1],
-        }
-
-
-def load_taskset(config: vf.TasksetConfig) -> vf.Taskset:
-    return vf.Taskset(
-        source=source,
-        system_prompt=SYSTEM_PROMPT,
-        rewards=[lcs_reward],
-        config=config,
-    )
+def load_taskset(config: ReverseTextTasksetConfig) -> vf.Taskset:
+    return ReverseTextTaskset(config=config)
 
 
 def load_environment(config: vf.EnvConfig) -> vf.Env:
-    return vf.Env(taskset=load_taskset(config=config.taskset))
+    return vf.Env(taskset=vf.load_taskset(config=config.taskset))

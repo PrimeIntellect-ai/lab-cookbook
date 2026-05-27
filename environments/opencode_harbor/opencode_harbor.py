@@ -1,13 +1,18 @@
+import harnesses as h
+import tasksets as t
 import verifiers as vf
 
 
-class OpenCodeHarborEnvConfig(vf.EnvConfig):
-    taskset: vf.HarborTasksetConfig
-    harness: vf.OpenCodeConfig
+def load_taskset(config: t.HarborTasksetConfig) -> t.HarborTaskset:
+    return t.HarborTaskset(config=config)
 
 
-def load_environment(config: OpenCodeHarborEnvConfig) -> vf.Env:
+def load_harness(config: h.OpenCodeConfig) -> h.OpenCode:
+    return h.OpenCode(config=config)
+
+
+def load_environment(config: vf.EnvConfig) -> vf.Env:
     return vf.Env(
-        taskset=vf.HarborTaskset(config=config.taskset),
-        harness=vf.OpenCode(config=config.harness),
+        taskset=vf.load_taskset(config=config.taskset),
+        harness=vf.load_harness(config=config.harness),
     )

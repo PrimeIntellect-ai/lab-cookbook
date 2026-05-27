@@ -17,7 +17,7 @@ repos:
         types_or: [python, pyi]
       - id: semgrep-env-policy
         name: Semgrep env policy
-        entry: uv run --group policy semgrep --metrics=off --disable-version-check --config .semgrep/lab-cookbook.yml --error --quiet
+        entry: uv run --isolated --with 'semgrep>=1.162.0' semgrep --metrics=off --disable-version-check --config .semgrep/lab-cookbook.yml --error --quiet
         language: system
         pass_filenames: false
       - id: ty

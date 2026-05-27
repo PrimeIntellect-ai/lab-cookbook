@@ -187,4 +187,4 @@ Results show up alongside training metrics in `prime lab view --training`. Use `
 
 ## Next
 
-In [Warm Starts with SFT](../04-warm-starts-with-sft/README.md), you will use SFT to give a model a stronger starting policy before RL.
+In [Prompt Optimization](../04-prompt-optimization/README.md), you will improve an environment prompt with GEPA before changing model weights.

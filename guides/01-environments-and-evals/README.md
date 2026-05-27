@@ -69,13 +69,14 @@ There are several factors to consider when selecting a model:
 - `/v1/chat/completions` (OpenAI)
 - `/v1/completions` (OpenAI)
 - `/v1/messages` (Anthropic)
+
 The same environments you use for evaluating closed frontier models can be used for training your own models on top of an open base model. See [Training with RL](../03-training-with-rl/README.md#choose-a-training-model) for how to connect a training-compatible model to the same environments.
 
 **Cost, speed, and capability.** Start with a cheap, fast model — `openai/gpt-5.4-nano`, `anthropic/claude-haiku-4.5`, or a small open model like `Qwen/Qwen3.5-0.8B` — to confirm the environment and scoring work, then step up when you're iterating on prompts or checking the ceiling. Many evals use OpenAI or Anthropic models: pass a Prime Inference id to `-m` as above, or an alias from [configs/endpoints.toml](../../configs/endpoints.toml) with your own API key. Run `prime inference models` if you want to browse options or compare pricing. If a bigger model doesn't move scores, the bottleneck is probably the environment, not the model.
 
-**Reasoning controls.** Many model families, including `Qwen3.5` / `Qwen3.6`, `Nemotron`, `gpt-oss`, support thinking mode — extended chain-of-thought before the final answer, toggled via `[sampling].enable_thinking` (or `reasoning_effort` for `gpt-oss`). This helps on multi-step tasks (math, code, logic) but inflates output length and cost. When comparing models, try a few reasoning settings so you see the cost-performance tradeoffs, not just the best-case score.
+**Reasoning controls.** Many model families, including `Qwen3.5` / `Qwen3.6`, `Nemotron`, and `gpt-oss`, support thinking mode — extended chain-of-thought before the final answer, toggled via `[sampling].enable_thinking` (or `reasoning_effort` for `gpt-oss`). This helps on multi-step tasks (math, code, logic) but inflates output length and cost. When comparing models, try a few reasoning settings so you see the cost-performance tradeoffs, not just the best-case score.
 
-**Multimodal support.** Many open-source models are text-only. If your tasks involve images, screenshots, or diagrams, you will need to choose a model family that supports multimodal input. As of May 2026, we recommend the `Qwen3.5`/`Qwen3.6` family for evaluation and training with multimodal support. Closed frontier models from OpenAI, Anthropic, and Google all support multimodal input for evaluation, as well as some flagship open models. See the [Multimodal Environments](../10-multimodal-environments/README.md) guide for how to build environments that pass non-text observations.
+**Multimodal support.** Many open-source models are text-only. If your tasks involve images, screenshots, or diagrams, you will need to choose a model family that supports multimodal input. As of May 2026, we recommend the `Qwen3.5`/`Qwen3.6` family for evaluation and training with multimodal support. Closed frontier models from OpenAI, Anthropic, and Google all support multimodal input for evaluation, as well as some flagship open models. See the [Multimodal Environments](../09-multimodal-environments/README.md) guide for how to build environments that pass non-text observations.
 
 
 ## Run a Small Suite

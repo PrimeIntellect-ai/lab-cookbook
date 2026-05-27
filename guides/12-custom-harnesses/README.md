@@ -4,40 +4,49 @@ Run third-party agent libraries inside Lab.
 
 Most environments can use the default harness: the model receives a task, calls tools if available, and returns a final answer. Use a custom harness when the rollout is owned by another agent runtime, framework, or program.
 
-The Taskset still owns the task rows, metrics, and rewards. The Harness owns how the model or agent is executed.
+The Taskset still owns tasks, rewards, and metrics. The Harness owns how the model or agent is executed.
 
 ## The Program Pattern
 
-A custom harness usually starts with a program:
+Local [opencode_harbor](../../environments/opencode_harbor/opencode_harbor.py) composes a Taskset and Harness separately:
 
 ```python
-import verifiers.v1 as vf
+import harnesses as h
+import tasksets as t
+import verifiers as vf
 
 
-async def run_program(task: vf.Task, state: vf.State) -> vf.State:
-    endpoint = state.get_endpoint_config(api="chat")
+def load_taskset(config: t.HarborTasksetConfig) -> t.HarborTaskset:
+    return t.HarborTaskset(config=config)
 
-    # Build the third-party client from endpoint["model"],
-    # endpoint["api_base"], and endpoint["api_key"].
-    # Run the framework agent on this task.
-    # Store the final answer and any useful artifacts in state.
 
-    state["completion"] = [{"role": "assistant", "content": final_answer}]
-    return state
+def load_harness(config: h.OpenCodeConfig) -> h.OpenCode:
+    return h.OpenCode(config=config)
 
 
 def load_environment(config: vf.EnvConfig) -> vf.Env:
     return vf.Env(
-        taskset=vf.Taskset(source=..., rewards=[...], config=config.taskset),
-        harness=vf.Harness(program=run_program, config=config.harness),
+        taskset=vf.load_taskset(config=config.taskset),
+        harness=vf.load_harness(config=config.harness),
     )
 ```
 
-The important part is `state.get_endpoint_config(api="chat")`. It gives the framework the model, base URL, and API key for the current rollout, so calls made inside the third-party library are routed through Lab instead of bypassing the environment.
+Inside the harness program, route third-party model calls through the rollout endpoint:
+
+```python
+async def run_program(task: vf.Task, state: vf.State) -> vf.State:
+    endpoint = state.get_endpoint_config(api="chat")
+    # Build the framework client from endpoint["model"],
+    # endpoint["api_base"], and endpoint["api_key"].
+    ...
+    return state
+```
+
+`get_endpoint_config` is appropriate here — inside an active harness program, not inside a reward function. See [Judges and Instruction Following](../07-judges-and-instruction-following/README.md) for the judge pitfall.
 
 ## Deep Agents
 
-[primeintellect/langchain-deep-agents-env](https://app.primeintellect.ai/dashboard/environments/primeintellect/langchain-deep-agents-env) is the clearest first example. The Taskset uses GSM8K rows and a numeric-answer reward. The Harness runs a LangChain Deep Agents program with `deepagents.create_deep_agent`.
+[primeintellect/langchain-deep-agents-env](https://app.primeintellect.ai/dashboard/environments/primeintellect/langchain-deep-agents-env) is a Hub example. The Taskset loads GSM8K rows and scores boxed answers. The Harness runs a LangChain Deep Agents program.
 
 Run a small eval:
 
@@ -67,11 +76,9 @@ sampling_args = { max_tokens = 2048 }
 prime eval run configs/12/deep-agents-eval.toml
 ```
 
-The source package is `langchain_deep_agents_env`. It builds a LangChain chat model from `state.get_endpoint_config(api="chat")`, creates a Deep Agent, runs it on the task, and writes the final output back into Lab state.
-
 ## DSPy
 
-[primeintellect/dspy-rlm](https://app.primeintellect.ai/dashboard/environments/primeintellect/dspy-rlm) shows the same pattern with DSPy. The Taskset again owns GSM8K rows and reward logic. The Harness runs a DSPy RLM program and routes DSPy's LM through the rollout endpoint config.
+[primeintellect/dspy-rlm](https://app.primeintellect.ai/dashboard/environments/primeintellect/dspy-rlm) shows the same split with DSPy.
 
 Run a small eval:
 
@@ -101,9 +108,7 @@ sampling_args = { max_tokens = 2048 }
 prime eval run configs/12/dspy-rlm-eval.toml
 ```
 
-The source package is `dspy_rlm`. The program creates a DSPy LM from the Lab endpoint config, runs the DSPy module, stores the answer in state, and lets the Taskset reward score the result.
-
-For a more domain-specific DSPy example, use `dspy-flights`, whose source package is `dspy_flights`.
+For a domain-specific DSPy example, use `dspy-flights`.
 
 ## When to Use One
 
@@ -118,4 +123,5 @@ Do not add a custom harness just to expose a tool or change a system prompt. The
 
 ## Next
 
-See [Lab Configuration](../../reference/lab-configuration.md) for accounts, secrets, Hub workflows, hosted runs, and inference deployments.
+- [Lab Configuration](../../reference/lab-configuration.md) — accounts, secrets, Hub workflows, hosted runs, inference deployments
+- [Legacy Environments](../13-legacy-environments/README.md) — older Rubric and `source()` patterns you may see in unmigrated Hub packages

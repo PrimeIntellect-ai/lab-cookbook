@@ -12,6 +12,19 @@ When constructing an environment, your goal is not simply to get it working, but
 - Avoid excess helper functions and private methods or variables. This is usually a sign that you are not using the framework correctly.
 - Avoid reaching into the framework internals unless a pattern is clearly documented as recommended for user code.
 
+factory functions should support bindings. the bindings pattern is good. the no-arg rule is really about no unbound args.
+
+
+"I tried to make the package robust around optional deps, typed messages, dict/message variants, game_info variants, word-list variants, and tests that avoid real TextArena/NLTK. That created the defensive helper clutter you objected to."  this is the exact wrong instinct. i will always complain at you for this. it violates our golden path maxim. never anticipate variants unless we are clearly explicit about wanting. be excessively strict. do not coerce or massage. fail fast, loudly, and often if contracts are violated. the alternative is quiet quality degradation, silent failures that are impossible to debug, and users who never learn the proper usage patterns because we allow them to be sloppy. rule of thumb is that users are not allowed to be sloppy, or violate contracts. we do not owe them working code outside of the most narrow golden path contract. make note of this. my preferred method of resolving type checker complaints is adding asserts, which fail loudly if a contract is violated. we need to internalize this as the right way to develop the library. 
+
+we basically want no globals as a hard rule. the only instances i've encountered where globals are acceptable are:
+- importing libraries/functions at top of a file
+- immutable literals
+- carefully managed global locks/resource constraints (e.g. semaphores), and even then we should use with extreme caution.
+- factory functions
+
+no other globals. 
+
 ---
 
 ## Intended v1 rules, organized by confidence
@@ -125,6 +138,72 @@ A good review question is: “Is this broad/dynamic construct part of the public
 - Current `main` docs say use explicit nested config objects (`taskset: MyTasksetConfig = MyTasksetConfig()`) and not `Field(default_factory=...)`. PR 1429 changes base `EnvConfig` to `Field(default_factory=...)`, but examples still use explicit objects in some taskset-first paths. Treat this as unsettled: follow whichever pattern is in the target Verifiers version/template. [source: current `verifiers/v1/ENVIRONMENT_BEST_PRACTICES.md`; PR 1429 `verifiers/v1/config.py`]
 
 ### Lower confidence / needs iteration
+
+#### System prompt callable specs (WIP sketch — vf not landed)
+
+Do not add env-specific system-prompt path fields or loader file-read boilerplate in `load_taskset` / `load_environment`. **`system_prompt` is a callable spec** (like `tasks` / `rewards`): config holds a loader ref; the resolved string/messages are a runtime product. Constants live in loader functions; switching prompts = patch the spec in eval config.
+
+**One field per component:** `TasksetConfig.system_prompt` and `HarnessConfig.system_prompt`.
+
+**Two stages (unchanged):**
+
+1. **Load time:** resolve each component’s `system_prompt` spec → call loader → normalize to system messages.
+2. **Rollout time:** harness merges taskset + harness (+ per-task `task["system_prompt"]`) via `system_prompt_merge`.
+
+**Callable spec shapes (explicit — no string heuristics):**
+
+Top level only — bare string is a loader ref:
+
+```toml
+[env.taskset]
+system_prompt = "wordle:load_system_prompt"
+```
+
+Top level — map with `fn` and literal kwargs:
+
+```toml
+[env.taskset]
+system_prompt = { fn = "wordle:load_system_prompt", path = "environments/wordle/prompts/system_prompt.txt" }
+```
+
+Nested loader args must use `{ fn = "..." }`. Inside a spec map, **plain strings are always literals** — vf does not guess whether a string is a file path, run id, or import ref:
+
+```toml
+[env.taskset]
+system_prompt = {
+  fn = "wordle:load_system_prompt",
+  path = { fn = "wordle:gepa_artifact_path" },
+}
+```
+
+Rules:
+
+- **`fn` is reserved** in callable-spec maps; other keys are loader kwargs (or reward-style metadata on `rewards`, not on `system_prompt` for now).
+- **Top-level `{ fn }` with no kwargs** ≡ bare string ref.
+- **Nested dict without `fn`** = literal mapping kwarg, not a callable.
+- **No** `SystemPromptSource` pydantic types, **no** binding-path roots like `eval.*` / `gepa.*`, **no** “looks like an import ref” coercion.
+
+Dynamic wiring goes through env (or third-party) loader refs, not vf magic namespaces:
+
+```python
+def load_system_prompt(path: str | None = None) -> str: ...
+
+def gepa_artifact_path() -> str: ...
+```
+
+Env default:
+
+```python
+def load_system_prompt() -> str:
+    return SYSTEM_PROMPT
+
+class WordleTasksetConfig(TextArenaTasksetConfig):
+    system_prompt = "wordle:load_system_prompt"
+```
+
+**GEPA (today):** optimization injects candidates at rollout via `verifiers.gepa` adapter; artifacts land as `system_prompt.txt`. There is no `vf.prompts.*` provider yet. Post-run eval should patch `system_prompt` to a loader spec (literal `path` kw or nested `{ fn = "wordle:gepa_artifact_path" }`), not `path_to_system_prompt` on env config.
+
+**Cookbook envs until vf lands:** loader ref + loader function; no path fields, no prompt resolution logic in `load_taskset`.
 
 #### Strict typing absolutism
 

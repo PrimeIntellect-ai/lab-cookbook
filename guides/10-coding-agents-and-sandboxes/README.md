@@ -23,7 +23,7 @@ prime eval run prime/math-python \
 Or run with a config file:
 
 ```toml
-# [configs/06/math-python-eval.toml](../../configs/06/math-python-eval.toml)
+# [configs/09/math-python-eval.toml](../../configs/09/math-python-eval.toml)
 model = "openai/gpt-5.4-nano"
 save_results = true
 
@@ -35,7 +35,7 @@ sampling_args = { max_tokens = 1024 }
 ```
 
 ```bash
-prime eval run configs/06/math-python-eval.toml
+prime eval run configs/09/math-python-eval.toml
 ```
 
 This is the smallest useful sandbox pattern: one task, one Python tool, one isolated runtime, and a deterministic reward.
@@ -53,7 +53,7 @@ prime eval run prime/opencode-harbor -m openai/gpt-5.4-mini
 Or run with a config file:
 
 ```toml
-# [configs/06/opencode-harbor.toml](../../configs/06/opencode-harbor.toml)
+# [configs/09/opencode-harbor.toml](../../configs/09/opencode-harbor.toml)
 model = "openai/gpt-5.4-mini"
 save_results = true
 
@@ -62,7 +62,7 @@ env_id = "prime/opencode-harbor"
 ```
 
 ```bash
-prime eval run configs/06/opencode-harbor.toml
+prime eval run configs/09/opencode-harbor.toml
 ```
 
 A baseline run of this config (5 examples × 3 rollouts, the env's defaults from `pyproject.toml`) cost roughly **$3.04** end-to-end against `gpt-5.4-mini`. Expect a longer eval than the text-only examples.
@@ -87,18 +87,8 @@ In `opencode_harbor`:
 
 You do not need to build all of this at once. Start with the smallest sandbox that proves the scoring loop, then add richer task state, files, commands, and full agent harnesses when the task requires them.
 
-## Before Training
-
-Before launching RL on a coding-agent environment, check:
-
-- baseline reward is not all zero from setup failures
-- failed rollouts contain useful agent behavior to improve
-- timeouts are long enough for plausible solutions
-- tests fail for the right reasons
-- sandbox logs are saved and readable
-
-When those conditions hold, train against the same environment ID just as you did in [Training with RL](../03-training-with-rl/README.md).
+When the baseline eval runs cleanly, train against the same environment ID as in [Training with RL](../03-training-with-rl/README.md).
 
 ## Next
 
-In [Tool Use and Search](../07-tool-use-and-search/README.md), you will work with environments where the model searches a document corpus before answering.
+In [Synthetic Agent Environments](../11-synthetic-agent-environments/README.md), you will simulate a small world in memory and have an agent interact with it through tools.
