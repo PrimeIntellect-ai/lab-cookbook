@@ -28,7 +28,7 @@ The environment is implemented in `swe_grep.py` as a v1 `Taskset` plus the defau
 The stack looks like this:
 
 - `SweGrepTasksetConfig`: owns dataset, judge, prompt, and sandbox defaults
-- `vf.Taskset`: exposes train/eval rows, toolsets, and reward signals
+- `vf.Taskset`: exposes train/eval tasks, toolsets, and reward signals
 - `vf.Toolset`: provisions one Prime sandbox per rollout and exposes grep-specific tools
 - `vf.Harness`: runs the default endpoint-backed tool loop
 

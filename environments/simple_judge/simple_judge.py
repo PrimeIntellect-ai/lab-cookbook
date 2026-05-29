@@ -74,19 +74,16 @@ class SimpleJudgeTasksetConfig(vf.TasksetConfig):
     judge_model: str = "openai/gpt-4.1-mini"
     judge_base_url: str = "https://api.pinference.ai/api/v1"
     judge_api_key_var: str = "PRIME_API_KEY"
+    system_prompt: vf.PromptInput | vf.SystemPromptConfig | None = (
+        "Follow the user instruction carefully. Keep answers short."
+    )
 
 
 class SimpleJudgeTaskset(vf.Taskset[SimpleJudgeTasksetConfig]):
-    def __init__(self, config: vf.ConfigSource = None) -> None:
-        super().__init__(config=config)
-        vf.ensure_keys([self.config.judge_api_key_var])
-
-    def load_tasks(self) -> vf.Tasks:
+    def load_tasks(self, split: vf.TaskSplit = "train") -> vf.Tasks:
+        _ = split
         for row in TOY_TASKS:
             yield row
-
-    def load_system_prompt(self) -> vf.SystemPrompt:
-        return "Follow the user instruction carefully. Keep answers short."
 
     @vf.reward(weight=1.0)
     async def judge_reward(self, task: vf.Task, state: vf.State) -> float:
@@ -126,9 +123,13 @@ class SimpleJudgeTaskset(vf.Taskset[SimpleJudgeTasksetConfig]):
         return 1.0 if "yes" in text.lower() else 0.0
 
 
-def load_taskset(config: SimpleJudgeTasksetConfig) -> vf.Taskset:
+def load_taskset(config: SimpleJudgeTasksetConfig) -> SimpleJudgeTaskset:
+    vf.ensure_keys([config.judge_api_key_var])
     return SimpleJudgeTaskset(config=config)
 
 
 def load_environment(config: vf.EnvConfig) -> vf.Env:
-    return vf.Env(taskset=vf.load_taskset(config=config.taskset))
+    return vf.Env(
+        taskset=vf.load_taskset(config=config.taskset),
+        harness=vf.Harness(config=config.harness),
+    )

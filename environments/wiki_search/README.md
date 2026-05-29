@@ -11,7 +11,7 @@ This is a v1 port of the canonical `wiki_search` environment in the `verifiers` 
 The stack:
 
 - `WikiSearchTasksetConfig`: dataset, judge, embedding, and corpus defaults
-- `vf.Taskset`: prompt rows from `willcb/wiki-trivia-questions-v4`, plus the toolset and judge reward
+- `vf.Taskset`: tasks from `willcb/wiki-trivia-questions-v4`, plus the toolset and judge reward
 - `vf.Toolset`: ships the three Wikipedia tools and lazily builds the shared ChromaDB index via `objects`/`bindings`
 - `vf.Harness`: runs the default endpoint-backed tool loop
 
@@ -66,9 +66,9 @@ All fields live on `WikiSearchTasksetConfig` and can be overridden through the v
 
 | Arg | Type | Default | Description |
 | --- | ---- | ------- | ----------- |
-| `dataset_name` | str | `"willcb/wiki-trivia-questions-v4"` | HF dataset of trivia Q&A rows |
+| `dataset_name` | str | `"willcb/wiki-trivia-questions-v4"` | HF dataset of trivia Q&A tasks |
 | `dataset_split` | str | `"train"` | Split used as the prompt source |
-| `max_examples` | int? | `None` | Optional cap on rows yielded |
+| `max_examples` | int? | `None` | Optional cap on tasks yielded |
 | `max_turns` | int | `10` | Per-rollout turn cap |
 | `judge_model` | str | `"gpt-4.1-mini"` | Judge model id |
 | `judge_base_url` | str | OpenAI v1 | Judge endpoint base URL |

@@ -8,7 +8,7 @@ Concise definitions for Lab, Verifiers, evaluation, and RL training terms used t
 - **eval**: A run where a model attempts environment tasks while the framework records rollouts and scores.
 - **task**: One problem instance from an environment, such as a question, game state, retrieval target, or coding challenge.
 - **rollout**: One complete model attempt on a task, including prompts, model outputs, tool calls, environment responses, and score.
-- **rollouts_per_example**: The number of independent attempts sampled for each task or dataset row.
+- **rollouts_per_example**: The number of independent attempts sampled for each task or dataset example.
 - **completion**: The model output captured for a rollout, usually stored as chat messages.
 - **trajectory**: The full step-by-step interaction path in a rollout, including intermediate model and environment actions.
 - **baseline**: A reference result used for comparison. Common subcases include a base-model baseline before prompt optimization, SFT, or RL, and a random or naive baseline used to show that a task has useful signal.
@@ -17,7 +17,7 @@ Concise definitions for Lab, Verifiers, evaluation, and RL training terms used t
 
 Class and API names keep Verifiers capitalization; lowercase entries describe roles or concepts.
 
-- **Taskset**: The Verifiers component that owns task rows, prompts, tools, rewards, and task-level configuration.
+- **Taskset**: The Verifiers component that owns tasks, prompts, tools, rewards, and task-level configuration.
 - **Harness**: The component that controls how a model or agent is executed during a rollout.
 - **Rubric**: The scoring container that runs reward functions and metrics and combines weighted reward outputs.
 - **reward function**: Code that inspects a rollout and returns a numeric score.
@@ -27,7 +27,7 @@ Class and API names keep Verifiers capitalization; lowercase entries describe ro
 - **parser**: Logic that extracts structured fields from a model response, such as boxed answers or XML tags, so reward functions can score the parsed values.
 - **metric**: A recorded diagnostic value. In a rubric, `weight = 0` keeps a reward function metric-only; nonzero weights contribute to the final reward.
 - **monitor rubric**: A rubric used to attach automatic metrics for observability, such as tool-call counts or turn counts.
-- **state**: Mutable rollout data shared by the environment, harness, tools, callbacks, and rewards.
+- **state**: Mutable rollout data shared by the environment, harness, tools, users, lifecycle hooks, and rewards.
 - **per-rollout state**: State initialized fresh for one rollout, such as a sandbox session, generated world, or database handle.
 - **DatasetBuilder**: A callable that lazily creates a dataset when the environment first needs it.
 - **stateful vs. stateless**: A distinction between code that preserves rollout-specific resources between steps and code that returns each result without remembering prior calls.
@@ -36,7 +36,7 @@ Class and API names keep Verifiers capitalization; lowercase entries describe ro
 - **MCP**: Model Context Protocol, a standard interface for exposing external tools and services over transports such as stdio or HTTP so agents can call them.
 - **sandbox**: An isolated runtime where agents can execute code or commands without affecting the host system.
 - **stop condition**: A rule that ends a rollout, such as task success, an error, or reaching a turn limit.
-- **user callback**: Environment code that emits follow-up user messages between assistant turns.
+- **User**: A Verifiers component that emits follow-up user messages between assistant turns.
 - **max_turns**: The maximum number of assistant turns allowed in a rollout.
 - **oracle**: Deterministic logic that computes the correct answer or best achievable score for a generated task.
 - **EnvConfig**: The top-level Verifiers configuration object passed into `load_environment`.
@@ -102,4 +102,3 @@ Class and API names keep Verifiers capitalization; lowercase entries describe ro
 - **hosted training**: A training run executed on Prime infrastructure.
 - **inference deployment**: A served model or adapter that can be queried through an inference API.
 - **Hub version**: An immutable published version of an environment on the Environments Hub.
-

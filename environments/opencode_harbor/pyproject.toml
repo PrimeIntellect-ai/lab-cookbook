@@ -6,10 +6,10 @@ tags = ["eval", "cli_agent", "v1", "taskset", "harness"]
 version = "0.1.3"
 requires-python = ">=3.10"
 dependencies = [
-    "verifiers>=0.1.15.dev11",
+    "verifiers>=0.1.15.dev12",
     "prime-sandboxes>=0.2.10",
-    "harnesses>=0.1.0.post0",
-    "tasksets>=0.1.0.post0",
+    "harnesses>=0.1.1",
+    "tasksets>=0.1.1",
 ]
 
 

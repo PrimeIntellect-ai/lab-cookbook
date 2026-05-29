@@ -10,30 +10,19 @@ class Gsm8kTasksetConfig(vf.TasksetConfig):
     dataset_name: str = "gsm8k"
     train_split: str = "train"
     eval_split: str = "test"
+    system_prompt: vf.PromptInput | vf.SystemPromptConfig | None = BOXED_SYSTEM_PROMPT
 
 
 class Gsm8kTaskset(vf.Taskset[Gsm8kTasksetConfig]):
-    # loaders
-    def load_tasks(self) -> vf.Tasks:
-        return load_example_dataset(self.config.dataset_name, split=self.config.train_split).map(
+    def load_tasks(self, split: vf.TaskSplit = "train") -> vf.Tasks:
+        dataset_split = self.config.train_split if split == "train" else self.config.eval_split
+        return load_example_dataset(self.config.dataset_name, split=dataset_split).map(
             lambda x: {
                 "prompt": [{"role": "user", "content": x["question"]}],
                 "answer": x["answer"],
             }
         )
 
-    def load_eval_tasks(self) -> vf.Tasks:
-        return load_example_dataset(self.config.dataset_name, split=self.config.eval_split).map(
-            lambda x: {
-                "prompt": [{"role": "user", "content": x["question"]}],
-                "answer": x["answer"],
-            }
-        )
-
-    def load_system_prompt(self) -> vf.SystemPrompt:
-        return BOXED_SYSTEM_PROMPT
-
-    # rewards
     @vf.reward(weight=1.0)
     async def correct_answer(self, task: vf.Task, state: vf.State) -> float:
         completion = state.get("completion")
@@ -49,9 +38,12 @@ class Gsm8kTaskset(vf.Taskset[Gsm8kTasksetConfig]):
         return 1.0 if response == str(task["answer"]) else 0.0
 
 
-def load_taskset(config: Gsm8kTasksetConfig) -> vf.Taskset:
+def load_taskset(config: Gsm8kTasksetConfig) -> Gsm8kTaskset:
     return Gsm8kTaskset(config=config)
 
 
 def load_environment(config: vf.EnvConfig) -> vf.Env:
-    return vf.Env(taskset=vf.load_taskset(config=config.taskset))
+    return vf.Env(
+        taskset=vf.load_taskset(config=config.taskset),
+        harness=vf.Harness(config=config.harness),
+    )

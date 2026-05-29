@@ -12,3 +12,5 @@ env_id = "prime/wordle"
 num_examples = 20
 rollouts_per_example = 1
 sampling_args = { max_tokens = 1024 }
+taskset = { num_eval_examples = 20 }
+harness = { max_turns = 6 }

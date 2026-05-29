@@ -59,15 +59,37 @@ save_results = true
 
 [[eval]]
 env_id = "prime/opencode-harbor"
+taskset = { task_names = ["regex-log"] }
+
+[eval.harness]
+max_turns = 4
+
+[eval.harness.program]
+disabled_tools = ["webfetch", "question"]
 ```
 
 ```bash
 prime eval run configs/09/opencode-harbor.toml
 ```
 
-A baseline run of this config (5 examples × 3 rollouts, the env's defaults from `pyproject.toml`) cost roughly **$3.04** end-to-end against `gpt-5.4-mini`. Expect a longer eval than the text-only examples.
+A broader baseline run without `task_names` (5 examples × 3 rollouts, the
+env's defaults from `pyproject.toml`) cost roughly **$3.04** end-to-end against
+`gpt-5.4-mini`. Expect a longer eval than the text-only examples.
 
 The reward comes from the task tests, not from judging the final message. That makes coding-agent environments useful for training, but it also means broken tests, missing dependencies, or unrealistic timeouts can dominate results.
+
+Use the same override split from the CLI when iterating locally:
+
+```bash
+prime eval run prime/opencode-harbor \
+  -m openai/gpt-5.4-mini \
+  -a '{"taskset": {"task_names": ["regex-log"]}, "harness": {"max_turns": 4, "program": {"disabled_tools": ["webfetch", "question"]}}}'
+```
+
+The taskset fields choose Harbor tasks and sandbox defaults. The harness fields
+change how OpenCode runs the task. Program fields are nested under
+`harness.program` because they configure the command program inside the harness,
+not the task distribution.
 
 ## How the Pieces Fit
 

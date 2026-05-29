@@ -15,7 +15,7 @@ efficiency, and output format.
 - Each episode samples a secret word from TextArena's Wordle word list.
 - The model submits one guess per turn inside `<guess>...</guess>` tags, using
   TextArena's action format with square brackets: `<guess>[crane]</guess>`.
-- A user callback parses the latest assistant message, steps the TextArena env,
+- `WordleUser` parses the latest assistant message, steps the TextArena env,
   and returns letter feedback until the game ends.
 
 ### Quickstart
@@ -30,7 +30,7 @@ Configure model and sampling:
 prime eval run wordle \
   -m openai/gpt-4.1-mini \
   -n 20 -r 3 -t 1024 -T 0.7 \
-  -a '{"num_train_examples": 100, "num_eval_examples": 20}'
+  -a '{"taskset": {"num_train_examples": 100, "num_eval_examples": 20}, "harness": {"max_turns": 6}}'
 ```
 
 ### Configuration
@@ -43,7 +43,12 @@ Taskset fields (via eval config or `-a`):
 | `num_eval_examples` | int | `20` | Number of evaluation episodes |
 | `seed` | int | `0` | Seed for sampling target words |
 | `game` | str | `Wordle-v0` | TextArena game id |
-| `system_prompt` | callable spec | `wordle:default_system_prompt` | Loader ref or `{ fn, ... }`; nested refs require `{ fn }` (see `reference/best-practices.md`) |
+| `system_prompt` | str or `{ path = ... }` | `prompts/system_prompt.txt` | Literal prompt text or file-backed `SystemPromptConfig` override |
+
+`WordleTaskset.load_system_prompt` loads the default prompt from
+`prompts/system_prompt.txt`. GEPA runs with `save_to_environment = true` can
+update that file directly, so follow-up evals use the optimized prompt without
+adding a separate prompt argument.
 
 ### Rewards
 
@@ -55,4 +60,5 @@ Taskset fields (via eval config or `-a`):
 | `format_reward` | `0.2` | `1.0` if each assistant turn contains exactly one `<guess>` tag |
 
 ### Layout
-- `wordle.py`: Wordle config, rewards, TextArena taskset subclass, loaders
+- `wordle.py`: Wordle config, `WordleUser`, rewards, TextArena taskset subclass, loaders
+- `prompts/system_prompt.txt`: Default prompt loaded through `load_system_prompt`

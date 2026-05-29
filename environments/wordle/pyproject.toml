@@ -5,8 +5,8 @@ tags = ["textarena", "multi-turn", "reasoning", "game", "train", "eval", "v1", "
 version = "0.2.0"
 requires-python = ">=3.11"
 dependencies = [
-    "verifiers[ta]>=0.1.15.dev11",
-    "tasksets>=0.1.0.post0",
+    "verifiers>=0.1.15.dev12",
+    "tasksets>=0.1.1",
 ]
 
 [build-system]
@@ -14,7 +14,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build]
-include = ["wordle.py", "pyproject.toml", "README.md"]
+include = ["wordle.py", "pyproject.toml", "README.md", "prompts/**"]
 
 [tool.verifiers.eval]
 num_examples = 5

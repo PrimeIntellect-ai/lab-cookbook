@@ -27,11 +27,13 @@ class ReverseTextTasksetConfig(vf.TasksetConfig):
 
 
 class ReverseTextTaskset(vf.Taskset[ReverseTextTasksetConfig]):
-    def load_system_prompt(self) -> vf.SystemPrompt:
+    def load_system_prompt(
+        self, config: ReverseTextTasksetConfig
+    ) -> vf.SystemPrompt:
         raise NotImplementedError("Load the system prompt for reverse-text.")
 
-    def load_tasks(self) -> vf.Tasks:
-        raise NotImplementedError("Load task rows for reverse-text.")
+    def load_tasks(self, split: vf.TaskSplit = "train") -> vf.Tasks:
+        raise NotImplementedError("Load tasks for reverse-text.")
 
     @vf.reward(weight=1.0)
     async def correct_answer(self, task: vf.Task, state: vf.State) -> float:
@@ -43,14 +45,17 @@ def load_taskset(config: ReverseTextTasksetConfig) -> ReverseTextTaskset:
 
 
 def load_environment(config: vf.EnvConfig) -> vf.Env:
-    return vf.Env(taskset=vf.load_taskset(config=config.taskset))
+    return vf.Env(
+        taskset=vf.load_taskset(config=config.taskset),
+        harness=vf.Harness(config=config.harness),
+    )
 ```
 
 The key pieces to include are:
 
-- `ReverseTextTasksetConfig` — user-tunable fields (dataset split, judge model, turn limits, …). 
-- `load_tasks` — loader for task rows (`prompt`, `answer`, `info`, …).
-- `load_system_prompt` — loader for the system message for each rollout.
+- `ReverseTextTasksetConfig` — user-tunable fields (dataset split, system prompt, …). 
+- `load_tasks(split)` — loader for tasks (`prompt`, `answer`, `info`, …).
+- `system_prompt` on the config — default system message for each rollout (or override with `load_system_prompt` when the prompt depends on files or runtime state).
 - `@vf.reward` methods — reward functions for completed rollouts.
 - `load_taskset` / `load_environment` — entrypoints used for Lab workflows.
 
@@ -60,7 +65,7 @@ The rest of this guide fills in the stubs for reverse-text.
 
 ## Define Your Tasks
 
-The first thing an environment needs is some tasks for the model to attempt. Here, we'll use [PrimeIntellect/Reverse-Text-RL](https://huggingface.co/datasets/PrimeIntellect/Reverse-Text-RL). Each row gives you a piece of text:
+The first thing an environment needs is some tasks for the model to attempt. Here, we'll use [PrimeIntellect/Reverse-Text-RL](https://huggingface.co/datasets/PrimeIntellect/Reverse-Text-RL). Each dataset example gives you a piece of text:
 
 ```python
 {"prompt": "The quick brown fox jumps over the lazy dog."}
@@ -78,17 +83,18 @@ from datasets import load_dataset
 class ReverseTextTasksetConfig(vf.TasksetConfig):
     dataset_name: str = "PrimeIntellect/Reverse-Text-RL"
     dataset_split: str = "train"
+    system_prompt: vf.PromptInput | vf.SystemPromptConfig | None = (
+        "Reverse the text character-by-character. Put your answer in <reversed_text> tags."
+    )
 
 
 class ReverseTextTaskset(vf.Taskset[ReverseTextTasksetConfig]):
-    def load_tasks(self) -> vf.Tasks:
+    def load_tasks(self, split: vf.TaskSplit = "train") -> vf.Tasks:
+        _ = split
         ds = load_dataset(self.config.dataset_name, split=self.config.dataset_split).map(
             lambda x: {"prompt": x["prompt"], "answer": x["prompt"][::-1]}
         )
         return ds
-
-    def load_system_prompt(self) -> vf.SystemPrompt:
-        return "Reverse the text character-by-character. Put your answer in <reversed_text> tags."
 
     @vf.reward(weight=1.0)
     async def lcs_reward(self, task: vf.Task, state: vf.State) -> float:
@@ -108,12 +114,15 @@ Rewards are `async` methods on the Taskset, decorated with `@vf.reward`. They re
 Export `load_taskset` and `load_environment` as the package entrypoints:
 
 ```python
-def load_taskset(config: ReverseTextTasksetConfig) -> vf.Taskset:
+def load_taskset(config: ReverseTextTasksetConfig) -> ReverseTextTaskset:
     return ReverseTextTaskset(config=config)
 
 
 def load_environment(config: vf.EnvConfig) -> vf.Env:
-    return vf.Env(taskset=vf.load_taskset(config=config.taskset))
+    return vf.Env(
+        taskset=vf.load_taskset(config=config.taskset),
+        harness=vf.Harness(config=config.harness),
+    )
 ```
 
 The finished implementation lives in [environments/reverse_text/reverse_text.py](../../environments/reverse_text/reverse_text.py).
@@ -132,7 +141,7 @@ tags = ["single-turn", "text", "train", "eval"]
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
-    "verifiers>=0.1.15.dev11",
+    "verifiers>=0.1.15.dev12",
     "datasets",
 ]
 
@@ -179,6 +188,22 @@ sampling_args = { max_tokens = 512 }
 prime eval run configs/02/reverse-text-eval.toml
 ```
 
+Tune environment config either inline with the CLI or in TOML. Taskset fields
+belong under `taskset`; base harness fields belong under `harness`:
+
+```bash
+prime eval run reverse-text \
+  -m openai/gpt-5.4-nano \
+  -a '{"taskset": {"dataset_split": "train[:100]"}, "harness": {"max_turns": 1}}'
+```
+
+```toml
+[[eval]]
+env_id = "reverse-text"
+taskset = { dataset_split = "train[:100]" }
+harness = { max_turns = 1 }
+```
+
 ```bash
 prime eval view
 ```
@@ -208,10 +233,10 @@ Before you push an environment or launch training, run a small QA pass.
 - **Smoke-eval first.** Run `prime eval run <env> -m <small model> -n 5 -r 2` and open the rollouts. If the model gets every example right or every example wrong, the environment is not ready.
 - **Read the rollouts, not just the score.** Look for: prompt shape (system + user as expected), reward matches your judgment, tasks the model can't possibly solve, tasks the model trivially solves.
 - **Common bugs.**
-  - Dataset rows shaped wrong (e.g. `prompt` is a string when it should be a list of messages).
+  - Dataset records shaped wrong (e.g. `prompt` is a string when it should be a list of messages).
   - Reward function silently returning `0.0` on a parse failure — add a metric for "parsed successfully" with `weight=0`.
   - Sync HTTP/LLM clients inside reward functions or `env_response` — these block the event loop and serialize concurrent rollouts. Use `AsyncOpenAI`, `httpx.AsyncClient`, or `asyncio.to_thread` for unavoidable sync calls.
-  - `info` shape changing between rows — store as a JSON string when rows have different schemas.
+  - `info` shape changing between records — store as a JSON string when records have different schemas.
   - Judge prompts that return prose instead of a score — fail loudly during eval, not silently in training. If the answer needs extraction, use a parser rather than ad hoc string slicing.
 - **Spread of rewards.** Across the smoke eval, you want a spread, not all-0 or all-1. If the distribution is collapsed, fix the task difficulty or the reward before training.
 - **Re-run on a second model.** Confirm the environment isn't accidentally tuned to one model family's quirks.

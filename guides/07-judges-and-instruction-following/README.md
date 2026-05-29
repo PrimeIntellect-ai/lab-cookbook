@@ -2,9 +2,9 @@
 
 Three environments, in order:
 
-1. [simple-judge](../../environments/simple_judge/simple_judge.py) — local Taskset, one yes/no judge criterion per row
+1. [simple-judge](../../environments/simple_judge/simple_judge.py) — local Taskset, one yes/no judge criterion per task
 2. [prime/ifeval](https://app.primeintellect.ai/dashboard/environments/primeintellect/ifeval) — [google/IFEval](https://huggingface.co/datasets/google/IFEval), programmatic constraint checks
-3. [will/advanced-if](https://app.primeintellect.ai/dashboard/environments/will/advanced-if) — [facebook/AdvancedIF](https://huggingface.co/datasets/facebook/AdvancedIF), multiple rubric bullets per row
+3. [will/advanced-if](https://app.primeintellect.ai/dashboard/environments/will/advanced-if) — [facebook/AdvancedIF](https://huggingface.co/datasets/facebook/AdvancedIF), multiple rubric bullets per task
 
 ## Part 1: simple-judge
 
@@ -36,7 +36,22 @@ class SimpleJudgeTasksetConfig(vf.TasksetConfig):
     judge_api_key_var: str = "PRIME_API_KEY"
 ```
 
-Override with `-a` and a nested `taskset` object, or a `taskset` table in eval configs. Call `vf.ensure_keys(...)` in `load_environment` if the env requires API keys.
+Override with `-a` and a nested `taskset` object, or a `taskset` table in eval
+configs:
+
+```bash
+prime eval run simple-judge \
+  -m openai/gpt-4.1-mini \
+  -a '{"taskset": {"judge_model": "openai/gpt-5-mini"}}'
+```
+
+```toml
+[[eval]]
+env_id = "simple-judge"
+taskset = { judge_model = "openai/gpt-5-mini", judge_api_key_var = "PRIME_API_KEY" }
+```
+
+Call `vf.ensure_keys(...)` in `load_taskset` if the env requires API keys.
 
 In reward functions, use a dedicated `AsyncOpenAI` client built from those config fields — not `state.get_endpoint_config(api="chat")`, which is tied to the rollout proxy.
 

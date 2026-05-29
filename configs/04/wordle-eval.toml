@@ -2,7 +2,9 @@ model = "openai/gpt-5.5"
 save_results = true
 
 [[eval]]
-env_id = "prime/wordle"
+env_id = "wordle"
 num_examples = 20
 rollouts_per_example = 1
 sampling_args = { max_tokens = 1024 }
+taskset = { num_train_examples = 100, num_eval_examples = 20 }
+harness = { max_turns = 6 }

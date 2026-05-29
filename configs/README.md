@@ -13,6 +13,41 @@ Starter TOMLs for the three Hosted Training CLIs (`prime eval run`, `prime gepa 
 
 Each subdirectory ships one TOML per supported model family. They differ only along three axes: the **`model`** identifier (and reflection_model for GEPA), the **`max_tokens`** sampling budget, and the **default environment** preselected in the `[[env]]`/`[[eval]]` block. Everything else (eval volume, GEPA loop sizes, RL batch shape) is held constant so the files diff cleanly.
 
+## Environment overrides
+
+Environment-specific knobs belong to either the Taskset or Harness config.
+Eval and GEPA configs can keep simple overrides inline:
+
+```toml
+[[eval]]
+env_id = "wordle"
+taskset = { num_eval_examples = 20 }
+harness = { max_turns = 6 }
+```
+
+Training configs use nested tables under the relevant `[[env]]` block:
+
+```toml
+[[env]]
+id = "prime/opencode-harbor"
+
+[env.taskset]
+task_names = ["regex-log"]
+
+[env.harness]
+max_turns = 4
+
+[env.harness.program]
+disabled_tools = ["webfetch", "question"]
+```
+
+Use the same shape from the CLI with `-a` / `--env-args`:
+
+```bash
+prime eval run wordle \
+  -a '{"taskset": {"num_eval_examples": 20}, "harness": {"max_turns": 6}}'
+```
+
 ## The model TOMLs
 
 | File | Family | Variants (uncomment one) | Default `max_tokens` | RL `batch_size` | Default env |

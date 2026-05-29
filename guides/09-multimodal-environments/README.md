@@ -2,7 +2,7 @@
 
 Evaluate environments where the prompt includes images, not just text.
 
-Multimodal environments extend the same Verifiers pieces you have already used — a Taskset, a reward, optionally a user callback for multi-turn flow — by letting the user message hold a list of typed content parts instead of a plain string. Each part is either text or an image. The environment never decodes pixels itself: it hands the message to a vision-language model and scores the response.
+Multimodal environments extend the same Verifiers pieces you have already used — a Taskset, a reward, optionally a `vf.User` for multi-turn flow — by letting the user message hold a list of typed content parts instead of a plain string. Each part is either text or an image. The environment never decodes pixels itself: it hands the message to a vision-language model and scores the response.
 
 This guide builds and evaluates [shape-detective](../../environments/shape_detective/), a tiny synthetic visual-deduction game. The model sees a 4×4 grid of tiles — each a combination of shape (circle, square, triangle, star), color (red, blue, green, yellow), and pattern (solid, striped, dotted) — and must identify a single target tile from clues that narrow its properties. Because scenes are rendered procedurally with PIL, there is no benchmark download, no judge model, and a deterministic binary reward.
 
@@ -83,7 +83,7 @@ The system prompt does three things at once: defines the game, fixes the coordin
 
 ## clue_line
 
-The only standalone helper in the file. Used in `load_tasks` for the multi-turn intro (clue 1) and in the user callback (clues 2 and 3).
+The only standalone helper in the file. Used in `load_tasks` for the multi-turn intro (clue 1) and in `ShapeDetectiveUser` (clues 2 and 3).
 
 ```python
 def clue_line(target: Tile, prop: str, clue_index: int) -> str:
@@ -97,23 +97,34 @@ The article handling is purely cosmetic — "the target is a circle" reads bette
 
 ## Taskset Shape
 
-`ShapeDetectiveTaskset` subclasses `vf.Taskset` like [reverse-text](../02-building-your-first-environment/README.md). Config, task generation, the user callback, and the reward live on the class:
+`ShapeDetectiveTaskset` subclasses `vf.Taskset` like [reverse-text](../02-building-your-first-environment/README.md). The taskset owns task generation and rewards; the multi-turn user behavior lives in a paired `vf.User` subclass:
 
 ```python
+class ShapeDetectiveUserConfig(vf.UserConfig):
+    pass
+
+
 class ShapeDetectiveTasksetConfig(vf.TasksetConfig):
     mode: Mode = "multi"
     num_rows: int = 12
     seed: int = 0
+    user: ShapeDetectiveUserConfig | None = ShapeDetectiveUserConfig()
+
+
+class ShapeDetectiveUser(vf.User[ShapeDetectiveUserConfig]):
+    async def get_response(
+        self, task: vf.Task, state: vf.State, messages: list[vf.Message]
+    ) -> list[vf.UserMessage]:
+        ...
 
 
 class ShapeDetectiveTaskset(vf.Taskset[ShapeDetectiveTasksetConfig]):
-    def load_system_prompt(self) -> vf.SystemPrompt:
+    def load_system_prompt(
+        self, config: ShapeDetectiveTasksetConfig
+    ) -> vf.SystemPrompt:
         return "You are playing Shape Detective..."
 
-    def load_tasks(self) -> vf.Tasks:
-        ...
-
-    async def shape_detective_user(self, task: vf.Task, state: vf.State) -> list[vf.ConfigData]:
+    def load_tasks(self, split: vf.TaskSplit = "train") -> vf.Tasks:
         ...
 
     @vf.reward(weight=1.0)
@@ -122,14 +133,17 @@ class ShapeDetectiveTaskset(vf.Taskset[ShapeDetectiveTasksetConfig]):
 
 
 def load_environment(config: vf.EnvConfig) -> vf.Env:
-    return vf.Env(taskset=vf.load_taskset(config=config.taskset))
+    return vf.Env(
+        taskset=vf.load_taskset(config=config.taskset),
+        harness=vf.Harness(config=config.harness),
+    )
 ```
 
-In multi-turn mode, the Taskset sets `self.user = self.shape_detective_user` in `__init__` when `mode == "multi"`.
+In multi-turn mode, the taskset config defaults to `ShapeDetectiveUserConfig()`, which materializes `ShapeDetectiveUser` without a taskset `__init__` override.
 
 ## load_tasks
 
-`load_tasks` generates each row inline: sample tiles, reject ambiguous scenes, render the grid with PIL, base64-encode to a `data:image/png` URL, compose the intro text, and yield task dicts.
+`load_tasks(split)` generates each task inline: sample tiles, reject ambiguous scenes, render the grid with PIL, base64-encode to a `data:image/png` URL, compose the intro text, and yield task dicts.
 
 `random.Random(seed)` makes the taskset deterministic for a given config seed.
 
@@ -212,7 +226,7 @@ image_url = (
 
 The image goes to a memory buffer as PNG, gets base64-encoded, and is wrapped in a `data:` URL. This is the format every OpenAI-compatible chat completions API accepts as an inline `image_url` content part — and what Prime Inference expects.
 
-### Prompt and row assembly (inline)
+### Prompt and Task Assembly
 
 The two modes branch on the intro text and on what we stash in `info`:
 
@@ -251,47 +265,49 @@ Two practical notes on the message shape:
 - Use a `data:image/<fmt>;base64,<payload>` URL for self-contained datasets. Use an `https://…` URL if your images already live somewhere stable.
 - Keep the text part first. Some providers tolerate either order, but text-then-image keeps trajectories readable and matches the convention every reward function expects.
 
-If a row needs multiple images, append more `image_url` parts — the conversation is still one user message.
+If a task needs multiple images, append more `image_url` parts — the conversation is still one user message.
 
-A row is a plain dict with four interesting fields:
+A task is a plain dict with four interesting fields:
 
 - **`prompt`** — the list of OpenAI-style messages above.
 - **`answer`** — the ground truth, a string here so the reward can compare with `==` after parsing. Storing the index as a string mirrors how the `\boxed{N}` payload comes out of the parser.
-- **`info`** — a per-row dict that survives serialization and is restored on the other side of the harness. In single mode it carries just the target index (only the reward reads it). In multi mode it carries the whole target tile so the user callback can look up clue values without re-running the scene generator.
-- **`max_turns`** — per-row override that the harness reads off the Task object. Single-mode rows ship with `max_turns=1`, multi-mode rows with `max_turns=3`. The harness reads this off `task["max_turns"]` at rollout setup and caps the loop accordingly. A single env with mixed `max_turns` per row is the cleanest way to ship single-turn and multi-turn variants of the same task.
+- **`info`** — per-task data that survives serialization and is restored on the other side of the harness. In single mode it carries just the target index (only the reward reads it). In multi mode it carries the whole target tile so `ShapeDetectiveUser` can look up clue values without re-running the scene generator.
+- **`max_turns`** — per-task override that the harness reads off the Task object. Single-mode tasks ship with `max_turns=1`, multi-mode tasks with `max_turns=3`. The harness reads this off `task["max_turns"]` at rollout setup and caps the loop accordingly. A single env with mixed `max_turns` per task is the cleanest way to ship single-turn and multi-turn variants of the same task.
 
-## User Callback (Multi-Turn)
+## User (Multi-Turn)
 
 ```python
-async def shape_detective_user(task, state):
-    info = task["info"]
-    if info["mode"] != "multi":
-        return []
-    target_tile = info["target_tile"]
-    assistant_turns = sum(1 for m in state["completion"] if m["role"] == "assistant")
+class ShapeDetectiveUser(vf.User[ShapeDetectiveUserConfig]):
+    async def get_response(self, task, state, messages):
+        _ = state
+        info = task["info"]
+        if info["mode"] != "multi":
+            return []
+        target_tile = info["target_tile"]
+        assistant_turns = len(vf.get_messages(messages, role="assistant"))
 
-    if assistant_turns == 1:
-        return [{"role": "user", "content":
-            f"{clue_line(target_tile, 'color', 1)}\n\n"
-            "Narrow the candidates again. Still do NOT submit your answer."
-        }]
-    if assistant_turns == 2:
-        return [{"role": "user", "content":
-            f"{clue_line(target_tile, 'shape', 2)}\n\n"
-            "Commit your answer now as \\boxed{N}."
-        }]
-    return []
+        if assistant_turns == 1:
+            return [vf.UserMessage(content=(
+                f"{clue_line(target_tile, 'color', 1)}\n\n"
+                "Narrow the candidates again. Still do NOT submit your answer."
+            ))]
+        if assistant_turns == 2:
+            return [vf.UserMessage(content=(
+                f"{clue_line(target_tile, 'shape', 2)}\n\n"
+                "Commit your answer now as \\boxed{N}."
+            ))]
+        return []
 ```
 
-The user callback is a method on the Taskset that the harness calls between assistant turns. In multi-turn mode, `ShapeDetectiveTaskset.__init__` assigns `self.user = self.shape_detective_user`.
+The user is a first-class component, not a taskset helper. The harness calls `ShapeDetectiveUser.get_response()` between assistant turns.
 
 Three things make this work cleanly:
 
-1. **The harness counts turns for us via `state["completion"]`.** That list grows as the conversation progresses: after assistant turn 1 it contains one assistant message; after the harness appends our user-callback output it contains two messages; after assistant turn 2 it contains three; and so on. Counting just the assistant messages gives us a clean turn index.
-2. **Returning `[]` ends the rollout.** When the callback returns no messages on turn 3, the harness sets `stop_condition = "no_tools"` and exits the loop. Combined with `max_turns=3`, this gives us a clean stop condition either way (the model can also be cut off by `max_turns_reached` if it kept calling tools, but this env has no tools).
-3. **Per-row `info` is the carrier for rollout-time data.** Anything the callback (or the reward) needs at rollout time goes in `info`. The harness round-trips it through serialization, so `task["info"]["target_tile"]` inside the callback matches what `load_tasks` wrote.
+1. **The harness passes the transcript to the user.** Counting assistant messages gives a clean turn index without reading taskset internals.
+2. **Returning `[]` ends the rollout.** When the user returns no messages on turn 3, the harness sets `stop_condition = "no_tools"` and exits the loop. Combined with `max_turns=3`, this gives us a clean stop condition either way.
+3. **Per-task `info` is the carrier for rollout-time data.** Anything the user or reward needs at rollout time goes in `info`. The harness round-trips it through serialization, so `task["info"]["target_tile"]` inside the user matches what `load_tasks` wrote.
 
-Single-mode rows skip the callback because `self.user` is only set when `mode == "multi"`.
+Single-mode tasks finish after one assistant turn because `ShapeDetectiveUser` returns `[]` when `info["mode"] != "multi"`.
 
 ## Reward
 
@@ -346,7 +362,7 @@ Sanity checks before trusting a multimodal eval:
 
 - decode one base64 payload yourself and confirm it opens as an image
 - run the same eval at `num_rows=2` and verify the model references specific tile *positions* (the only signal exclusive to the image)
-- if rewards are suspiciously uniform across rows, suspect the image isn't being delivered
+- if rewards are suspiciously uniform across tasks, suspect the image isn't being delivered
 
 ### Judge mismatch
 
@@ -358,16 +374,16 @@ Shape-detective sidesteps this entirely by using an exact-match reward on a tile
 
 The implementation above is a working template. The pattern is:
 
-1. **Render once per row.** Generate the image with PIL (or any library), encode as PNG, wrap as a `data:image/png;base64,...` URL inside an `image_url` content part.
+1. **Render once per task.** Generate the image with PIL (or any library), encode as PNG, wrap as a `data:image/png;base64,...` URL inside an `image_url` content part.
 2. **Compose the user message** as `[{"type": "text", ...}, {"type": "image_url", ...}]`. Put text first.
-3. **Wire ground truth into `info`.** Anything the reward or user callback needs at rollout time goes in `info`; the harness preserves it through serialization.
-4. **Set `max_turns` per row** when different rows need different rollout budgets — useful for mixing single-turn and multi-turn examples in one taskset, or for varying difficulty.
-5. **For multi-turn, attach a `user` callback** that reads `state["completion"]` to decide what to emit next.
+3. **Wire ground truth into `info`.** Anything the reward or user needs at rollout time goes in `info`; the harness preserves it through serialization.
+4. **Set `max_turns` per task** when different tasks need different rollout budgets — useful for mixing single-turn and multi-turn examples in one taskset, or for varying difficulty.
+5. **For multi-turn, add a `UserConfig` field and a paired `vf.User` subclass** that reads the transcript to decide what to emit next.
 
 Two upgrades that pay back quickly:
 
-- **Cache encoded images.** If scenes are deterministic given a seed, cache rendered PNGs or row dicts and skip re-rendering on every eval.
-- **Stratify your eval set.** Mix easy, medium, and hard rows. A flat random sample hides which capability the model is missing. For shape-detective specifically, vary `seed` across eval splits and check that performance is stable across them — not just on the seed you developed against.
+- **Cache encoded images.** If scenes are deterministic given a seed, cache rendered PNGs or task dicts and skip re-rendering on every eval.
+- **Stratify your eval set.** Mix easy, medium, and hard tasks. A flat random sample hides which capability the model is missing. For shape-detective specifically, vary `seed` across eval splits and check that performance is stable across them — not just on the seed you developed against.
 
 ## Training Notes
 
@@ -379,9 +395,9 @@ The eval workflow above is the same shape RL uses, so a clean shape-detective ev
 
 A few details from building `shape_detective` that are easy to miss:
 
-- **Per-row `max_turns`.** Set `"max_turns"` on each task row to override the harness default. This is the cleanest way to mix single-turn and multi-turn rows in one taskset.
-- **User callbacks** are Taskset methods assigned to `self.user`. The harness calls them between assistant turns with `task` and `state`.
-- **Custom `info` round-trips** through serialization — fields you set in `load_tasks` are available on `task["info"]` in callbacks and rewards.
+- **Per-task `max_turns`.** Set `"max_turns"` on each task to override the harness default. This is the cleanest way to mix single-turn and multi-turn tasks in one taskset.
+- **Users** are `vf.User` subclasses configured by the taskset. The harness calls `get_response` between assistant turns with `task`, `state`, and typed transcript messages.
+- **Custom `info` round-trips** through serialization — fields you set in `load_tasks` are available on `task["info"]` in users and rewards.
 - **`state["completion"]` is `list[vf.Message]`.** Prefer `vf.AssistantMessage` and related types over dict access.
 - **Config subclasses expose tunables.** Put `mode`, `num_rows`, and `seed` on `ShapeDetectiveTasksetConfig`; override via `taskset` in eval configs or `-a`.
 

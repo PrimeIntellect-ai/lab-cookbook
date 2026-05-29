@@ -20,8 +20,8 @@ no token-budget surprises. The target tile is guaranteed unique within the grid
   the model commits in one shot with `\boxed{N}`.
 - `multi` (`max_turns=3`, default) — clues are revealed across three turns
   (pattern → color → shape). The model is asked to track candidate tiles after
-  each clue and commit only on the final turn. Implemented with a `vf.Taskset`
-  user callback.
+  each clue and commit only on the final turn. Implemented with a paired
+  `vf.User`.
 
 The two modes share the same scene generator and reward, so they exercise the
 same perception task with different conversational scaffolding.
@@ -37,16 +37,16 @@ exactly matches the target index, else `0.0`.
 prime eval run shape-detective \
     --model Qwen/Qwen3.5-2B \
     --provider prime \
-    -x '{"mode": "multi"}'
+    -a '{"taskset": {"mode": "multi"}}'
 ```
 
 Switch to single-turn:
 
 ```bash
-prime eval run shape-detective -x '{"mode": "single", "num_rows": 20}'
+prime eval run shape-detective -a '{"taskset": {"mode": "single", "num_rows": 20}}'
 ```
 
-## Kwargs
+## Taskset Config
 
 - `mode: "single" | "multi"` (default `"multi"`)
 - `num_rows: int` (default `12`)

@@ -34,6 +34,13 @@ reasoning_effort = "medium"
 
 [[env]]
 id = "prime/wordle"
+
+[env.taskset]
+num_train_examples = 512
+num_eval_examples = 128
+
+[env.harness]
+max_turns = 6
 ```
 
 This config trains `openai/gpt-oss-20b` with SFT on demonstrations generated from `prime/wordle`.
@@ -45,6 +52,8 @@ The key fields are:
 - [teacher].replay controls whether the run reuses saved demonstrations instead of generating fresh ones.
 - `[teacher.sampling]` controls teacher generation.
 - `[[env]]` points to the environment that defines tasks and scoring.
+- `[env.taskset]` and `[env.harness]` tune the same environment components you
+  used during eval.
 
 ## Launch Training
 
@@ -72,6 +81,13 @@ reasoning_effort = "medium"
 
 [[env]]
 id = "prime/wordle"
+
+[env.taskset]
+num_train_examples = 512
+num_eval_examples = 128
+
+[env.harness]
+max_turns = 6
 ```
 
 ```bash

@@ -29,7 +29,7 @@ no other globals.
 
 ## Intended v1 rules, organized by confidence
 
-These notes synthesize local `~/dev/verifiers` v1 code and docs, plus WIP PR 1429 (`pr-1429`). The goal is to track rules we should converge on, not to freeze every detail forever.
+These notes synthesize local `~/dev/verifiers` v1 code and docs. The goal is to track the current intended rules for Lab environment work, not to preserve historical alternatives.
 
 ### Scope: user environment code vs framework internals
 
@@ -42,7 +42,7 @@ A good review question is: “Is this broad/dynamic construct part of the public
 #### Loader and package shape
 
 - New v1 environment packages should expose `load_environment(config: ...) -> vf.Env`; the loader takes one concrete config argument, not mirrored keyword args. [source: `verifiers/v1/ENVIRONMENT_BEST_PRACTICES.md`, `verifiers/utils/env_utils.py`]
-- Envs may intentionally be taskset-only. If an env does not support harness customization, it may bind a concrete taskset config and return `vf.Env(taskset=...)` with the default harness. Do not invent an empty custom harness only to satisfy a pattern unless the target template/version requires package-composable harness loading. [source: `verifiers/v1/env.py`, current docs vs PR 1429]
+- Envs may intentionally be taskset-only. If an env does not support harness customization, it may bind a concrete taskset config and return `vf.Env(taskset=...)` with the default harness. Do not invent an empty custom harness only to satisfy a pattern. [source: `verifiers/v1/env.py`, current docs]
 - Environment-specific fields belong on `TasksetConfig` or `HarnessConfig`, never as extra root fields on `EnvConfig`. Current `EnvConfig.__pydantic_init_subclass__` rejects unsupported root fields. [source: `verifiers/v1/config.py`]
 - `EnvConfig.taskset` must be typed as a `vf.TasksetConfig` subclass and `EnvConfig.harness` as a `vf.HarnessConfig` subclass when those fields are explicitly annotated. `None` child configs are invalid for the env envelope. [source: `verifiers/v1/config.py`]
 - The typed annotation matters: loader/config annotations determine how TOML/CLI data is parsed before user code runs. Do not treat annotations as cosmetic. [source: `verifiers/utils/env_utils.py`, `verifiers/v1/config.py`]
@@ -50,20 +50,20 @@ A good review question is: “Is this broad/dynamic construct part of the public
 
 #### Taskset vs harness ownership
 
-- Tasksets own task data and task-local behavior: row/eval-row loading, prompts, reference answers, per-task controls, task-owned tools/toolsets, user behavior, rewards, metrics, advantages, stops, cleanup, and task-local objects. [source: `verifiers/v1/README.md`, `verifiers/v1/taskset.py`]
+- Tasksets own task data and task-local behavior: split-aware task loading, prompts, reference answers, per-task controls, task-owned tools/toolsets, user behavior, rewards, metrics, advantages, stops, cleanup, and task-local objects. [source: `verifiers/v1/README.md`, `verifiers/v1/taskset.py`]
 - Harnesses own rollout/execution behavior: programs, command/sandbox execution, model/client defaults for standalone harnesses, rollout limits, trajectory handling, harness toolsets, harness user behavior, lifecycle wiring, and execution-owned metrics/scoring. [source: `verifiers/v1/README.md`, `verifiers/v1/harness.py`]
 - Do not split one logical setting across layers. Put a field where the behavior is implemented and where lifecycle ownership lives. [source: `verifiers/v1/ENVIRONMENT_BEST_PRACTICES.md`]
-- If a taskset can be paired with many harnesses, keep it free of harness-specific assumptions. If a harness only works for one task protocol, make that protocol explicit in config, validation, or task row requirements rather than implicit globals.
+- If a taskset can be paired with many harnesses, keep it free of harness-specific assumptions. If a harness only works for one task protocol, make that protocol explicit in config, validation, or task requirements rather than implicit globals.
 
 #### Data model and runtime controls
 
 - `Task` is immutable input data; `State` is mutable rollout output data. Keep both JSON-serializable at user-visible boundaries. Runtime handles belong in framework runtime stores/hidden metadata, not ordinary state fields. [source: `verifiers/v1/README.md`, `verifiers/v1/state.py`]
 - Task prompts must not include system messages. Use `task["system_prompt"]`, `TasksetConfig.system_prompt`, or `HarnessConfig.system_prompt`; multiple system prompt sources reject by default unless a harness intentionally sets `system_prompt_merge`. [source: `verifiers/v1/README.md`, `verifiers/v1/harness.py`]
 - Rewards/metrics should read reference data from `task` and rollout data from `state`; do not assume `task["answer"]` is copied to top-level state. [source: `verifiers/v1/README.md`]
-- Task rows may set top-level controls such as `max_turns`, `tools`, `toolsets`, `sandbox`, and `program`. Runtime precedence is explicit `state.runtime` controls over task controls over harness defaults. [source: `verifiers/v1/README.md`, `verifiers/v1/harness.py`]
+- Tasks may set top-level controls such as `max_turns`, `tools`, `toolsets`, `sandbox`, `artifacts`, and `program`. Runtime precedence is explicit `state.runtime` controls over task controls over harness defaults. [source: `verifiers/v1/README.md`, `verifiers/v1/harness.py`]
 - User code should write task-local knobs as task fields, component defaults as config fields, and rollout-local overrides as state/runtime controls only through documented framework paths. Do not hand-edit private runtime structures.
-- Use task top-level controls for per-example variability, not hidden module globals. Examples: per-row tool visibility, per-row sandbox image/resources, per-row `max_turns`, per-row program option fragments.
-- Use config fields for package-level defaults that should be visible in TOML/CLI. Examples: dataset split, max rows, scoring mode, timeout, system prompt, default sandbox, default toolset specs.
+- Use task top-level controls for per-example variability, not hidden module globals. Examples: per-task tool visibility, per-task sandbox image/resources, per-task `max_turns`, per-task program option fragments.
+- Use config fields for package-level defaults that should be visible in TOML/CLI. Examples: dataset split, max examples, scoring mode, timeout, system prompt, default sandbox, default toolset specs.
 - Use state fields for observable rollout outputs and artifacts. Examples: submitted answer, parsed answer, validation logs, task-specific counters, user-visible error summaries. Avoid putting clients, sandboxes, sessions, locks, file handles, or large caches in state.
 - Runtime handles should be addressed by stable serializable identifiers in state/task, then resolved by the owning taskset/harness/toolset/runtime when needed.
 
@@ -82,21 +82,21 @@ A good review question is: “Is this broad/dynamic construct part of the public
 
 #### Plugging in pieces
 
-- Add task-owned behavior by configuring or subclassing `vf.Taskset`: rows/eval rows, task tools/toolsets, task user, task rewards/metrics/stops/advantages, task cleanup, task objects/bindings.
+- Add task-owned behavior by configuring or subclassing `vf.Taskset`: tasks, split-aware task loading, task tools/toolsets, task user, task rewards/metrics/stops/advantages, task cleanup, task objects/bindings.
 - Add execution behavior by configuring or subclassing `vf.Harness`: program, sandbox, model/client defaults for standalone use, harness tools/toolsets, harness user, rollout limits, trajectory policy, harness metrics, teardown.
 - Use decorators (`@vf.reward`, `@vf.metric`, `@vf.stop`, `@vf.cleanup`, `@vf.teardown`) and default handler tuples/lists for lifecycle participation. Prefer these over ad hoc calls from inside `load_environment`.
-- Use task rows or taskset methods for dataset transformation. Avoid doing dataset downloads, filtering, or row materialization in `load_environment` unless the framework loader is explicitly responsible for that component.
-- Override `eval_rows()` only when eval data differs from training/default rows. Otherwise let it reuse `rows()`.
+- Use `load_tasks(split)` or taskset methods for dataset transformation. Avoid doing dataset downloads, filtering, or task materialization in `load_environment` unless the framework loader is explicitly responsible for that component.
+- Use the `split` argument in `load_tasks(split)` when train and eval tasks differ.
 - Use per-task `tools`/`toolsets` visibility for narrowing action space on individual examples. Do not dynamically mutate global tool lists mid-rollout unless the harness/toolset lifecycle owns that behavior.
 - If an environment needs multiple task categories with the same lifecycle/scoring, one taskset with explicit category fields is fine. If categories need different harnesses, lifecycle, or scoring contracts, expose separate typed loaders/components.
 
 #### Types and failure behavior in user env code
 
 - Use `import verifiers as vf` in environment code. Prefer top-level public API over internal `verifiers.v1` imports. [source: `verifiers/v1/ENVIRONMENT_BEST_PRACTICES.md`]
-- Use precise Pydantic config models for structured settings. Raw mappings belong at real external/dynamic boundaries: TOML/CLI payloads, task rows, protocol messages, sandbox/program specs, or arbitrary user data fields. [source: `verifiers/v1/ENVIRONMENT_BEST_PRACTICES.md`, `verifiers/v1/types.py`]
+- Use precise Pydantic config models for structured settings. Raw mappings belong at real external/dynamic boundaries: TOML/CLI payloads, task payloads, protocol messages, sandbox/program specs, or arbitrary user data fields. [source: `verifiers/v1/ENVIRONMENT_BEST_PRACTICES.md`, `verifiers/v1/types.py`]
 - Avoid `Any`, broad `object`, and untyped mappings in user env internals unless arbitrary data is genuinely the public contract. Prefer named boundary aliases/types.
 - Union types are acceptable in user config only when they express a real supported input surface, such as `str | None` defaults, literal mode switches, or a deliberately documented “path or inline value” field. They are not acceptable just to silence a type checker or support stale call patterns.
-- Prefer loud failure over silent fallbacks. Do not write `config = config or MyConfig()` in v1 loaders; the framework supplies a concrete validated config. [source: `verifiers/utils/env_utils.py`, docs diff in PR 1429]
+- Prefer loud failure over silent fallbacks. Do not write `config = config or MyConfig()` in v1 loaders; the framework supplies a concrete validated config. [source: `verifiers/utils/env_utils.py`]
 - `assert` is acceptable for internal invariants and type narrowing when the invariant should always hold; do not use try/except fallbacks to mask unsupported shapes. [source: current v1 docs and framework style]
 
 #### Lifecycle and async behavior
@@ -111,14 +111,12 @@ A good review question is: “Is this broad/dynamic construct part of the public
 - Validate behavior with `prime eval run <env-name> ...`; do not add `--skip-upload` unless explicitly requested. [source: project `AGENTS.md`]
 - Keep each lab environment self-contained under `environments/<env_name>/` with its own `pyproject.toml`, implementation, and README. Create new environments with `prime env init`, not by manually scaffolding files. [source: project `AGENTS.md`]
 
-### Medium confidence: intended direction, especially from PR 1429
+### Current v1 loader shape
 
-#### Canonical v1 loader direction
-
-- PR 1429 appears to move the canonical template toward explicit `load_taskset(config: MyTasksetConfig)`, optional explicit `load_harness(config: MyHarnessConfig)` when the env supports harness customization, and `load_environment(config: vf.EnvConfig)` that can call component loaders. [source: PR 1429 diff in `verifiers/scripts/init.py`, `verifiers/v1/README.md`, `docs/byo-harness.md`]
-- In that direction, `load_taskset`/`load_harness` signatures determine concrete package component config types, while base `vf.EnvConfig` can act as an unresolved package-loading envelope. This differs from current `main` docs that prefer environment-local `EnvConfig` subclasses binding child config types. [source: PR 1429 diff in `verifiers/utils/env_utils.py`, `verifiers/v1/config.py`]
-- PR 1429 adds component/package resolution utilities and default child `id` injection from the env id when using base `vf.EnvConfig`. If this lands, prefer component loaders over environment-local root config subclasses for package-composable envs. [source: PR 1429 `verifiers/v1/utils/component_utils.py`, `verifiers/utils/env_utils.py`]
-- Even under PR 1429, taskset/harness configs still own leaf fields; do not move settings back to root env kwargs. [source: PR 1429 docs diffs]
+- Export `load_taskset(config: MyTasksetConfig)` for taskset packages and `load_harness(config: MyHarnessConfig)` when the environment owns a reusable harness.
+- `load_environment(config: vf.EnvConfig)` should stay small and use `vf.load_taskset(config=config.taskset)` plus `vf.load_harness(config=config.harness)` or `vf.Harness(config=config.harness)`.
+- For reusable standalone packages, import their public classes and configs directly, then construct them through the same local factory pattern.
+- Taskset and harness configs own leaf fields. Do not move taskset/harness settings back to root env kwargs.
 
 #### Enforcing and surfacing binding/global-ref rules
 
@@ -130,86 +128,66 @@ A good review question is: “Is this broad/dynamic construct part of the public
 
 #### Harness class usage
 
-- Current `main` says omit `harness=` when the base endpoint-backed harness is enough. PR 1429 templates include a typed harness config/class and explicit `load_harness` even when empty, likely to make package composition uniform. Treat “always include harness loader” as a package-composition option, not a universal env requirement.
+- Omit `harness=` when the base endpoint-backed harness is enough.
 - Do not create thin custom harnesses only to restate `Harness` unless following a package-composable loader shape or reserving a real typed surface. If no harness customization is intended, taskset-only remains a valid env design.
 
 #### Config defaults
 
-- Current `main` docs say use explicit nested config objects (`taskset: MyTasksetConfig = MyTasksetConfig()`) and not `Field(default_factory=...)`. PR 1429 changes base `EnvConfig` to `Field(default_factory=...)`, but examples still use explicit objects in some taskset-first paths. Treat this as unsettled: follow whichever pattern is in the target Verifiers version/template. [source: current `verifiers/v1/ENVIRONMENT_BEST_PRACTICES.md`; PR 1429 `verifiers/v1/config.py`]
+- Use explicit nested config defaults when an environment needs a typed root config, e.g. `taskset: MyTasksetConfig = MyTasksetConfig()`.
 
-### Lower confidence / needs iteration
+### Current v1 surfaces
 
-#### System prompt callable specs (WIP sketch — vf not landed)
-
-Do not add env-specific system-prompt path fields or loader file-read boilerplate in `load_taskset` / `load_environment`. **`system_prompt` is a callable spec** (like `tasks` / `rewards`): config holds a loader ref; the resolved string/messages are a runtime product. Constants live in loader functions; switching prompts = patch the spec in eval config.
-
-**One field per component:** `TasksetConfig.system_prompt` and `HarnessConfig.system_prompt`.
-
-**Two stages (unchanged):**
-
-1. **Load time:** resolve each component’s `system_prompt` spec → call loader → normalize to system messages.
-2. **Rollout time:** harness merges taskset + harness (+ per-task `task["system_prompt"]`) via `system_prompt_merge`.
-
-**Callable spec shapes (explicit — no string heuristics):**
-
-Top level only — bare string is a loader ref:
-
-```toml
-[env.taskset]
-system_prompt = "wordle:load_system_prompt"
-```
-
-Top level — map with `fn` and literal kwargs:
-
-```toml
-[env.taskset]
-system_prompt = { fn = "wordle:load_system_prompt", path = "environments/wordle/prompts/system_prompt.txt" }
-```
-
-Nested loader args must use `{ fn = "..." }`. Inside a spec map, **plain strings are always literals** — vf does not guess whether a string is a file path, run id, or import ref:
-
-```toml
-[env.taskset]
-system_prompt = {
-  fn = "wordle:load_system_prompt",
-  path = { fn = "wordle:gepa_artifact_path" },
-}
-```
-
-Rules:
-
-- **`fn` is reserved** in callable-spec maps; other keys are loader kwargs (or reward-style metadata on `rewards`, not on `system_prompt` for now).
-- **Top-level `{ fn }` with no kwargs** ≡ bare string ref.
-- **Nested dict without `fn`** = literal mapping kwarg, not a callable.
-- **No** `SystemPromptSource` pydantic types, **no** binding-path roots like `eval.*` / `gepa.*`, **no** “looks like an import ref” coercion.
-
-Dynamic wiring goes through env (or third-party) loader refs, not vf magic namespaces:
+Use the owning component's config for user-visible behavior. A direct
+`system_prompt` string is prompt text. File-backed prompts use
+`SystemPromptConfig(path=...)` in Python or `{ path = "..." }` in TOML. Do not
+add env-specific prompt path fields or loader file-read boilerplate in
+`load_taskset` / `load_environment`.
 
 ```python
-def load_system_prompt(path: str | None = None) -> str: ...
+class WordleTasksetConfig(TextArenaTasksetConfig):
+    system_prompt: vf.PromptInput | vf.SystemPromptConfig | None = None
 
-def gepa_artifact_path() -> str: ...
+
+class WordleTaskset(TextArenaTaskset[WordleTasksetConfig]):
+    def load_system_prompt(
+        self, config: WordleTasksetConfig
+    ) -> vf.PromptInput | vf.SystemPromptConfig | None:
+        if config.system_prompt is not None:
+            return config.system_prompt
+        return vf.SystemPromptConfig(path="prompts/system_prompt.txt")
 ```
 
-Env default:
+TextArena customization should live in a paired `vf.User` subclass, not a
+taskset observation-formatting hook:
 
 ```python
-def load_system_prompt() -> str:
-    return SYSTEM_PROMPT
+class WordleUserConfig(TextArenaUserConfig):
+    pass
+
 
 class WordleTasksetConfig(TextArenaTasksetConfig):
-    system_prompt = "wordle:load_system_prompt"
+    user: WordleUserConfig | None = WordleUserConfig()
+
+
+class WordleUser(TextArenaUser):
+    async def get_response(
+        self, task: vf.Task, state: vf.State, messages: list[vf.Message]
+    ) -> list[vf.UserMessage]:
+        response = await super().get_response(task, state, messages)
+        ...
 ```
 
-**GEPA (today):** optimization injects candidates at rollout via `verifiers.gepa` adapter; artifacts land as `system_prompt.txt`. There is no `vf.prompts.*` provider yet. Post-run eval should patch `system_prompt` to a loader spec (literal `path` kw or nested `{ fn = "wordle:gepa_artifact_path" }`), not `path_to_system_prompt` on env config.
-
-**Cookbook envs until vf lands:** loader ref + loader function; no path fields, no prompt resolution logic in `load_taskset`.
+GEPA artifacts land as `system_prompt.txt`. For environment-owned prompts, load
+the prompt through `load_system_prompt` from a package `prompts/` file so
+`save_to_environment = true` can update the default. For one-off prompt files,
+patch `taskset.system_prompt = { path = "..." }`, not `path_to_system_prompt`
+on env config.
 
 #### Strict typing absolutism
 
 - “No unions ever” is too strong. Framework code uses unions at real boundaries (`TasksetInput`, `HarnessInput`, config fields that accept import refs or structured specs, optional values). The user-env rule should be: no broad unions to appease type checkers; unions are acceptable only when supporting multiple shapes is a deliberate public contract. [source: `verifiers/v1/env.py`, `verifiers/v1/config.py`]
 - “No `object` ever” is too strong. v1 uses `object` at validation and arbitrary-data boundaries. The user-env rule should be: avoid broad `object` in business logic and public helper signatures; use it only for validators/dynamic payloads where unknown input is the point. [source: `verifiers/v1/config.py`, `verifiers/v1/types.py`]
-- “No loose mappings ever” is too strong. Task rows, JSON config maps, protocol payloads, and sandbox/program specs are mapping-shaped by design. The rule should be to confine those mappings to named boundaries and convert to typed config/classes as soon as possible. [source: `verifiers/v1/types.py`, `verifiers/v1/taskset.py`]
+- “No loose mappings ever” is too strong. Task payloads, JSON config maps, protocol payloads, and sandbox/program specs are mapping-shaped by design. The rule should be to confine those mappings to named boundaries and convert to typed config/classes as soon as possible. [source: `verifiers/v1/types.py`, `verifiers/v1/taskset.py`]
 
 #### Binding details still to pin down
 
@@ -225,9 +203,9 @@ class WordleTasksetConfig(TextArenaTasksetConfig):
 ## Practical review checklist
 
 - Is this user env code, framework code, or reusable framework-like infrastructure? Apply strict user-code rules only to the first category.
-- Does the package expose the loader shape expected by the target Verifiers version (`main` vs PR 1429), and does it intentionally support or not support custom harnesses?
+- Does the package expose the current loader shape, and does it intentionally support or not support custom harnesses?
 - Are all environment-specific fields on the owning taskset/harness config?
-- Are task rows and returned state JSON-serializable? Are live handles hidden behind runtime/object mechanisms?
+- Are tasks and returned state JSON-serializable? Are live handles hidden behind runtime/object mechanisms?
 - Are prompts/system prompts represented in the documented fields, with no system messages inside `task["prompt"]`?
 - Are rewards/metrics reading `task` for references and `state` for rollout outputs?
 - Are hidden args injected through bindings rather than globals or model-visible tool parameters?

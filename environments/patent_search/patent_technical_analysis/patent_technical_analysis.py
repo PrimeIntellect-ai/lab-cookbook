@@ -11,7 +11,6 @@ from chromadb.utils import embedding_functions
 from datasets import load_dataset
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
-from verifiers import ensure_keys
 
 os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
 
@@ -117,6 +116,7 @@ class PatentTechnicalTasksetConfig(vf.TasksetConfig):
     corpus_file: str = "patents_formatted.json"
     qa_file: str = "patent_qa_level3.jsonl"
     chroma_db_dir: str = CHROMA_DB_DIR
+    system_prompt: vf.PromptInput | vf.SystemPromptConfig | None = SYSTEM_PROMPT
 
 
 def extract_section_by_header(content: str, header: str) -> str:
@@ -250,18 +250,22 @@ def load_patents(config: PatentTechnicalTasksetConfig) -> PatentIndex:
     )
 
 
-def normalize_info(value: object) -> vf.ConfigData:
+def normalize_info(value: object) -> vf.JsonData:
     if isinstance(value, dict):
-        return {str(key): item for key, item in value.items()}
+        normalized = json.loads(json.dumps(value))
+        assert isinstance(normalized, dict)
+        return normalized
     if isinstance(value, str):
         parsed = json.loads(value)
         if not isinstance(parsed, dict):
             raise TypeError("Parsed info must be a dict.")
-        return {str(key): item for key, item in parsed.items()}
+        normalized = json.loads(json.dumps(parsed))
+        assert isinstance(normalized, dict)
+        return normalized
     return {}
 
 
-def ground_truth_from_info(info: vf.ConfigData) -> vf.ConfigData:
+def ground_truth_from_info(info: vf.JsonData) -> vf.JsonData:
     ground_truth = info.get("ground_truth", {})
     if not isinstance(ground_truth, dict):
         raise TypeError("ground_truth must be a dict.")
@@ -275,15 +279,8 @@ def string_list(value: object) -> list[str]:
 
 
 class PatentTechnicalTaskset(vf.Taskset[PatentTechnicalTasksetConfig]):
-    def __init__(self, config: PatentTechnicalTasksetConfig | None = None) -> None:
-        super().__init__(config=config)
-        if "toolsets" not in self.config.model_fields_set:
-            self.add_toolset(self.load_toolset())
-
-    def load_system_prompt(self) -> vf.SystemPrompt:
-        return SYSTEM_PROMPT
-
-    def load_tasks(self) -> vf.Tasks:
+    def load_tasks(self, split: vf.TaskSplit = "train") -> vf.Tasks:
+        _ = split
         dataset = load_dataset(
             self.config.corpus_dataset,
             data_files=self.config.qa_file,
@@ -300,12 +297,13 @@ class PatentTechnicalTaskset(vf.Taskset[PatentTechnicalTasksetConfig]):
                 "info": normalize_info(row.get("info", {})),
             }
 
-    def load_toolset(self) -> vf.Toolset:
-        ensure_keys([self.config.embed_api_key_var])
+    def load_toolsets(self, config: PatentTechnicalTasksetConfig) -> vf.Toolsets:
+        _ = config
+        vf.ensure_keys([self.config.embed_api_key_var])
         patents = load_patents(self.config)
         chroma_semaphore = asyncio.Semaphore(100)
 
-        async def search_patents(query: str) -> list[dict[str, str]]:
+        async def search_patents(query: str) -> vf.JsonData:
             """Search for relevant patents using title and abstract embedding similarity."""
             async with chroma_semaphore:
                 results = await asyncio.to_thread(
@@ -329,9 +327,9 @@ class PatentTechnicalTaskset(vf.Taskset[PatentTechnicalTasksetConfig]):
                         "abstract": abstract_value or "",
                     }
                 )
-            return hits
+            return {"patents": hits}
 
-        async def get_metadata(patent_id: str) -> dict[str, str]:
+        async def get_metadata(patent_id: str) -> vf.JsonData:
             """Get patent metadata."""
             if patent_id not in patents.patent_id_to_metadata:
                 raise ValueError("Patent not found: " + patent_id)
@@ -373,7 +371,7 @@ class PatentTechnicalTaskset(vf.Taskset[PatentTechnicalTasksetConfig]):
                 return content[:20000] + "\n\n[TRUNCATED - content continues...]"
             return content
 
-        async def compare_patents(patent_id_1: str, patent_id_2: str) -> dict[str, dict[str, str]]:
+        async def compare_patents(patent_id_1: str, patent_id_2: str) -> vf.JsonData:
             """Get side-by-side comparison data for two patents."""
             if patent_id_1 not in patents.patent_id_to_content:
                 raise ValueError("Patent not found: " + patent_id_1)
@@ -398,7 +396,7 @@ class PatentTechnicalTaskset(vf.Taskset[PatentTechnicalTasksetConfig]):
                 },
             }
 
-        async def view_sections(patent_id: str) -> list[dict[str, str]]:
+        async def view_sections(patent_id: str) -> vf.JsonData:
             """View the sections of a patent."""
             content = patents.patent_id_to_content[patent_id]
             sections: list[dict[str, str]] = []
@@ -413,7 +411,7 @@ class PatentTechnicalTaskset(vf.Taskset[PatentTechnicalTasksetConfig]):
                     )
             if not sections:
                 sections.append({"section_id": patent_id + ":full", "section_name": "Full Patent"})
-            return sections
+            return {"sections": sections}
 
         async def read_section(section_id: str) -> str:
             """Read a section of a patent."""
@@ -439,19 +437,21 @@ class PatentTechnicalTaskset(vf.Taskset[PatentTechnicalTasksetConfig]):
                 raise ValueError("Section not found: " + section_id)
             return "\n".join(lines[section_start : section_end or len(lines)])
 
-        return vf.Toolset(
-            tools=[
-                search_patents,
-                get_metadata,
-                get_abstract,
-                get_claims_text,
-                get_description,
-                get_full_content,
-                compare_patents,
-                view_sections,
-                read_section,
-            ],
-        )
+        return {
+            "patents": vf.Toolset(
+                tools=[
+                    search_patents,
+                    get_metadata,
+                    get_abstract,
+                    get_claims_text,
+                    get_description,
+                    get_full_content,
+                    compare_patents,
+                    view_sections,
+                    read_section,
+                ],
+            )
+        }
 
     @vf.reward(weight=1.0)
     async def judge_reward(self, task: vf.Task, state: vf.State) -> float:
@@ -488,10 +488,13 @@ class PatentTechnicalTaskset(vf.Taskset[PatentTechnicalTasksetConfig]):
             key_points_checklist=key_points_checklist,
         )
         endpoint = state.get_endpoint_config(api="chat")
-        judge_client = AsyncOpenAI(api_key=endpoint["api_key"], base_url=endpoint["api_base"])
+        judge_client = AsyncOpenAI(
+            api_key=os.getenv(endpoint.api_key_var, ""),
+            base_url=endpoint.base_url,
+        )
         try:
             judge_response = await judge_client.chat.completions.create(
-                model=endpoint["model"],
+                model=endpoint.model,
                 messages=[{"role": "user", "content": formatted_prompt}],
                 temperature=0.0,
                 max_tokens=2048,
@@ -520,9 +523,12 @@ class PatentTechnicalTaskset(vf.Taskset[PatentTechnicalTasksetConfig]):
         return max(0.0, min(1.0, score))
 
 
-def load_taskset(config: PatentTechnicalTasksetConfig) -> vf.Taskset:
+def load_taskset(config: PatentTechnicalTasksetConfig) -> PatentTechnicalTaskset:
     return PatentTechnicalTaskset(config=config)
 
 
 def load_environment(config: vf.EnvConfig) -> vf.Env:
-    return vf.Env(taskset=vf.load_taskset(config=config.taskset))
+    return vf.Env(
+        taskset=vf.load_taskset(config=config.taskset),
+        harness=vf.Harness(config=config.harness),
+    )

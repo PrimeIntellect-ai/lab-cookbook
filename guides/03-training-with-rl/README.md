@@ -4,7 +4,6 @@ Launch RL runs in your environment with Hosted Training.
 
 Reinforcement learning is useful for improving a model's behavior once an environment has a reward signal you trust. The model samples multiple rollouts for each task, the environment scores those rollouts, and the trainer updates the model's policy toward higher-reward behavior.
 
-
 Run the reverse-text eval from [Building Your First Environment](../02-building-your-first-environment/README.md#evaluate-it) before launching training. Ensure your environment shows rewards with some variance in scores across rollouts before starting training.
 
 ## Choose a Training Model
@@ -52,7 +51,7 @@ For a first run, the config below is intentionally small. Once it works, these a
 
 **learning_rate.** This sets the learning rate for the LoRA adapter and defaults to `1e-4`. The default is usually a decent starting point for tasks with rewards between 0 and 1. If reward collapses or oscillates wildly in the first 20 steps, the learning rate is too high. If it plateaus from the start and never moves, it may be too low.
 
-**`max_tokens` and thinking mode.** Under `[sampling]`, `max_tokens` sets the maximum number of tokens the model can generate per response turn. Models that support thinking need enough budget to reason through the problem and produce the answer. If completions are getting truncated mid-answer, raise max_tokens before changing anything else. Thinking is toggled for hybrid reasoning models (`Qwen`, `Nemotron`) via `[sampling].enable_thinking` — it produces extended chain-of-thought reasoning before the final answer, which helps on multi-step tasks at the cost of longer outputs. Note that `gpt-oss` models instead support `reasoning_effort` (`low`, `medium`, `high`) under `[sampling]`.
+`**max_tokens` and thinking mode.** Under `[sampling]`, `max_tokens` sets the maximum number of tokens the model can generate per response turn. Models that support thinking need enough budget to reason through the problem and produce the answer. If completions are getting truncated mid-answer, raise max_tokens before changing anything else. Thinking is toggled for hybrid reasoning models (`Qwen`, `Nemotron`) via `[sampling].enable_thinking` — it produces extended chain-of-thought reasoning before the final answer, which helps on multi-step tasks at the cost of longer outputs. Note that `gpt-oss` models instead support `reasoning_effort` (`low`, `medium`, `high`) under `[sampling]`.
 
 **Eval cadence.** The `[eval].interval` field controls how often a held-out eval runs during training. Set it frequent enough to catch regressions but sparse enough to not dominate cost. Configure under `[eval]` once the basic training loop is working.
 
@@ -90,14 +89,16 @@ For a first run, keep the config small. Bigger batches, more rollouts, validatio
 
 The table below shows observed costs from small Hosted Training runs. Treat these as rough reference points rather than quotes: pricing can change, and the final cost depends on the model, rollout length, token usage, and any extra evals or logging you enable. Each run used the same small training shape: `max_steps = 100`, `batch_size = 128`, `rollouts_per_example = 8`, and `max_tokens = 1024`.
 
-| Environment | Model | What it shows | Observed cost |
-|---|---|---|---:|
-| `prime/reverse-text` | `meta-llama/Llama-3.2-1B-Instruct` | Cheapest baseline text-only RL run | $0.14 |
-| `prime/reverse-text` | `Qwen/Qwen3.5-0.8B` | Same task on a similarly small Qwen model | $0.14 |
-| `prime/reverse-text` | `meta-llama/Llama-3.2-3B-Instruct` | Same task on the next Llama size up | $0.35 |
-| `prime/reverse-text` | `Qwen/Qwen3.5-2B` | Same task on a small dense Qwen model | $0.54 |
-| `primeintellect/wordle` | `meta-llama/Llama-3.2-1B-Instruct` | Same small model on a multi-turn game | $0.73 |
-| `prime/reverse-text` | `Qwen/Qwen3.5-4B` | Same task on a larger dense Qwen model | $3.24 |
+
+| Environment             | Model                              | What it shows                             | Observed cost |
+| ----------------------- | ---------------------------------- | ----------------------------------------- | ------------- |
+| `prime/reverse-text`    | `meta-llama/Llama-3.2-1B-Instruct` | Cheapest baseline text-only RL run        | $0.14         |
+| `prime/reverse-text`    | `Qwen/Qwen3.5-0.8B`                | Same task on a similarly small Qwen model | $0.14         |
+| `prime/reverse-text`    | `meta-llama/Llama-3.2-3B-Instruct` | Same task on the next Llama size up       | $0.35         |
+| `prime/reverse-text`    | `Qwen/Qwen3.5-2B`                  | Same task on a small dense Qwen model     | $0.54         |
+| `primeintellect/wordle` | `meta-llama/Llama-3.2-1B-Instruct` | Same small model on a multi-turn game     | $0.73         |
+| `prime/reverse-text`    | `Qwen/Qwen3.5-4B`                  | Same task on a larger dense Qwen model    | $3.24         |
+
 
 The main pattern is that text-only runs on the smallest models can stay well under a dollar, while multi-turn environments and larger models move the cost up quickly. For the current per-token model prices, run `prime train models` before launching a larger experiment.
 
@@ -167,6 +168,24 @@ env_ratios = [0.5, 0.5]
 ```
 
 The ratios match the order of the `[[env]]` sections.
+
+### Environment Overrides
+
+Training uses the same Taskset/Harness config split as eval. Put task data and
+difficulty knobs under `[env.taskset]`; put rollout execution knobs under
+`[env.harness]`.
+
+```toml
+[[env]]
+id = "prime/wordle"
+
+[env.taskset]
+num_train_examples = 512
+num_eval_examples = 128
+
+[env.harness]
+max_turns = 6
+```
 
 ### Online Evaluation
 

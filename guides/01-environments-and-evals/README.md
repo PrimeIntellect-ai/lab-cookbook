@@ -101,6 +101,8 @@ env_id = "prime/wordle"
 num_examples = 20
 rollouts_per_example = 1
 sampling_args = { max_tokens = 1024 }
+taskset = { num_eval_examples = 20 }
+harness = { max_turns = 6 }
 ```
 Run the suite:
 
@@ -108,7 +110,11 @@ Run the suite:
 prime eval run configs/01/first-eval-suite.toml
 ```
 
-Use this pattern when you want to compare model behavior across environments, compare a base model to a trained adapter, or re-run the same checks after changing a prompt or config.
+Use this pattern when you want to compare model behavior across environments,
+compare a base model to a trained adapter, or re-run the same checks after
+changing a prompt or config. Environment-specific overrides stay next to each
+`[[eval]]`: `taskset` changes the task source or difficulty, while `harness`
+changes rollout execution.
 
 ## Next
 

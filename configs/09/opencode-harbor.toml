@@ -3,3 +3,10 @@ save_results = true
 
 [[eval]]
 env_id = "prime/opencode-harbor"
+taskset = { task_names = ["regex-log"] }
+
+[eval.harness]
+max_turns = 4
+
+[eval.harness.program]
+disabled_tools = ["webfetch", "question"]

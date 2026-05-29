@@ -10,7 +10,6 @@ from chromadb.utils import embedding_functions
 from datasets import load_dataset
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
-from verifiers import ensure_keys
 
 os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
 
@@ -50,6 +49,7 @@ class AdvancedPatentTasksetConfig(vf.TasksetConfig):
     corpus_file: str = "patents_formatted.json"
     qa_file: str = "patent_qa_level2.jsonl"
     chroma_db_dir: str = CHROMA_DB_DIR
+    system_prompt: vf.PromptInput | vf.SystemPromptConfig | None = SYSTEM_PROMPT
 
 
 def normalize_id(text: str) -> str:
@@ -153,15 +153,8 @@ def load_patents(config: AdvancedPatentTasksetConfig) -> PatentIndex:
 
 
 class AdvancedPatentTaskset(vf.Taskset[AdvancedPatentTasksetConfig]):
-    def __init__(self, config: AdvancedPatentTasksetConfig | None = None) -> None:
-        super().__init__(config=config)
-        if "toolsets" not in self.config.model_fields_set:
-            self.add_toolset(self.load_toolset())
-
-    def load_system_prompt(self) -> vf.SystemPrompt:
-        return SYSTEM_PROMPT
-
-    def load_tasks(self) -> vf.Tasks:
+    def load_tasks(self, split: vf.TaskSplit = "train") -> vf.Tasks:
+        _ = split
         dataset = load_dataset(
             self.config.corpus_dataset,
             data_files=self.config.qa_file,
@@ -177,12 +170,13 @@ class AdvancedPatentTaskset(vf.Taskset[AdvancedPatentTasksetConfig]):
                 "prompt": [{"role": "user", "content": question}],
             }
 
-    def load_toolset(self) -> vf.Toolset:
-        ensure_keys([self.config.embed_api_key_var])
+    def load_toolsets(self, config: AdvancedPatentTasksetConfig) -> vf.Toolsets:
+        _ = config
+        vf.ensure_keys([self.config.embed_api_key_var])
         patents = load_patents(self.config)
         chroma_semaphore = asyncio.Semaphore(100)
 
-        async def search_patents(query: str) -> list[dict[str, str]]:
+        async def search_patents(query: str) -> vf.JsonData:
             """Search for relevant patents using title and abstract embedding similarity."""
             async with chroma_semaphore:
                 results = await asyncio.to_thread(
@@ -206,9 +200,9 @@ class AdvancedPatentTaskset(vf.Taskset[AdvancedPatentTasksetConfig]):
                         "abstract": abstract_value or "",
                     }
                 )
-            return hits
+            return {"patents": hits}
 
-        async def get_metadata(patent_id: str) -> dict[str, str]:
+        async def get_metadata(patent_id: str) -> vf.JsonData:
             """Get patent metadata."""
             if patent_id not in patents.patent_id_to_metadata:
                 raise ValueError(f"Patent not found: {patent_id}")
@@ -226,7 +220,7 @@ class AdvancedPatentTaskset(vf.Taskset[AdvancedPatentTasksetConfig]):
                 raise ValueError(f"Patent not found: {patent_id}")
             return patents.patent_id_to_abstract[patent_id]
 
-        async def view_sections(patent_id: str) -> list[dict[str, str]]:
+        async def view_sections(patent_id: str) -> vf.JsonData:
             """View the sections of a patent."""
             content = patents.patent_id_to_content[patent_id]
             sections: list[dict[str, str]] = []
@@ -241,7 +235,7 @@ class AdvancedPatentTaskset(vf.Taskset[AdvancedPatentTasksetConfig]):
                     )
             if not sections:
                 sections.append({"section_id": f"{patent_id}:full", "section_name": "Full Patent"})
-            return sections
+            return {"sections": sections}
 
         async def read_section(section_id: str) -> str:
             """Read a section of a patent."""
@@ -267,14 +261,25 @@ class AdvancedPatentTaskset(vf.Taskset[AdvancedPatentTasksetConfig]):
                 raise ValueError(f"Section not found: {section_id}")
             return "\n".join(lines[section_start : section_end or len(lines)])
 
-        return vf.Toolset(
-            tools=[search_patents, get_metadata, get_abstract, view_sections, read_section],
-        )
+        return {
+            "patents": vf.Toolset(
+                tools=[
+                    search_patents,
+                    get_metadata,
+                    get_abstract,
+                    view_sections,
+                    read_section,
+                ],
+            )
+        }
 
     @vf.reward(weight=1.0)
     async def judge_reward(self, task: vf.Task, state: vf.State) -> float:
         endpoint = state.get_endpoint_config(api="chat")
-        judge_client = AsyncOpenAI(api_key=endpoint["api_key"], base_url=endpoint["api_base"])
+        judge_client = AsyncOpenAI(
+            api_key=os.getenv(endpoint.api_key_var, ""),
+            base_url=endpoint.base_url,
+        )
         completion = state["completion"]
         last_assistant = next(
             (msg for msg in reversed(completion) if msg.get("role") == "assistant"),
@@ -282,7 +287,7 @@ class AdvancedPatentTaskset(vf.Taskset[AdvancedPatentTasksetConfig]):
         )
         response_text = str(last_assistant["content"]) if last_assistant else ""
         response = await judge_client.chat.completions.create(
-            model=endpoint["model"],
+            model=endpoint.model,
             messages=[
                 {
                     "role": "user",
@@ -298,9 +303,12 @@ class AdvancedPatentTaskset(vf.Taskset[AdvancedPatentTasksetConfig]):
         return 1.0 if "yes" in text.lower() else 0.0
 
 
-def load_taskset(config: AdvancedPatentTasksetConfig) -> vf.Taskset:
+def load_taskset(config: AdvancedPatentTasksetConfig) -> AdvancedPatentTaskset:
     return AdvancedPatentTaskset(config=config)
 
 
 def load_environment(config: vf.EnvConfig) -> vf.Env:
-    return vf.Env(taskset=vf.load_taskset(config=config.taskset))
+    return vf.Env(
+        taskset=vf.load_taskset(config=config.taskset),
+        harness=vf.Harness(config=config.harness),
+    )

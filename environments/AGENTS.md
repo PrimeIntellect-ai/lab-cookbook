@@ -888,7 +888,7 @@ Supported third-party environment integrations include:
 - **`BrowserEnv`** — unified browser automation via [Browserbase](https://browserbase.com) with DOM and CUA modes
 - **`OpenEnvEnv`** — wraps OpenEnv gym and MCP contracts using Prime Sandboxes with prebuilt images referenced from `.build.json`
 
-These require additional dependencies installed via extras (e.g., `uv add 'verifiers[ta]'` for TextArena, `uv add 'verifiers[browser]'` for BrowserEnv, `uv add 'verifiers[openenv]'` for OpenEnvEnv). For OpenEnv environments, build the bundled project image with `prime env build <env-id>` before evaluation or training.
+These require additional dependencies installed through their packages (e.g., `uv add tasksets` for TextArena/OpenEnv tasksets, or `uv add 'verifiers[browser]'` for BrowserEnv). For OpenEnv environments, build the bundled project image with `prime env build <env-id>` before evaluation or training.
 
 Newer and more experimental environment classes include:
 

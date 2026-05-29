@@ -31,6 +31,13 @@ reasoning_effort = "medium"
 
 [[env]]
 id = "prime/wordle"
+
+[env.taskset]
+num_train_examples = 512
+num_eval_examples = 128
+
+[env.harness]
+max_turns = 6
 ```
 
 The key fields are:
@@ -40,6 +47,7 @@ The key fields are:
 - `[teacher].teacher_tau` — distillation weight (`0` disables distillation)
 - `[teacher].adv_tau` — optional weight on the RL advantage signal
 - `[[env]]` — environment id
+- `[env.taskset]` / `[env.harness]` — per-environment task and rollout overrides
 
 ## Launch Training
 
@@ -81,6 +89,13 @@ reasoning_effort = "medium"
 
 [[env]]
 id = "prime/wordle"
+
+[env.taskset]
+num_train_examples = 512
+num_eval_examples = 128
+
+[env.harness]
+max_turns = 6
 ```
 
 ```bash

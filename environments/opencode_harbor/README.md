@@ -28,31 +28,42 @@ prime eval run opencode-harbor -m openai/gpt-4.1-mini -n 20 -r 3 -t 1024 -T 0.7
 ```
 
 Notes:
-- Use `-a` / `--env-args` for flat environment arguments.
-- Use `taskset` and `harness` config sections for v1 object configuration.
+- Use `-a` / `--env-args` for nested Taskset/Harness overrides.
+- Use `taskset` for Harbor task selection and `harness` for OpenCode runtime settings.
 
 ### Environment Arguments
 
-| Arg | Type | Default | Description |
-| --- | ---- | ------- | ----------- |
-Taskset settings live under `env.taskset` (all fields of `vf.HarborTasksetConfig`):
+Taskset settings use fields from `tasksets.HarborTasksetConfig`:
 
-```toml
-[env.taskset]
-tasks = "./environments/opencode_harbor/tasks"   # defaults to bundled tasks/
-task_names = ["regex-log", "qemu-startup"]       # or import opencode_harbor.TERMINAL_BENCH_SAMPLE_TASKS
+```bash
+prime eval run opencode-harbor \
+  -a '{"taskset": {"task_names": ["regex-log"]}}'
 ```
 
-Harness settings live under `env.harness`:
+Harness settings use fields from `harnesses.OpenCodeConfig`; OpenCode program
+settings live under `harness.program`:
+
+```bash
+prime eval run opencode-harbor \
+  -a '{"harness": {"max_turns": 4, "program": {"disabled_tools": ["webfetch", "question"]}}}'
+```
+
+The same shape works in an eval TOML:
 
 ```toml
-[env.harness]
+[[eval]]
+env_id = "opencode-harbor"
+taskset = { task_names = ["regex-log", "qemu-startup"] }
+
+[eval.harness]
 max_turns = 4
+
+[eval.harness.program]
 disabled_tools = ["webfetch", "question"]
 ```
 
-By default this environment uses `vf.OpenCode` with only `webfetch` and
-`question` disabled. Set `env.harness.disabled_tools` to override that list.
+By default this environment uses `harnesses.OpenCode` with only `webfetch` and
+`question` disabled. Set `harness.program.disabled_tools` to override that list.
 
 ### Metrics
 Summarize key metrics your rubric emits and how they’re interpreted.
@@ -64,15 +75,15 @@ Summarize key metrics your rubric emits and how they’re interpreted.
 
 ## How It Works
 
-1. `vf.HarborTaskset` loads Harbor task rows and contributes sandbox settings,
+1. `tasksets.HarborTaskset` loads Harbor tasks and contributes sandbox settings,
    task uploads, env vars, and the Harbor reward.
-2. `vf.OpenCode` contributes the reusable OpenCode CLI program, install/setup,
+2. `harnesses.OpenCode` contributes the reusable OpenCode CLI program, install/setup,
    intercepted endpoint config, MCP tool proxy, and log artifact collection.
 3. The v1 runtime resolves both sides into one sandboxed command program at rollout time.
 4. Reward is computed by running the Harbor test scripts after the rollout.
 
-`HarborTaskset` and `OpenCode` are packaged under `verifiers.v1.packages` and
-re-exported from `verifiers.v1`.
+`HarborTaskset` and `OpenCode` live in the standalone `tasksets` and
+`harnesses` packages.
 
 ## Requirements
 

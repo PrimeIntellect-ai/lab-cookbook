@@ -48,6 +48,9 @@ class WikiSearchTasksetConfig(vf.TasksetConfig):
     corpus_dataset: str = "willcb/rare-wiki-pages"
     corpus_split: str = "train"
     chroma_db_dir: str = CHROMA_DB_DIR
+    system_prompt: vf.PromptInput | vf.SystemPromptConfig | None = (
+        "Use the provided Wikipedia search tools to help answer questions."
+    )
 
 
 @dataclass(frozen=True)
@@ -118,7 +121,8 @@ def load_wiki(config: WikiSearchTasksetConfig) -> WikiIndex:
 
 
 class WikiSearchTaskset(vf.Taskset[WikiSearchTasksetConfig]):
-    def load_tasks(self) -> vf.Tasks:
+    def load_tasks(self, split: vf.TaskSplit = "train") -> vf.Tasks:
+        _ = split
         dataset = load_dataset(self.config.dataset_name, split=self.config.dataset_split)
         for index, raw_row in enumerate(dataset):
             if self.config.max_examples is not None and index >= self.config.max_examples:
@@ -132,14 +136,12 @@ class WikiSearchTaskset(vf.Taskset[WikiSearchTasksetConfig]):
                 "prompt": [{"role": "user", "content": str(raw_row["question"])}],
             }
 
-    def load_system_prompt(self) -> vf.SystemPrompt:
-        return "Use the provided Wikipedia search tools to help answer questions."
-
-    def load_toolsets(self) -> vf.Toolsets:
+    def load_toolsets(self, config: WikiSearchTasksetConfig) -> vf.Toolsets:
+        _ = config
         wiki = load_wiki(self.config)
         chroma_semaphore = asyncio.Semaphore(100)
 
-        async def search_pages(query: str) -> list[dict[str, str]]:
+        async def search_pages(query: str) -> vf.JsonData:
             """Search for top 10 relevant articles using title embedding similarity."""
             async with chroma_semaphore:
                 results = await asyncio.to_thread(
@@ -154,9 +156,9 @@ class WikiSearchTaskset(vf.Taskset[WikiSearchTasksetConfig]):
                 assert isinstance(page_id, str)
                 assert isinstance(title, str)
                 pages.append({"page_id": page_id, "title": title})
-            return pages
+            return {"pages": pages}
 
-        async def view_sections(page_id: str) -> list[dict[str, str]]:
+        async def view_sections(page_id: str) -> vf.JsonData:
             """View the sections of a page."""
             content = wiki.page_id_to_content[page_id]
             sections: list[dict[str, str]] = []
@@ -171,7 +173,7 @@ class WikiSearchTaskset(vf.Taskset[WikiSearchTasksetConfig]):
                     )
             if not sections:
                 sections.append({"section_id": f"{page_id}:full", "section_name": "Full Page"})
-            return sections
+            return {"sections": sections}
 
         async def read_section(section_id: str) -> str:
             """Read a section of a page."""
@@ -231,9 +233,12 @@ class WikiSearchTaskset(vf.Taskset[WikiSearchTasksetConfig]):
         return 1.0 if "yes" in text.lower() else 0.0
 
 
-def load_taskset(config: WikiSearchTasksetConfig) -> vf.Taskset:
+def load_taskset(config: WikiSearchTasksetConfig) -> WikiSearchTaskset:
     return WikiSearchTaskset(config=config)
 
 
 def load_environment(config: vf.EnvConfig) -> vf.Env:
-    return vf.Env(taskset=vf.load_taskset(config=config.taskset))
+    return vf.Env(
+        taskset=vf.load_taskset(config=config.taskset),
+        harness=vf.Harness(config=config.harness),
+    )

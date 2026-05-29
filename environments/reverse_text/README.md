@@ -11,7 +11,7 @@ the true reversal.
 
 ### Datasets
 - **Primary dataset(s)**: [PrimeIntellect/Reverse-Text-RL](https://huggingface.co/datasets/PrimeIntellect/Reverse-Text-RL) train split
-- **Split sizes**: full train split for task rows
+- **Split sizes**: full train split for tasks
 
 ### Task
 - **Type**: single-turn

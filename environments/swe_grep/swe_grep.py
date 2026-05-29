@@ -1,4 +1,5 @@
 import functools
+import os
 import shlex
 
 import verifiers as vf
@@ -44,6 +45,7 @@ class SweGrepTasksetConfig(vf.TasksetConfig):
     max_turns: int = 2
     repo_url: str = "https://github.com/microsoft/vscode.git"
     repo_path: str = "vscode"
+    system_prompt: vf.PromptInput | vf.SystemPromptConfig | None = SYSTEM_PROMPT
 
 
 def assistant_text(state: vf.State) -> str:
@@ -66,17 +68,10 @@ def load_splits(dataset_name: str, train_ratio: float) -> tuple[Dataset, Dataset
 
 
 class SweGrepTaskset(vf.Taskset[SweGrepTasksetConfig]):
-    def __init__(self, config: SweGrepTasksetConfig | None = None) -> None:
-        super().__init__(config=config)
-        if "toolsets" not in self.config.model_fields_set:
-            self.add_toolset(self.load_toolset())
-
-    def load_system_prompt(self) -> vf.SystemPrompt:
-        return SYSTEM_PROMPT
-
-    def load_tasks(self) -> vf.Tasks:
-        train, _ = load_splits(self.config.dataset_name, self.config.train_ratio)
-        for index, raw_row in enumerate(train):
+    def load_tasks(self, split: vf.TaskSplit = "train") -> vf.Tasks:
+        train, test = load_splits(self.config.dataset_name, self.config.train_ratio)
+        dataset = train if split == "train" else test
+        for index, raw_row in enumerate(dataset):
             if not isinstance(raw_row, dict):
                 raise TypeError("Dataset rows must be dicts.")
             question = str(raw_row["question"])
@@ -87,20 +82,8 @@ class SweGrepTaskset(vf.Taskset[SweGrepTasksetConfig]):
                 "max_turns": self.config.max_turns,
             }
 
-    def load_eval_tasks(self) -> vf.Tasks:
-        _, test = load_splits(self.config.dataset_name, self.config.train_ratio)
-        for index, raw_row in enumerate(test):
-            if not isinstance(raw_row, dict):
-                raise TypeError("Dataset rows must be dicts.")
-            question = str(raw_row["question"])
-            yield {
-                **raw_row,
-                "example_id": index,
-                "prompt": [{"role": "user", "content": question}],
-                "max_turns": self.config.max_turns,
-            }
-
-    def load_toolset(self) -> vf.Toolset:
+    def load_toolsets(self, config: SweGrepTasksetConfig) -> vf.Toolsets:
+        _ = config
         repo_path = self.config.repo_path
 
         async def grep_tool(
@@ -114,7 +97,7 @@ class SweGrepTaskset(vf.Taskset[SweGrepTasksetConfig]):
             case_insensitive: bool = False,
         ) -> str:
             """Search for a pattern in files using ripgrep."""
-            del state
+            _ = state
             max_lines = 50
             flags = ["-n", "--max-filesize", "100K"]
             if context_lines > 0:
@@ -147,7 +130,7 @@ class SweGrepTaskset(vf.Taskset[SweGrepTasksetConfig]):
 
         async def list_files(path: str, sandbox, state) -> str:
             """List files and directories at a path."""
-            del state
+            _ = state
             result = await sandbox.execute(f"ls -la {shlex.quote(path)}")
             if result.exit_code:
                 error = (result.stderr or result.stdout or "")[:100]
@@ -164,7 +147,7 @@ class SweGrepTaskset(vf.Taskset[SweGrepTasksetConfig]):
             num_lines: int = 100,
         ) -> str:
             """Read lines from a file."""
-            del state
+            _ = state
             num_lines = min(num_lines, 50)
             end_line = start_line + num_lines - 1
             command = f"sed -n '{start_line},{end_line + 1}p' {shlex.quote(file_path)}"
@@ -184,29 +167,34 @@ class SweGrepTaskset(vf.Taskset[SweGrepTasksetConfig]):
                 )
             return f"Lines {start_line}-{end_line} of {file_path}:\n{output}"
 
-        return vf.Toolset(
-            tools=[grep_tool, list_files, read_file],
-            sandbox={
-                "image": "python:3.11-slim",
-                "scope": "rollout",
-                "network_access": True,
-                "timeout_minutes": 60,
-                "command_timeout": 60,
-                "setup_timeout": 600,
-                "setup_commands": [
-                    "apt-get update && apt-get install -y git ripgrep",
-                    f"git clone --depth 1 {self.config.repo_url} {self.config.repo_path}",
-                    f"test -d {self.config.repo_path}",
-                ],
-            },
-        )
+        return {
+            "swe_grep": vf.Toolset(
+                tools=[grep_tool, list_files, read_file],
+                sandbox=vf.SandboxConfig(
+                    image="python:3.11-slim",
+                    scope="rollout",
+                    network_access=True,
+                    timeout_minutes=60,
+                    command_timeout=60,
+                    setup_timeout=600,
+                    setup_commands=[
+                        "apt-get update && apt-get install -y git ripgrep",
+                        f"git clone --depth 1 {self.config.repo_url} {self.config.repo_path}",
+                        f"test -d {self.config.repo_path}",
+                    ],
+                ),
+            )
+        }
 
     @vf.update
     async def score_with_judge(self, task: vf.Task, state: vf.State) -> None:
         endpoint = state.get_endpoint_config(api="chat")
-        judge = AsyncOpenAI(api_key=endpoint["api_key"], base_url=endpoint["api_base"])
+        judge = AsyncOpenAI(
+            api_key=os.getenv(endpoint.api_key_var, ""),
+            base_url=endpoint.base_url,
+        )
         response = await judge.chat.completions.create(
-            model=endpoint["model"],
+            model=endpoint.model,
             messages=[
                 {
                     "role": "user",
@@ -223,7 +211,7 @@ class SweGrepTaskset(vf.Taskset[SweGrepTasksetConfig]):
 
     @vf.reward(weight=0.4)
     async def correct_answer(self, task: vf.Task, state: vf.State) -> float:
-        del task
+        _ = task
         return float(state.get("judge_score", 0.0))
 
     @vf.reward(weight=0.4)
@@ -248,7 +236,7 @@ class SweGrepTaskset(vf.Taskset[SweGrepTasksetConfig]):
 
     @vf.reward(weight=0.2)
     async def parallel_tool_calls(self, task: vf.Task, state: vf.State) -> float:
-        del task
+        _ = task
         completion = state["completion"]
         if not isinstance(completion, list):
             return 0.0
@@ -268,7 +256,7 @@ class SweGrepTaskset(vf.Taskset[SweGrepTasksetConfig]):
     async def efficiency_bonus_for_correct(
         self, tasks: list[vf.Task], states: list[vf.State]
     ) -> list[float]:
-        del tasks
+        _ = tasks
         rewards = [0.0] * len(states)
         correct_indices = [
             index
@@ -284,9 +272,12 @@ class SweGrepTaskset(vf.Taskset[SweGrepTasksetConfig]):
         return rewards
 
 
-def load_taskset(config: SweGrepTasksetConfig) -> vf.Taskset:
+def load_taskset(config: SweGrepTasksetConfig) -> SweGrepTaskset:
     return SweGrepTaskset(config=config)
 
 
 def load_environment(config: vf.EnvConfig) -> vf.Env:
-    return vf.Env(taskset=vf.load_taskset(config=config.taskset))
+    return vf.Env(
+        taskset=vf.load_taskset(config=config.taskset),
+        harness=vf.Harness(config=config.harness),
+    )

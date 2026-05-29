@@ -1,3 +1,4 @@
+import os
 import re
 
 import verifiers as vf
@@ -38,10 +39,20 @@ Score each dimension 0-2 (0=absent, 1=superficial, 2=thorough):
 Sum the five scores (0-10). Respond with ONLY the total number."""
 
 
+class EthicsDebateUserConfig(vf.UserConfig):
+    pass
+
+
 class EthicsDebateTasksetConfig(vf.TasksetConfig):
     dataset_name: str = "ergotts/ethics_questions"
     dataset_split: str = "train"
     num_rounds: int = 2
+    user: EthicsDebateUserConfig | None = EthicsDebateUserConfig()
+    system_prompt: vf.PromptInput | vf.SystemPromptConfig | None = (
+        "You are participating in a structured ethics debate. Follow the current "
+        "role assignment in each user message and end every turn with the requested "
+        "XML tag."
+    )
 
 
 def content_text(content: str | list | None, separator: str = "\n") -> str:
@@ -111,52 +122,15 @@ def refine_message(critique: str) -> str:
     )
 
 
-class EthicsDebateTaskset(vf.Taskset[EthicsDebateTasksetConfig]):
-    def __init__(self, config: EthicsDebateTasksetConfig | None = None) -> None:
-        super().__init__(config=config)
-        if "user" not in self.config.model_fields_set:
-            self.user = self.debate_user
-
-    def load_system_prompt(self) -> vf.SystemPrompt:
-        return (
-            "You are participating in a structured ethics debate. Follow the current "
-            "role assignment in each user message and end every turn with the requested "
-            "XML tag."
-        )
-
-    def load_tasks(self) -> vf.Tasks:
-        dataset = load_dataset(self.config.dataset_name, split=self.config.dataset_split)
-        num_rounds = self.config.num_rounds
-        for index, row in enumerate(dataset):
-            if not isinstance(row, dict):
-                raise TypeError("Dataset rows must be dicts.")
-            question = str(row["question"])
-            yield {
-                "example_id": index,
-                "question": question,
-                "num_rounds": num_rounds,
-                "prompt": [{"role": "user", "content": arguer_message(question)}],
-                "max_turns": 2 * num_rounds + 1,
-            }
-
-    @vf.setup
-    async def setup_debate(self, task: vf.Task, state: vf.State) -> None:
-        del task
-        state["debate_actor"] = ARGUER
-        state["handoff_history"] = []
-        state["current_argument"] = None
-        state["current_critique"] = None
-        state["final_argument"] = None
-        state["rollout_completed_cleanly"] = True
-
-    async def debate_user(
+class EthicsDebateUser(vf.User[EthicsDebateUserConfig]):
+    async def get_response(
         self,
         task: vf.Task,
         state: vf.State,
-        transcript: list[vf.Message],
-    ) -> list[dict[str, str]]:
+        messages: list[vf.Message],
+    ) -> list[vf.UserMessage]:
         actor = str(state.get("debate_actor") or ARGUER)
-        handoff = parse_handoff(actor, last_assistant_text(transcript))
+        handoff = parse_handoff(actor, last_assistant_text(messages))
         if handoff is None:
             tag = handoff_tag(actor)
             state["rollout_completed_cleanly"] = False
@@ -179,11 +153,39 @@ class EthicsDebateTaskset(vf.Taskset[EthicsDebateTasksetConfig]):
                 state["final_env_response"] = "Debate complete."
                 return []
             state["debate_actor"] = CRITIC
-            return [{"role": "user", "content": critic_message(question, handoff)}]
+            return [vf.UserMessage(content=critic_message(question, handoff))]
 
         state["current_critique"] = handoff
         state["debate_actor"] = ARGUER
-        return [{"role": "user", "content": refine_message(handoff)}]
+        return [vf.UserMessage(content=refine_message(handoff))]
+
+
+class EthicsDebateTaskset(vf.Taskset[EthicsDebateTasksetConfig]):
+    def load_tasks(self, split: vf.TaskSplit = "train") -> vf.Tasks:
+        _ = split
+        dataset = load_dataset(self.config.dataset_name, split=self.config.dataset_split)
+        num_rounds = self.config.num_rounds
+        for index, row in enumerate(dataset):
+            if not isinstance(row, dict):
+                raise TypeError("Dataset rows must be dicts.")
+            question = str(row["question"])
+            yield {
+                "example_id": index,
+                "question": question,
+                "num_rounds": num_rounds,
+                "prompt": [{"role": "user", "content": arguer_message(question)}],
+                "max_turns": 2 * num_rounds + 1,
+            }
+
+    @vf.setup
+    async def setup_debate(self, task: vf.Task, state: vf.State) -> None:
+        _ = task
+        state["debate_actor"] = ARGUER
+        state["handoff_history"] = []
+        state["current_argument"] = None
+        state["current_critique"] = None
+        state["final_argument"] = None
+        state["rollout_completed_cleanly"] = True
 
     @vf.reward(weight=1.0)
     async def argument_quality(self, task: vf.Task, state: vf.State) -> float:
@@ -191,9 +193,12 @@ class EthicsDebateTaskset(vf.Taskset[EthicsDebateTasksetConfig]):
         if not final_argument:
             return 0.0
         endpoint = state.get_endpoint_config(api="chat")
-        client = AsyncOpenAI(api_key=endpoint["api_key"], base_url=endpoint["api_base"])
+        client = AsyncOpenAI(
+            api_key=os.getenv(endpoint.api_key_var, ""),
+            base_url=endpoint.base_url,
+        )
         response = await client.chat.completions.create(
-            model=endpoint["model"],
+            model=endpoint.model,
             messages=[
                 {"role": "system", "content": JUDGE_SYSTEM},
                 {
@@ -210,9 +215,12 @@ class EthicsDebateTaskset(vf.Taskset[EthicsDebateTasksetConfig]):
         return float(numbers[0]) / 10.0 if numbers else 0.0
 
 
-def load_taskset(config: EthicsDebateTasksetConfig) -> vf.Taskset:
+def load_taskset(config: EthicsDebateTasksetConfig) -> EthicsDebateTaskset:
     return EthicsDebateTaskset(config=config)
 
 
 def load_environment(config: vf.EnvConfig) -> vf.Env:
-    return vf.Env(taskset=vf.load_taskset(config=config.taskset))
+    return vf.Env(
+        taskset=vf.load_taskset(config=config.taskset),
+        harness=vf.Harness(config=config.harness),
+    )

@@ -30,6 +30,7 @@ env_id = "prime/wiki-search"
 num_examples = 5
 rollouts_per_example = 2
 sampling_args = { max_tokens = 2048 }
+taskset = { max_examples = 250, max_turns = 8, chroma_db_dir = ".chroma_db/wiki-search-small" }
 ```
 
 ```bash
@@ -37,6 +38,15 @@ prime eval run configs/07/wiki-search-eval.toml
 ```
 
 The first run may spend extra time building or loading the search index before rollouts begin.
+
+Use taskset overrides to change the local corpus/cache and rollout budget
+without editing the environment package:
+
+```bash
+prime eval run prime/wiki-search \
+  -m openai/gpt-5.4-nano \
+  -a '{"taskset": {"max_examples": 250, "max_turns": 8, "chroma_db_dir": ".chroma_db/wiki-search-small"}}'
+```
 
 ## The Search Pattern
 
@@ -57,13 +67,15 @@ The [wiki-search](../../environments/wiki_search/wiki_search.py) implementation 
 
 ```python
 class WikiSearchTaskset(vf.Taskset[WikiSearchTasksetConfig]):
-    def load_tasks(self) -> vf.Tasks:
+    def load_tasks(self, split: vf.TaskSplit = "train") -> vf.Tasks:
         ...
 
-    def load_system_prompt(self) -> vf.SystemPrompt:
+    def load_system_prompt(
+        self, config: WikiSearchTasksetConfig
+    ) -> vf.SystemPrompt:
         return "Use the provided Wikipedia search tools to help answer questions."
 
-    def load_toolsets(self) -> vf.Toolsets:
+    def load_toolsets(self, config: WikiSearchTasksetConfig) -> vf.Toolsets:
         wiki = load_wiki(self.config)
         ...
         return {"wiki": vf.Toolset(tools=[search_pages, view_sections, read_section])}
@@ -74,10 +86,13 @@ class WikiSearchTaskset(vf.Taskset[WikiSearchTasksetConfig]):
 
 
 def load_environment(config: vf.EnvConfig) -> vf.Env:
-    return vf.Env(taskset=vf.load_taskset(config=config.taskset))
+    return vf.Env(
+        taskset=vf.load_taskset(config=config.taskset),
+        harness=vf.Harness(config=config.harness),
+    )
 ```
 
-`load_tasks` yields rows with prompt, answer, example ID, and turn limit. `load_toolsets` builds the Wikipedia index. `judge_reward` uses a dedicated judge client — see [Judges and Instruction Following](../07-judges-and-instruction-following/README.md).
+`load_tasks(split)` yields tasks with prompt, answer, example ID, and turn limit. `load_toolsets(config)` builds the Wikipedia index. `judge_reward` uses a dedicated judge client — see [Judges and Instruction Following](../07-judges-and-instruction-following/README.md).
 
 ## Train on Search
 

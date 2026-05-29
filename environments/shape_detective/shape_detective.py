@@ -43,33 +43,66 @@ def clue_line(target: Tile, prop: str, clue_index: int) -> str:
     return f"Clue {clue_index + 1} — {prop}: the target is {article}**{target[prop]}**."
 
 
+class ShapeDetectiveUserConfig(vf.UserConfig):
+    pass
+
+
 class ShapeDetectiveTasksetConfig(vf.TasksetConfig):
     mode: Mode = "multi"
     num_rows: int = 12
     seed: int = 0
+    user: ShapeDetectiveUserConfig | None = ShapeDetectiveUserConfig()
+    system_prompt: vf.PromptInput | vf.SystemPromptConfig | None = (
+        "You are playing Shape Detective. You see a 4x4 grid of tiles numbered 0-15 "
+        "(left-to-right, top-to-bottom). Each tile has a shape (circle, square, "
+        "triangle, star), a color (red, blue, green, yellow), and a pattern (solid, "
+        "striped, dotted). You are told clues that narrow down a single target tile. "
+        "When asked to commit your final answer, reply with the tile index in \\boxed{N}."
+    )
+
+
+class ShapeDetectiveUser(vf.User[ShapeDetectiveUserConfig]):
+    async def get_response(
+        self, task: vf.Task, state: vf.State, messages: list[vf.Message]
+    ) -> list[vf.UserMessage]:
+        _ = state
+        info = task["info"]
+        assert isinstance(info, dict)
+        if info["mode"] != "multi":
+            return []
+        target_tile = info["target_tile"]
+        assert isinstance(target_tile, dict)
+        assistant_turns = len(vf.get_messages(messages, role="assistant"))
+
+        if assistant_turns == 1:
+            return [
+                vf.UserMessage(
+                    content=(
+                        f"{clue_line(target_tile, 'color', 1)}\n\n"
+                        "Narrow the candidates again. Still do NOT submit your answer."
+                    )
+                )
+            ]
+        if assistant_turns == 2:
+            return [
+                vf.UserMessage(
+                    content=(
+                        f"{clue_line(target_tile, 'shape', 2)}\n\n"
+                        "Commit your answer now as \\boxed{N}."
+                    )
+                )
+            ]
+        return []
 
 
 class ShapeDetectiveTaskset(vf.Taskset[ShapeDetectiveTasksetConfig]):
-    def __init__(self, config: ShapeDetectiveTasksetConfig | None = None) -> None:
-        super().__init__(config=config)
-        if self.config.mode == "multi" and "user" not in self.config.model_fields_set:
-            self.user = self.shape_detective_user
-
-    def load_system_prompt(self) -> vf.SystemPrompt:
-        return (
-            "You are playing Shape Detective. You see a 4x4 grid of tiles numbered 0-15 "
-            "(left-to-right, top-to-bottom). Each tile has a shape (circle, square, "
-            "triangle, star), a color (red, blue, green, yellow), and a pattern (solid, "
-            "striped, dotted). You are told clues that narrow down a single target tile. "
-            "When asked to commit your final answer, reply with the tile index in \\boxed{N}."
-        )
-
-    def load_tasks(self) -> vf.Tasks:
+    def load_tasks(self, split: vf.TaskSplit = "train") -> vf.Tasks:
+        _ = split
         mode = self.config.mode
         num_rows = self.config.num_rows
         seed = self.config.seed
         rng = random.Random(seed)
-        rows: list[vf.ConfigData] = []
+        tasks: list[vf.JsonData] = []
         for _ in range(num_rows):
             while True:
                 tiles: list[Tile] = [
@@ -160,7 +193,7 @@ class ShapeDetectiveTaskset(vf.Taskset[ShapeDetectiveTasksetConfig]):
                     f"{clue_block}\n\n"
                     "Reply with the tile index in \\boxed{N}."
                 )
-                info: vf.ConfigData = {"mode": "single", "target": target}
+                info: vf.JsonData = {"mode": "single", "target": target}
                 max_turns = 1
             else:
                 intro = (
@@ -179,7 +212,7 @@ class ShapeDetectiveTaskset(vf.Taskset[ShapeDetectiveTasksetConfig]):
                 }
                 max_turns = 3
 
-            rows.append(
+            tasks.append(
                 {
                     "prompt": [
                         {
@@ -195,36 +228,7 @@ class ShapeDetectiveTaskset(vf.Taskset[ShapeDetectiveTasksetConfig]):
                     "max_turns": max_turns,
                 }
             )
-        return rows
-
-    async def shape_detective_user(self, task: vf.Task, state: vf.State) -> list[vf.ConfigData]:
-        info = task["info"]
-        if info["mode"] != "multi":
-            return []
-        target_tile: Tile = info["target_tile"]
-        assistant_turns = sum(1 for m in state["completion"] if m["role"] == "assistant")
-
-        if assistant_turns == 1:
-            return [
-                {
-                    "role": "user",
-                    "content": (
-                        f"{clue_line(target_tile, 'color', 1)}\n\n"
-                        "Narrow the candidates again. Still do NOT submit your answer."
-                    ),
-                }
-            ]
-        if assistant_turns == 2:
-            return [
-                {
-                    "role": "user",
-                    "content": (
-                        f"{clue_line(target_tile, 'shape', 2)}\n\n"
-                        "Commit your answer now as \\boxed{N}."
-                    ),
-                }
-            ]
-        return []
+        return tasks
 
     @vf.reward(weight=1.0)
     async def solved(self, task: vf.Task, state: vf.State) -> float:
@@ -244,9 +248,12 @@ class ShapeDetectiveTaskset(vf.Taskset[ShapeDetectiveTasksetConfig]):
         return 1.0 if answer == str(task["answer"]) else 0.0
 
 
-def load_taskset(config: ShapeDetectiveTasksetConfig) -> vf.Taskset:
+def load_taskset(config: ShapeDetectiveTasksetConfig) -> ShapeDetectiveTaskset:
     return ShapeDetectiveTaskset(config=config)
 
 
 def load_environment(config: vf.EnvConfig) -> vf.Env:
-    return vf.Env(taskset=vf.load_taskset(config=config.taskset))
+    return vf.Env(
+        taskset=vf.load_taskset(config=config.taskset),
+        harness=vf.Harness(config=config.harness),
+    )

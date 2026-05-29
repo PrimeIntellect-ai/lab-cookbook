@@ -11,17 +11,21 @@ The Taskset still owns tasks, rewards, and metrics. The Harness owns how the mod
 Local [opencode_harbor](../../environments/opencode_harbor/opencode_harbor.py) composes a Taskset and Harness separately:
 
 ```python
-import harnesses as h
-import tasksets as t
 import verifiers as vf
+from harnesses import OpenCode, OpenCodeConfig
+from tasksets import HarborTaskset, HarborTasksetConfig
 
 
-def load_taskset(config: t.HarborTasksetConfig) -> t.HarborTaskset:
-    return t.HarborTaskset(config=config)
+class OpenCodeHarborTasksetConfig(HarborTasksetConfig):
+    bundle_package: str | None = __name__
 
 
-def load_harness(config: h.OpenCodeConfig) -> h.OpenCode:
-    return h.OpenCode(config=config)
+def load_taskset(config: OpenCodeHarborTasksetConfig) -> HarborTaskset:
+    return HarborTaskset(config=config)
+
+
+def load_harness(config: OpenCodeConfig) -> OpenCode:
+    return OpenCode(config=config)
 
 
 def load_environment(config: vf.EnvConfig) -> vf.Env:
@@ -30,6 +34,10 @@ def load_environment(config: vf.EnvConfig) -> vf.Env:
         harness=vf.load_harness(config=config.harness),
     )
 ```
+
+The loader annotations define the concrete config types. `vf.load_taskset` and
+`vf.load_harness` use those annotations to validate `config.taskset` and
+`config.harness`, so environment entrypoints stay small.
 
 Inside the harness program, route third-party model calls through the rollout endpoint:
 
@@ -44,9 +52,43 @@ async def run_program(task: vf.Task, state: vf.State) -> vf.State:
 
 `get_endpoint_config` is appropriate here — inside an active harness program, not inside a reward function. See [Judges and Instruction Following](../07-judges-and-instruction-following/README.md) for the judge pitfall.
 
+## Config Overrides
+
+Tasksets and harnesses are tuned independently. For Harbor + OpenCode, the
+taskset decides which tasks to load; the harness decides how many turns the CLI
+agent gets; the nested program config decides how OpenCode itself is launched.
+
+```toml
+[[eval]]
+env_id = "prime/opencode-harbor"
+taskset = { task_names = ["regex-log"] }
+
+[eval.harness]
+max_turns = 4
+
+[eval.harness.program]
+disabled_tools = ["webfetch", "question"]
+```
+
+The same shape works from the CLI:
+
+```bash
+prime eval run prime/opencode-harbor \
+  -m openai/gpt-5.4-mini \
+  -a '{"taskset": {"task_names": ["regex-log"]}, "harness": {"max_turns": 4, "program": {"disabled_tools": ["webfetch", "question"]}}}'
+```
+
+Use this split as the default rule:
+
+- put dataset, task selection, task sandbox defaults, task tools, rewards, and
+  metrics on the Taskset config
+- put rollout limits, program execution, framework adapters, harness-owned
+  tools, and artifact collection on the Harness config
+- put command-specific settings under `harness.program`
+
 ## Deep Agents
 
-[primeintellect/langchain-deep-agents-env](https://app.primeintellect.ai/dashboard/environments/primeintellect/langchain-deep-agents-env) is a Hub example. The Taskset loads GSM8K rows and scores boxed answers. The Harness runs a LangChain Deep Agents program.
+[primeintellect/langchain-deep-agents-env](https://app.primeintellect.ai/dashboard/environments/primeintellect/langchain-deep-agents-env) is a Hub example. The Taskset loads GSM8K tasks and scores boxed answers. The Harness runs a LangChain Deep Agents program.
 
 Run a small eval:
 
