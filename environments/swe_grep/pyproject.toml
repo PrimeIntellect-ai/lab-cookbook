@@ -3,9 +3,9 @@ name = "swe-grep"
 description = "Just another swe grep environment"
 tags = ["train", "eval", "v1", "taskset", "harness"]
 version = "0.3.3"
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.14"
 dependencies = [
-    "verifiers>=0.1.15.dev12",
+    "verifiers>=0.1.15.dev17",
 ]
 
 [build-system]

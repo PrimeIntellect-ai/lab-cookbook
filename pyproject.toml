@@ -8,9 +8,9 @@ version = "0.1.0"
 description = "Guides and recipes for Prime Intellect Lab"
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 dependencies = [
-    "verifiers>=0.1.15.dev12",
+    "verifiers>=0.1.15.dev17",
     "datasets>=2.0",
     "openai>=1.0",
     "scikit-learn>=1.3",
@@ -19,6 +19,7 @@ dependencies = [
     "gsm8k",
     "wiki-search",
     "shape-detective",
+    "math-python",
     "ethics-debate",
     "swe-grep",
     "basic-patent-q-and-a",
@@ -26,7 +27,7 @@ dependencies = [
     "patent-technical-analysis",
     "harnesses>=0.1.1",
     "simple-judge",
-    "tasksets>=0.1.1",
+    "tasksets>=0.1.4",
 ]
 
 [tool.uv.workspace]
@@ -36,6 +37,7 @@ members = [
     "environments/gsm8k",
     "environments/wiki_search",
     "environments/shape_detective",
+    "environments/math_python",
     "environments/ethics_debate",
     "environments/swe_grep",
     "environments/opencode_harbor",
@@ -51,6 +53,7 @@ wordle = { workspace = true }
 gsm8k = { workspace = true }
 wiki-search = { workspace = true }
 shape-detective = { workspace = true }
+math-python = { workspace = true }
 ethics-debate = { workspace = true }
 swe-grep = { workspace = true }
 opencode-harbor = { workspace = true }
@@ -58,7 +61,6 @@ basic-patent-q-and-a = { workspace = true }
 advanced-patent-q-and-a = { workspace = true }
 patent-technical-analysis = { workspace = true }
 simple-judge = { workspace = true }
-verifiers = { path = "../verifiers" }
 
 [dependency-groups]
 dev = [

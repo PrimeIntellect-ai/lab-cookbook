@@ -2,10 +2,10 @@
 name = "advanced-patent-q-and-a"
 description = "Advanced Agentic RAG over patent documents for Q&A with more comparisons and lookups"
 tags = ["patents", "multi-turn", "agentic-search", "rag", "train", "eval", "llm-judge", "v1", "taskset", "harness"]
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 version = "0.2.3"
 dependencies = [
-    "verifiers>=0.1.15.dev12",
+    "verifiers>=0.1.15.dev17",
     "chromadb",
     "datasets",
     "openai",

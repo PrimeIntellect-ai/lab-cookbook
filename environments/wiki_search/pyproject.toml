@@ -3,9 +3,9 @@ name = "wiki-search"
 description = "Agentic RAG over a small Wikipedia corpus indexed with ChromaDB"
 tags = ["train", "eval", "v1", "taskset", "harness", "wikipedia", "rag", "embeddings", "llm-judge"]
 version = "0.1.0"
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.14"
 dependencies = [
-    "verifiers>=0.1.15.dev12",
+    "verifiers>=0.1.15.dev17",
     "chromadb",
     "datasets>=2.18.0",
     "openai>=1.40.0",

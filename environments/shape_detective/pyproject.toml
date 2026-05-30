@@ -2,9 +2,9 @@
 name = "shape-detective"
 version = "0.1.0"
 description = "Visual deduction game: identify a hidden tile in a 4x4 grid from shape/color/pattern clues."
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 dependencies = [
-    "verifiers>=0.1.15.dev12",
+    "verifiers>=0.1.15.dev17",
     "Pillow>=10.0.0",
 ]
 

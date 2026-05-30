@@ -3,10 +3,10 @@ name = "wordle"
 description = "Wordle game environment (v1 taskset wrapping TextArena Wordle-v0)"
 tags = ["textarena", "multi-turn", "reasoning", "game", "train", "eval", "v1", "taskset", "harness"]
 version = "0.2.0"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 dependencies = [
-    "verifiers>=0.1.15.dev12",
-    "tasksets>=0.1.1",
+    "verifiers>=0.1.15.dev17",
+    "tasksets>=0.1.4",
 ]
 
 [build-system]
