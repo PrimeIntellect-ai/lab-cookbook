@@ -11,7 +11,7 @@ reasoning_effort = "low"
 [[env]]
 id = "prime/wiki-search"
 
-[env.taskset]
+[env.args.taskset]
 max_examples = 512
 max_turns = 8
 chroma_db_dir = ".chroma_db/wiki-search-rl"

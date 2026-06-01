@@ -3,8 +3,6 @@ loss = "sft"
 
 [teacher]
 model = "openai/gpt-oss-120b"
-save = true
-replay = false
 
 [teacher.sampling]
 max_tokens = 2048
@@ -13,9 +11,9 @@ reasoning_effort = "medium"
 [[env]]
 id = "prime/wordle"
 
-[env.taskset]
+[env.args.taskset]
 num_train_examples = 512
 num_eval_examples = 128
 
-[env.harness]
+[env.args.harness]
 max_turns = 6
