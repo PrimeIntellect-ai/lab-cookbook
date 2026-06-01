@@ -16,7 +16,7 @@ env_id = "primeintellect/wiki-search"
 # env_id = "primeintellect/wordle"
 
 # [[eval]]
-# env_id = "primeintellect/dspy-flights"
+# env_id = "prime/dspy-rlm"
 
 # [[eval]]
 # env_id = "primeintellect/opencode-harbor"

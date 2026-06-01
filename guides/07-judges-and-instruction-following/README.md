@@ -3,7 +3,7 @@
 Three environments, in order:
 
 1. [simple-judge](../../environments/simple_judge/simple_judge.py) — local Taskset, one yes/no judge criterion per task
-2. [prime/ifeval](https://app.primeintellect.ai/dashboard/environments/primeintellect/ifeval) — [google/IFEval](https://huggingface.co/datasets/google/IFEval), programmatic constraint checks
+2. [primeintellect/ifeval](https://app.primeintellect.ai/dashboard/environments/primeintellect/ifeval) — [google/IFEval](https://huggingface.co/datasets/google/IFEval), programmatic constraint checks
 3. [will/advanced-if](https://app.primeintellect.ai/dashboard/environments/will/advanced-if) — [facebook/AdvancedIF](https://huggingface.co/datasets/facebook/AdvancedIF), multiple rubric bullets per task
 
 ## Part 1: simple-judge
@@ -60,7 +60,7 @@ Implementation: [environments/simple_judge/simple_judge.py](../../environments/s
 ## Part 2: IFEval
 
 ```bash
-prime eval run prime/ifeval -m openai/gpt-4.1-mini -n 10 -r 1 -t 1024
+prime eval run primeintellect/ifeval -m openai/gpt-4.1-mini -n 10 -r 1 -t 1024
 ```
 
 ```toml
@@ -69,7 +69,7 @@ model = "openai/gpt-4.1-mini"
 save_results = true
 
 [[eval]]
-env_id = "prime/ifeval"
+env_id = "primeintellect/ifeval"
 num_examples = 10
 rollouts_per_example = 1
 sampling_args = { max_tokens = 1024 }

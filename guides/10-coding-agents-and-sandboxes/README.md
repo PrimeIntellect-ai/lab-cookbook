@@ -13,7 +13,7 @@ This guide starts with [primeintellect/math-python](https://app.primeintellect.a
 Run a small eval:
 
 ```bash
-prime eval run prime/math-python \
+prime eval run primeintellect/math-python \
   -m openai/gpt-5.4-nano \
   -n 5 \
   -r 2 \
@@ -28,7 +28,7 @@ model = "openai/gpt-5.4-nano"
 save_results = true
 
 [[eval]]
-env_id = "prime/math-python"
+env_id = "primeintellect/math-python"
 num_examples = 5
 rollouts_per_example = 2
 sampling_args = { max_tokens = 1024 }
@@ -47,7 +47,7 @@ This is the smallest useful sandbox pattern: one task, one Python tool, one isol
 Run a small eval:
 
 ```bash
-prime eval run prime/opencode-harbor -m openai/gpt-5.4-mini
+prime eval run primeintellect/opencode-harbor -m openai/gpt-5.4-mini
 ```
 
 Or run with a config file:
@@ -58,7 +58,7 @@ model = "openai/gpt-5.4-mini"
 save_results = true
 
 [[eval]]
-env_id = "prime/opencode-harbor"
+env_id = "primeintellect/opencode-harbor"
 taskset = { task_names = ["regex-log"] }
 
 [eval.harness]
@@ -81,7 +81,7 @@ The reward comes from the task tests, not from judging the final message. That m
 Use the same override split from the CLI when iterating locally:
 
 ```bash
-prime eval run prime/opencode-harbor \
+prime eval run primeintellect/opencode-harbor \
   -m openai/gpt-5.4-mini \
   -a '{"taskset": {"task_names": ["regex-log"]}, "harness": {"max_turns": 4, "program": {"disabled_tools": ["webfetch", "question"]}}}'
 ```

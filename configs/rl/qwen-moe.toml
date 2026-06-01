@@ -23,7 +23,7 @@ id = "primeintellect/reverse-text"
 # id = "primeintellect/wiki-search"
 
 # [[env]]
-# id = "primeintellect/dspy-flights"
+# id = "prime/dspy-rlm"
 
 # [[env]]
 # id = "primeintellect/opencode-harbor"

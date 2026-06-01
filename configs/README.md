@@ -29,7 +29,7 @@ Training configs use nested tables under the relevant `[[env]]` block:
 
 ```toml
 [[env]]
-id = "prime/opencode-harbor"
+id = "primeintellect/opencode-harbor"
 
 [env.taskset]
 task_names = ["regex-log"]

@@ -21,7 +21,7 @@ id = "primeintellect/wiki-search"
 # id = "primeintellect/wordle"
 
 # [[env]]
-# id = "primeintellect/dspy-flights"
+# id = "prime/dspy-rlm"
 
 # [[env]]
 # id = "primeintellect/opencode-harbor"

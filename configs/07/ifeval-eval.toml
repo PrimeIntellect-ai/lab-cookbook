@@ -2,7 +2,7 @@ model = "openai/gpt-4.1-mini"
 save_results = true
 
 [[eval]]
-env_id = "prime/ifeval"
+env_id = "primeintellect/ifeval"
 num_examples = 10
 rollouts_per_example = 1
 sampling_args = { max_tokens = 1024 }

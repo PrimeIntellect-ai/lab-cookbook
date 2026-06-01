@@ -60,7 +60,7 @@ agent gets; the nested program config decides how OpenCode itself is launched.
 
 ```toml
 [[eval]]
-env_id = "prime/opencode-harbor"
+env_id = "primeintellect/opencode-harbor"
 taskset = { task_names = ["regex-log"] }
 
 [eval.harness]
@@ -73,7 +73,7 @@ disabled_tools = ["webfetch", "question"]
 The same shape works from the CLI:
 
 ```bash
-prime eval run prime/opencode-harbor \
+prime eval run primeintellect/opencode-harbor \
   -m openai/gpt-5.4-mini \
   -a '{"taskset": {"task_names": ["regex-log"]}, "harness": {"max_turns": 4, "program": {"disabled_tools": ["webfetch", "question"]}}}'
 ```
@@ -88,12 +88,12 @@ Use this split as the default rule:
 
 ## Deep Agents
 
-[primeintellect/langchain-deep-agents-env](https://app.primeintellect.ai/dashboard/environments/primeintellect/langchain-deep-agents-env) is a Hub example. The Taskset loads GSM8K tasks and scores boxed answers. The Harness runs a LangChain Deep Agents program.
+[prime/langchain-deep-agents-math](https://app.primeintellect.ai/dashboard/environments/prime/langchain-deep-agents-math) is a Hub example. The Taskset loads INTELLECT-3-RL math tasks and scores boxed answers. The Harness runs a LangChain Deep Agents program.
 
 Run a small eval:
 
 ```bash
-prime eval run primeintellect/langchain-deep-agents-env \
+prime eval run prime/langchain-deep-agents-math \
   -m openai/gpt-5-nano \
   -n 5 \
   -r 1 \
@@ -108,7 +108,7 @@ model = "openai/gpt-5.4-nano"
 save_results = true
 
 [[eval]]
-env_id = "prime/langchain-deep-agents-env"
+env_id = "prime/langchain-deep-agents-math"
 num_examples = 5
 rollouts_per_example = 1
 sampling_args = { max_tokens = 2048 }
@@ -120,12 +120,12 @@ prime eval run configs/12/deep-agents-eval.toml
 
 ## DSPy
 
-[primeintellect/dspy-rlm](https://app.primeintellect.ai/dashboard/environments/primeintellect/dspy-rlm) shows the same split with DSPy.
+[prime/dspy-rlm](https://app.primeintellect.ai/dashboard/environments/prime/dspy-rlm) shows the same split with DSPy.
 
 Run a small eval:
 
 ```bash
-prime eval run primeintellect/dspy-rlm \
+prime eval run prime/dspy-rlm \
   -m openai/gpt-5-nano \
   -n 5 \
   -r 1 \
@@ -150,7 +150,7 @@ sampling_args = { max_tokens = 2048 }
 prime eval run configs/12/dspy-rlm-eval.toml
 ```
 
-For a domain-specific DSPy example, use `dspy-flights`.
+For more DSPy examples, run `prime env list --search dspy`.
 
 ## When to Use One
 

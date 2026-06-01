@@ -2,7 +2,7 @@ model = "openai/gpt-5.4-mini"
 save_results = true
 
 [[eval]]
-env_id = "prime/opencode-harbor"
+env_id = "primeintellect/opencode-harbor"
 taskset = { task_names = ["regex-log"] }
 
 [eval.harness]
