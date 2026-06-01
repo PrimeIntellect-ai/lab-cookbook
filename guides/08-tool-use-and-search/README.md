@@ -12,7 +12,7 @@ Run a small eval:
 
 ```bash
 prime eval run prime/wiki-search \
-  -m openai/gpt-5.4-nano \
+  -m openai/gpt-oss-20b \
   -n 5 \
   -r 2 \
   -t 2048
@@ -22,7 +22,7 @@ Or run with a config file:
 
 ```toml
 # [configs/07/wiki-search-eval.toml](../../configs/07/wiki-search-eval.toml)
-model = "openai/gpt-5.4-nano"
+model = "openai/gpt-oss-20b"
 save_results = true
 
 [[eval]]
@@ -44,7 +44,7 @@ without editing the environment package:
 
 ```bash
 prime eval run prime/wiki-search \
-  -m openai/gpt-5.4-nano \
+  -m openai/gpt-oss-20b \
   -a '{"taskset": {"max_examples": 250, "max_turns": 8, "chroma_db_dir": ".chroma_db/wiki-search-small"}}'
 ```
 

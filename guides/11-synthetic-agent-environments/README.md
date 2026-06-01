@@ -21,7 +21,7 @@ Run a small eval:
 
 ```bash
 prime eval run prime/calendar-scheduling \
-  -m openai/gpt-5.4-nano \
+  -m openai/gpt-oss-20b \
   -n 5 \
   -r 2 \
   -t 2048 \
@@ -32,7 +32,7 @@ Or run with a config file:
 
 ```toml
 # [configs/11/calendar-scheduling-eval.toml](../../configs/11/calendar-scheduling-eval.toml)
-model = "openai/gpt-5.4-nano"
+model = "openai/gpt-oss-20b"
 save_results = true
 
 [[eval]]
@@ -194,7 +194,7 @@ Before launching RL on a synthetic environment, check:
 
 - the generator produces only solvable tasks (oracle finds a valid solution every time)
 - random or naive baselines score well below the oracle
-- a capable model (gpt-5 or similar) scores meaningfully above random
+- a capable model (gpt-5.5 or similar) scores meaningfully above random
 - failures look like genuine reasoning mistakes, not environment bugs or formatting issues
 - the score-check budget and turn limit are tight enough to discourage brute-force search
 

@@ -331,7 +331,7 @@ Use `vf.AssistantMessage` and `vf.TextContentPart` when reading `state["completi
 Multimodal eval requires a model that can actually consume the image part. The set of multimodal models on Prime Inference changes regularly, so check the live list rather than copying a table:
 
 ```bash
-prime inference models --plain --output json | jq '.data[].id' | grep -iE "vl|qwen3\.5|gpt-5|gemini|claude"
+prime inference models --plain --output json | jq '.data[].id' | grep -iE "vl|qwen3\.5|gpt-5.5|gemini|claude"
 ```
 
 The full catalog is browsable in the Prime Inference docs under the inference / models section. Don't pick a text-only model and hope it ignores the image — most providers reject the request outright; a few silently drop the image, which produces eval numbers that look plausible but are evaluating something else.

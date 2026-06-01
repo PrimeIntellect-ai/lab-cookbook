@@ -306,7 +306,7 @@ Judges are used for tasks where deterministic evaluation is impractical, and an 
 
 ```python
 judge_rubric = vf.JudgeRubric(
-    judge_model="gpt-4.1-mini",
+    judge_model="openai/gpt-oss-120b",
 )
 
 async def judge_correctness(prompt, completion, answer, judge) -> float:
@@ -322,7 +322,7 @@ For more control, JudgeRubric accepts a custom `judge_prompt` template and expos
 
 ```python
 judge_rubric = vf.JudgeRubric(
-    judge_model="gpt-4.1-mini",
+    judge_model="openai/gpt-oss-120b",
     judge_prompt="""Rate the writing quality of this response from 0-10.
 Response: {response}
 Score:"""
@@ -354,7 +354,7 @@ MathRubric includes a `correct_answer` reward function that parses `\boxed{}` an
 
 ```python
 math_rubric = vf.MathRubric()
-judge_rubric = vf.JudgeRubric(judge_model="gpt-4.1-mini")
+judge_rubric = vf.JudgeRubric(judge_model="openai/gpt-oss-120b")
 judge_rubric.add_reward_func(judge_correctness, weight=0.5)
 
 rubric = vf.RubricGroup([math_rubric, judge_rubric])

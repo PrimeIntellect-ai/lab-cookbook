@@ -10,5 +10,5 @@ Toy single-turn environment for learning LLM judge wiring. Each task asks for a 
 
 ```bash
 prime env install simple-judge
-prime eval run simple-judge -m openai/gpt-4.1-mini -n 6 -r 2
+prime eval run simple-judge -m openai/gpt-oss-120b -n 6 -r 2
 ```

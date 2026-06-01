@@ -16,7 +16,7 @@ Run a small eval:
 
 ```bash
 prime eval run prime/gsm8k \
-  -m openai/gpt-5.4-nano \
+  -m openai/gpt-oss-20b \
   -n 10 \
   -r 2
 ```
@@ -27,7 +27,7 @@ This can also be done with a config file:
 
 ```toml
 # [configs/01/first-eval.toml](../../configs/01/first-eval.toml)
-model = "openai/gpt-5.4-nano"
+model = "openai/gpt-oss-20b"
 save_results = true
 
 [[eval]]
@@ -72,7 +72,7 @@ There are several factors to consider when selecting a model:
 
 The same environments you use for evaluating closed frontier models can be used for training your own models on top of an open base model. See [Training with RL](../03-training-with-rl/README.md#choose-a-training-model) for how to connect a training-compatible model to the same environments.
 
-**Cost, speed, and capability.** Start with a cheap, fast model — `openai/gpt-5.4-nano`, `anthropic/claude-haiku-4.5`, or a small open model like `Qwen/Qwen3.5-0.8B` — to confirm the environment and scoring work, then step up when you're iterating on prompts or checking the ceiling. Many evals use OpenAI or Anthropic models: pass a Prime Inference id to `-m` as above, or an alias from [configs/endpoints.toml](../../configs/endpoints.toml) with your own API key. Run `prime inference models` if you want to browse options or compare pricing. If a bigger model doesn't move scores, the bottleneck is probably the environment, not the model.
+**Cost, speed, and capability.** Start with a cheap, fast model — `openai/gpt-oss-20b`, `anthropic/claude-haiku-4.5`, or a small open model like `Qwen/Qwen3.5-0.8B` — to confirm the environment and scoring work, then step up when you're iterating on prompts or checking the ceiling. Many evals use OpenAI or Anthropic models: pass a Prime Inference id to `-m` as above, or an alias from [configs/endpoints.toml](../../configs/endpoints.toml) with your own API key. Run `prime inference models` if you want to browse options or compare pricing. If a bigger model doesn't move scores, the bottleneck is probably the environment, not the model.
 
 **Reasoning controls.** Many model families, including `Qwen3.5` / `Qwen3.6`, `Nemotron`, and `gpt-oss`, support thinking mode — extended chain-of-thought before the final answer, toggled via `[sampling].enable_thinking` (or `reasoning_effort` for `gpt-oss`). This helps on multi-step tasks (math, code, logic) but inflates output length and cost. When comparing models, try a few reasoning settings so you see the cost-performance tradeoffs, not just the best-case score.
 
@@ -87,7 +87,7 @@ Use [configs/01/first-eval-suite.toml](../../configs/01/first-eval-suite.toml):
 
 ```toml
 # [configs/01/first-eval-suite.toml](../../configs/01/first-eval-suite.toml)
-model = "openai/gpt-5.4-nano"
+model = "openai/gpt-oss-20b"
 save_results = true
 
 [[eval]]

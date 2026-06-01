@@ -39,7 +39,7 @@ class WikiSearchTasksetConfig(vf.TasksetConfig):
     dataset_split: str = "train"
     max_examples: int | None = None
     max_turns: int = 10
-    judge_model: str = "openai/gpt-4.1-mini"
+    judge_model: str = "openai/gpt-oss-120b"
     judge_base_url: str = "https://api.pinference.ai/api/v1"
     judge_api_key_var: str = "PRIME_API_KEY"
     embed_model: str = "text-embedding-3-small"

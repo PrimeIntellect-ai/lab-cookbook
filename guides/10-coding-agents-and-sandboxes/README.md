@@ -14,7 +14,7 @@ Run a small eval:
 
 ```bash
 prime eval run prime/math-python \
-  -m openai/gpt-5.4-nano \
+  -m openai/gpt-oss-20b \
   -n 5 \
   -r 2 \
   -t 1024
@@ -24,7 +24,7 @@ Or run with a config file:
 
 ```toml
 # [configs/09/math-python-eval.toml](../../configs/09/math-python-eval.toml)
-model = "openai/gpt-5.4-nano"
+model = "openai/gpt-oss-20b"
 save_results = true
 
 [[eval]]
@@ -47,14 +47,14 @@ This is the smallest useful sandbox pattern: one task, one Python tool, one isol
 Run a small eval:
 
 ```bash
-prime eval run prime/opencode-harbor -m openai/gpt-5.4-mini
+prime eval run prime/opencode-harbor -m openai/gpt-5.5
 ```
 
 Or run with a config file:
 
 ```toml
 # [configs/09/opencode-harbor.toml](../../configs/09/opencode-harbor.toml)
-model = "openai/gpt-5.4-mini"
+model = "openai/gpt-5.5"
 save_results = true
 
 [[eval]]
@@ -74,7 +74,7 @@ prime eval run configs/09/opencode-harbor.toml
 
 A broader baseline run without `task_names` (5 examples × 3 rollouts, the
 env's defaults from `pyproject.toml`) cost roughly **$3.04** end-to-end against
-`gpt-5.4-mini`. Expect a longer eval than the text-only examples.
+`gpt-5.5`. Expect a longer eval than the text-only examples.
 
 The reward comes from the task tests, not from judging the final message. That makes coding-agent environments useful for training, but it also means broken tests, missing dependencies, or unrealistic timeouts can dominate results.
 
@@ -82,7 +82,7 @@ Use the same override split from the CLI when iterating locally:
 
 ```bash
 prime eval run prime/opencode-harbor \
-  -m openai/gpt-5.4-mini \
+  -m openai/gpt-5.5 \
   -a '{"taskset": {"task_names": ["regex-log"]}, "harness": {"max_turns": 4, "program": {"disabled_tools": ["webfetch", "question"]}}}'
 ```
 

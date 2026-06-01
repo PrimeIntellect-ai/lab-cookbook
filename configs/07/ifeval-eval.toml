@@ -1,4 +1,4 @@
-model = "openai/gpt-4.1-mini"
+model = "openai/gpt-oss-120b"
 save_results = true
 
 [[eval]]

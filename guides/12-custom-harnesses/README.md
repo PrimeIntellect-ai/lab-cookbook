@@ -74,7 +74,7 @@ The same shape works from the CLI:
 
 ```bash
 prime eval run prime/opencode-harbor \
-  -m openai/gpt-5.4-mini \
+  -m openai/gpt-5.5 \
   -a '{"taskset": {"task_names": ["regex-log"]}, "harness": {"max_turns": 4, "program": {"disabled_tools": ["webfetch", "question"]}}}'
 ```
 
@@ -94,7 +94,7 @@ Run a small eval:
 
 ```bash
 prime eval run primeintellect/langchain-deep-agents-env \
-  -m openai/gpt-5-nano \
+  -m openai/gpt-oss-20b \
   -n 5 \
   -r 1 \
   -t 2048
@@ -104,7 +104,7 @@ Or run with a config file:
 
 ```toml
 # [configs/12/deep-agents-eval.toml](../../configs/12/deep-agents-eval.toml)
-model = "openai/gpt-5.4-nano"
+model = "openai/gpt-oss-20b"
 save_results = true
 
 [[eval]]
@@ -126,7 +126,7 @@ Run a small eval:
 
 ```bash
 prime eval run primeintellect/dspy-rlm \
-  -m openai/gpt-5-nano \
+  -m openai/gpt-oss-20b \
   -n 5 \
   -r 1 \
   -t 2048
@@ -136,7 +136,7 @@ Or run with a config file:
 
 ```toml
 # [configs/12/dspy-rlm-eval.toml](../../configs/12/dspy-rlm-eval.toml)
-model = "openai/gpt-5.4-nano"
+model = "openai/gpt-oss-20b"
 save_results = true
 
 [[eval]]

@@ -12,12 +12,12 @@ Each task stores a criterion in `info`. `judge_reward` calls an LLM and parses `
 
 ```bash
 prime env install simple-judge
-prime eval run simple-judge -m openai/gpt-4.1-mini -n 6 -r 2
+prime eval run simple-judge -m openai/gpt-oss-120b -n 6 -r 2
 ```
 
 ```toml
 # [configs/07/simple-judge-eval.toml](../../configs/07/simple-judge-eval.toml)
-model = "openai/gpt-4.1-mini"
+model = "openai/gpt-oss-120b"
 save_results = true
 
 [[eval]]
@@ -31,7 +31,7 @@ Judge settings live on `TasksetConfig`:
 
 ```python
 class SimpleJudgeTasksetConfig(vf.TasksetConfig):
-    judge_model: str = "openai/gpt-4.1-mini"
+    judge_model: str = "openai/gpt-oss-120b"
     judge_base_url: str = "https://api.pinference.ai/api/v1"
     judge_api_key_var: str = "PRIME_API_KEY"
 ```
@@ -41,14 +41,14 @@ configs:
 
 ```bash
 prime eval run simple-judge \
-  -m openai/gpt-4.1-mini \
-  -a '{"taskset": {"judge_model": "openai/gpt-5-mini"}}'
+  -m openai/gpt-oss-120b \
+  -a '{"taskset": {"judge_model": "openai/gpt-oss-120b"}}'
 ```
 
 ```toml
 [[eval]]
 env_id = "simple-judge"
-taskset = { judge_model = "openai/gpt-5-mini", judge_api_key_var = "PRIME_API_KEY" }
+taskset = { judge_model = "openai/gpt-oss-120b", judge_api_key_var = "PRIME_API_KEY" }
 ```
 
 Call `vf.ensure_keys(...)` in `load_taskset` if the env requires API keys.
@@ -60,12 +60,12 @@ Implementation: [environments/simple_judge/simple_judge.py](../../environments/s
 ## Part 2: IFEval
 
 ```bash
-prime eval run prime/ifeval -m openai/gpt-4.1-mini -n 10 -r 1 -t 1024
+prime eval run prime/ifeval -m openai/gpt-oss-120b -n 10 -r 1 -t 1024
 ```
 
 ```toml
 # [configs/07/ifeval-eval.toml](../../configs/07/ifeval-eval.toml)
-model = "openai/gpt-4.1-mini"
+model = "openai/gpt-oss-120b"
 save_results = true
 
 [[eval]]
@@ -81,12 +81,12 @@ taskset = { mode = "strict" }
 ## Part 3: AdvancedIF
 
 ```bash
-prime eval run will/advanced-if -m openai/gpt-4.1-mini -n 5 -r 1 -t 2048
+prime eval run will/advanced-if -m openai/gpt-oss-120b -n 5 -r 1 -t 2048
 ```
 
 ```toml
 # [configs/07/advanced-if-eval.toml](../../configs/07/advanced-if-eval.toml)
-model = "openai/gpt-4.1-mini"
+model = "openai/gpt-oss-120b"
 save_results = true
 
 [[eval]]

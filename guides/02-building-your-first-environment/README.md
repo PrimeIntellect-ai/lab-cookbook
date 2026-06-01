@@ -164,7 +164,7 @@ Run a small eval:
 
 ```bash
 prime eval run reverse-text \
-  -m openai/gpt-5.4-nano \
+  -m openai/gpt-oss-20b \
   -n 10 \
   -r 2 \
   -t 512
@@ -174,7 +174,7 @@ Or run with a config file:
 
 ```toml
 # [configs/02/reverse-text-eval.toml](../../configs/02/reverse-text-eval.toml)
-model = "openai/gpt-5.4-nano"
+model = "openai/gpt-oss-20b"
 save_results = true
 
 [[eval]]
@@ -193,7 +193,7 @@ belong under `taskset`; base harness fields belong under `harness`:
 
 ```bash
 prime eval run reverse-text \
-  -m openai/gpt-5.4-nano \
+  -m openai/gpt-oss-20b \
   -a '{"taskset": {"dataset_split": "train[:100]"}, "harness": {"max_turns": 1}}'
 ```
 

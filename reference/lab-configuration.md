@@ -33,7 +33,7 @@ You do not need to export `PRIME_API_KEY` just to run `prime eval run` against a
 
 ## Workspace Endpoint Aliases
 
-[configs/endpoints.toml](../configs/endpoints.toml) in a Lab workspace maps short aliases (`gpt-5-mini`, `qwen3-30b-i`, `sonnet`) to provider, model id, base URL, and the env var that holds the key. Aliases are how evals and GEPA refer to models without repeating provider URLs.
+[configs/endpoints.toml](../configs/endpoints.toml) in a Lab workspace maps short aliases (`gpt-oss-120b`, `qwen3-30b-i`, `sonnet`) to provider, model id, base URL, and the env var that holds the key. Aliases are how evals and GEPA refer to models without repeating provider URLs.
 
 ```toml
 [[endpoint]]
@@ -196,5 +196,4 @@ Run `doctor` first when a hosted run misbehaves — it surfaces the most common 
 | Training models, pricing, recovery | [/hosted-training](https://docs.primeintellect.ai/hosted-training/getting-started)                                                                                             |
 | Inference API                      | [/inference](https://docs.primeintellect.ai/inference/overview)                                                                                                                |
 | API surface                        | [/API/api-references](https://docs.primeintellect.ai/API/api-references)                                                                                                       |
-
 

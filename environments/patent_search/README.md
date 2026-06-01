@@ -27,9 +27,9 @@ Each package uses the v1 `Taskset` plus default `Harness` pattern: the taskset o
 Evaluate published environments:
 
 ```bash
-prime eval run primeintellect/basic-patent-q-and-a --model openai/gpt-4.1-mini
-prime eval run primeintellect/advanced-patent-q-and-a --model openai/gpt-4.1-mini
-prime eval run primeintellect/patent-technical-analysis --model openai/gpt-4.1-mini
+prime eval run primeintellect/basic-patent-q-and-a --model openai/gpt-oss-120b
+prime eval run primeintellect/advanced-patent-q-and-a --model openai/gpt-oss-120b
+prime eval run primeintellect/patent-technical-analysis --model openai/gpt-oss-120b
 ```
 
 Train from the included configs:
