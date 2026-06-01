@@ -31,7 +31,7 @@ Judge settings live on `TasksetConfig`:
 
 ```python
 class SimpleJudgeTasksetConfig(vf.TasksetConfig):
-    judge_model: str = "openai/gpt-oss-120b"
+    judge_model: str = "openai/gpt-4.1-mini"
     judge_base_url: str = "https://api.pinference.ai/api/v1"
     judge_api_key_var: str = "PRIME_API_KEY"
 ```
@@ -42,13 +42,13 @@ configs:
 ```bash
 prime eval run simple-judge \
   -m openai/gpt-oss-120b \
-  -a '{"taskset": {"judge_model": "openai/gpt-oss-120b"}}'
+  -a '{"taskset": {"judge_model": "openai/gpt-4.1-mini"}}'
 ```
 
 ```toml
 [[eval]]
 env_id = "simple-judge"
-taskset = { judge_model = "openai/gpt-oss-120b", judge_api_key_var = "PRIME_API_KEY" }
+taskset = { judge_model = "openai/gpt-4.1-mini", judge_api_key_var = "PRIME_API_KEY" }
 ```
 
 Call `vf.ensure_keys(...)` in `load_taskset` if the env requires API keys.

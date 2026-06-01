@@ -71,7 +71,7 @@ TOY_TASKS: list[dict] = [
 
 
 class SimpleJudgeTasksetConfig(vf.TasksetConfig):
-    judge_model: str = "openai/gpt-oss-120b"
+    judge_model: str = "openai/gpt-4.1-mini"
     judge_base_url: str = "https://api.pinference.ai/api/v1"
     judge_api_key_var: str = "PRIME_API_KEY"
     system_prompt: vf.PromptInput | vf.SystemPromptConfig | None = (

@@ -32,7 +32,7 @@ The index is built lazily — the corpus + collection load runs the first time a
 
 ## Reward design
 
-A single judge reward (weight `1.0`): an `openai/gpt-oss-120b` yes/no on whether the final response is correct and coherent given the ground-truth answer. Incoherent responses score 0 even if the answer is buried inside them.
+A single judge reward (weight `1.0`): an `openai/gpt-4.1-mini` yes/no on whether the final response is correct and coherent given the ground-truth answer. Incoherent responses score 0 even if the answer is buried inside them.
 
 The judge call lives in a `@vf.update` handler (`score_with_judge`) that receives the `AsyncOpenAI` client and model name through the same `Toolset.bindings` mechanism the tools use. The reward function (`judge_reward`) just reads `state["judge_score"]` — no factory, no closure-captured client.
 
@@ -70,7 +70,7 @@ All fields live on `WikiSearchTasksetConfig` and can be overridden through the v
 | `dataset_split` | str | `"train"` | Split used as the prompt source |
 | `max_examples` | int? | `None` | Optional cap on tasks yielded |
 | `max_turns` | int | `10` | Per-rollout turn cap |
-| `judge_model` | str | `"openai/gpt-oss-120b"` | Judge model id |
+| `judge_model` | str | `"openai/gpt-4.1-mini"` | Judge model id |
 | `judge_base_url` | str | OpenAI v1 | Judge endpoint base URL |
 | `judge_api_key_var` | str | `"OPENAI_API_KEY"` | Env var holding the judge API key |
 | `embed_model` | str | `"text-embedding-3-small"` | Title-embedding model |
