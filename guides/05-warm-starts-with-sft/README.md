@@ -1,7 +1,5 @@
 # Warm Starts with SFT
 
-**SFT in Lab is currently in beta and will roll out to all users shortly.**
-
 Use SFT to give a model a better starting policy before further RL or as a standalone warm start.
 
 SFT is useful when the model needs examples of the right behavior before reward optimization becomes efficient. Instead of bringing a separate dataset, Lab can generate demonstrations from an environment using a stronger teacher model, then train the target model on those demonstrations.
