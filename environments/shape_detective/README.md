@@ -34,17 +34,24 @@ exactly matches the target index, else `0.0`.
 ## Run
 
 ```bash
-prime eval run shape-detective \
-    --model Qwen/Qwen3.5-2B \
+prime eval run prime/shape-detective \
+    --model qwen/qwen3-vl-8b-instruct \
     --provider prime \
-    -a '{"taskset": {"mode": "multi"}}'
+    -n 5 -r 3 -t 2048
 ```
 
-Switch to single-turn:
+Switch to single-turn in eval TOML:
 
-```bash
-prime eval run shape-detective -a '{"taskset": {"mode": "single", "num_rows": 20}}'
+```toml
+[[eval]]
+env_id = "prime/shape-detective"
+
+[eval.taskset]
+mode = "single"
+num_rows = 20
 ```
+
+Or use [configs/08/shape-detective-eval.toml](../../configs/08/shape-detective-eval.toml).
 
 ## Taskset Config
 

@@ -2,7 +2,7 @@ model = "openai/gpt-5.4-nano"
 save_results = true
 
 [[eval]]
-env_id = "prime/langchain-deep-agents-env"
+env_id = "prime/langchain-deep-agents-wikispeedia"
 num_examples = 5
 rollouts_per_example = 1
-sampling_args = { max_tokens = 2048 }
+sampling_args = { max_tokens = 4096 }

@@ -116,7 +116,7 @@ class PatentTechnicalTasksetConfig(vf.TasksetConfig):
     corpus_file: str = "patents_formatted.json"
     qa_file: str = "patent_qa_level3.jsonl"
     chroma_db_dir: str = CHROMA_DB_DIR
-    system_prompt: vf.PromptInput | vf.SystemPromptConfig | None = SYSTEM_PROMPT
+    system_prompt: vf.SystemPrompt | vf.SystemPromptConfig | None = SYSTEM_PROMPT
 
 
 def extract_section_by_header(content: str, header: str) -> str:
@@ -286,16 +286,13 @@ class PatentTechnicalTaskset(vf.Taskset[PatentTechnicalTasksetConfig]):
             data_files=self.config.qa_file,
             split="train",
         )
-        for index, row in enumerate(dataset):
-            if not isinstance(row, dict):
-                raise TypeError("Dataset rows must be dicts.")
-            question = str(row["question"])
-            yield {
+        return dataset.map(
+            lambda row: {
                 **dict(row),
-                "example_id": index,
-                "prompt": [{"role": "user", "content": question}],
+                "prompt": [{"role": "user", "content": str(row["question"])}],
                 "info": normalize_info(row.get("info", {})),
             }
+        )
 
     def load_toolsets(self, config: PatentTechnicalTasksetConfig) -> vf.Toolsets:
         _ = config
@@ -530,5 +527,5 @@ def load_taskset(config: PatentTechnicalTasksetConfig) -> PatentTechnicalTaskset
 def load_environment(config: vf.EnvConfig) -> vf.Env:
     return vf.Env(
         taskset=vf.load_taskset(config=config.taskset),
-        harness=vf.Harness(config=config.harness),
+        harness=vf.load_harness(config=config.harness),
     )

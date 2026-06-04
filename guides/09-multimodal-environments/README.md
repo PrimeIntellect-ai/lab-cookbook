@@ -11,41 +11,45 @@ The env ships in two modes that share the same scene generator:
 - **single-turn** (max_turns=1) — all three clues in the initial prompt; the model commits with a boxed tile index, such as `\boxed{N}`
 - **multi-turn** (`max_turns=3`, default) — clues revealed across three turns (pattern → color → shape); the model tracks candidates after each clue and commits on the final turn
 
-Both modes are good fits for small native-multimodal models like `Qwen/Qwen3.5-2B`.
+Both modes are good fits for small native-multimodal models like `qwen/qwen3-vl-8b-instruct`.
 
 ## Run It
 
 Run a small eval:
 
 ```bash
-prime eval run shape-detective \
-  -m Qwen/Qwen3.5-2B \
+prime eval run prime/shape-detective \
+  -m qwen/qwen3-vl-8b-instruct \
   -n 5 \
   -r 3 \
-  -t 1024 \
-  -a '{"taskset": {"mode": "multi"}}'
+  -t 2048
 ```
 
 Or run with a config file:
 
 ```toml
 # [configs/08/shape-detective-eval.toml](../../configs/08/shape-detective-eval.toml)
-model = "Qwen/Qwen3.5-2B"
+model = "qwen/qwen3-vl-8b-instruct"
 save_results = true
 
 [[eval]]
-env_id = "shape-detective"
+env_id = "prime/shape-detective"
 num_examples = 5
 rollouts_per_example = 3
-sampling_args = { max_tokens = 1024 }
-taskset = { mode = "multi" }
+sampling_args = { max_tokens = 2048 }
+
+[eval.taskset]
+mode = "multi"
 ```
 
 ```bash
 prime eval run configs/08/shape-detective-eval.toml
 ```
 
-Switch to single-turn with `-a '{"taskset": {"mode": "single"}}'`. The walkthrough below follows [environments/shape_detective/shape_detective.py](../../environments/shape_detective/shape_detective.py) top to bottom.
+Switch to single-turn with `mode = "single"` under `[eval.taskset]` in eval TOML. The
+walkthrough below follows
+[environments/shape_detective/shape_detective.py](../../environments/shape_detective/shape_detective.py)
+top to bottom.
 
 ## Constants and Palette
 
@@ -83,7 +87,7 @@ The system prompt does three things at once: defines the game, fixes the coordin
 
 ## clue_line
 
-The only standalone helper in the file. Used in `load_tasks` for the multi-turn intro (clue 1) and in `ShapeDetectiveUser` (clues 2 and 3).
+The only standalone helper in the file. It is module-level because both the Taskset and the User use it; taskset-only helpers should live on the Taskset.
 
 ```python
 def clue_line(target: Tile, prop: str, clue_index: int) -> str:
@@ -135,7 +139,7 @@ class ShapeDetectiveTaskset(vf.Taskset[ShapeDetectiveTasksetConfig]):
 def load_environment(config: vf.EnvConfig) -> vf.Env:
     return vf.Env(
         taskset=vf.load_taskset(config=config.taskset),
-        harness=vf.Harness(config=config.harness),
+        harness=vf.load_harness(config=config.harness),
     )
 ```
 
@@ -331,12 +335,12 @@ Use `vf.AssistantMessage` and `vf.TextContentPart` when reading `state["completi
 Multimodal eval requires a model that can actually consume the image part. The set of multimodal models on Prime Inference changes regularly, so check the live list rather than copying a table:
 
 ```bash
-prime inference models --plain --output json | jq '.data[].id' | grep -iE "vl|qwen3\.5|gpt-5|gemini|claude"
+prime inference models --output json | jq '.data[].id' | grep -iE "vl|qwen3\.5|gpt-5|gemini|claude"
 ```
 
 The full catalog is browsable in the Prime Inference docs under the inference / models section. Don't pick a text-only model and hope it ignores the image — most providers reject the request outright; a few silently drop the image, which produces eval numbers that look plausible but are evaluating something else.
 
-For first-pass evals on a small Qwen3.5 / Qwen3-VL-class model, target the smallest variant that fits your latency budget. The shape-detective smoke set runs in seconds and is enough to sanity-check both the eval wiring and the model's basic vision capability.
+For first-pass evals on a small Qwen3-VL-class model, target the smallest variant that fits your latency budget. The shape-detective smoke set runs in seconds and is enough to sanity-check both the eval wiring and the model's basic vision capability.
 
 ## Failure Modes
 
@@ -349,7 +353,7 @@ A single 512×512 image often costs 1k–2k tokens on its own, and many provider
 Diagnose with a single rollout at a larger budget:
 
 ```bash
-prime eval run shape-detective -n 1 -r 1 -t 4096
+prime eval run prime/shape-detective -n 1 -r 1 -t 4096
 ```
 
 If results improve, the bound was the token budget, not the model. Fix by lowering image resolution upstream (resize before base64-encoding) or raising `-t` for evaluation.
@@ -399,7 +403,7 @@ A few details from building `shape_detective` that are easy to miss:
 - **Users** are `vf.User` subclasses configured by the taskset. The harness calls `get_response` between assistant turns with `task`, `state`, and typed transcript messages.
 - **Custom `info` round-trips** through serialization — fields you set in `load_tasks` are available on `task["info"]` in users and rewards.
 - **`state["completion"]` is `list[vf.Message]`.** Prefer `vf.AssistantMessage` and related types over dict access.
-- **Config subclasses expose tunables.** Put `mode`, `num_rows`, and `seed` on `ShapeDetectiveTasksetConfig`; override via `taskset` in eval configs or `-a`.
+- **Config subclasses expose tunables.** Put `mode`, `num_rows`, and `seed` on `ShapeDetectiveTasksetConfig`; override under `[eval.taskset]` in eval TOML.
 
 ## Next
 

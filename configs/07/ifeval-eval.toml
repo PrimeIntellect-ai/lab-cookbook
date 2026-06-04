@@ -1,9 +1,0 @@
-model = "openai/gpt-4.1-mini"
-save_results = true
-
-[[eval]]
-env_id = "prime/ifeval"
-num_examples = 10
-rollouts_per_example = 1
-sampling_args = { max_tokens = 1024 }
-taskset = { mode = "strict" }

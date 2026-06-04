@@ -6,32 +6,27 @@ The first task we'll examine is simple to state, yet surprisingly hard for model
 
 The payoff is a clean continuous reward — longest-common-subsequence between the model's answer and the true reversal — that is robust to reward hacking and trains quickly under RL.
 
-You will build this as `reverse-text`. You can also inspect the finished Hub environment at [primeintellect/reverse-text](https://app.primeintellect.ai/dashboard/environments/primeintellect/reverse-text).
+You will build this as `reverse-text`. You can also inspect the finished Hub environment at [prime/reverse-text](https://app.primeintellect.ai/dashboard/environments/prime/reverse-text).
 
 ## Create the Package
 
 From your Lab workspace, initialize a local environment package:
 
 ```bash
-prime env init reverse-text
+prime env init reverse-text --v1
 ```
 
-This creates `environments/reverse_text/` with `reverse_text.py`, `pyproject.toml`, and a README. Every environment package created with `prime env init` follows the same shape. Open `reverse_text.py`:
+This creates `environments/reverse_text/` with `reverse_text.py`, `pyproject.toml`, and a README. Every v1 environment package created with `prime env init --v1` follows the same shape. Open `reverse_text.py`:
 
 ```python
 import verifiers as vf
 
 
 class ReverseTextTasksetConfig(vf.TasksetConfig):
-    pass
+    system_prompt: vf.SystemPrompt = "Replace this with the system prompt for reverse-text."
 
 
 class ReverseTextTaskset(vf.Taskset[ReverseTextTasksetConfig]):
-    def load_system_prompt(
-        self, config: ReverseTextTasksetConfig
-    ) -> vf.SystemPrompt:
-        raise NotImplementedError("Load the system prompt for reverse-text.")
-
     def load_tasks(self, split: vf.TaskSplit = "train") -> vf.Tasks:
         raise NotImplementedError("Load tasks for reverse-text.")
 
@@ -47,17 +42,21 @@ def load_taskset(config: ReverseTextTasksetConfig) -> ReverseTextTaskset:
 def load_environment(config: vf.EnvConfig) -> vf.Env:
     return vf.Env(
         taskset=vf.load_taskset(config=config.taskset),
-        harness=vf.Harness(config=config.harness),
+        harness=vf.load_harness(config=config.harness),
     )
 ```
 
 The key pieces to include are:
 
-- `ReverseTextTasksetConfig` — user-tunable fields (dataset split, system prompt, …). 
+- `ReverseTextTasksetConfig` — user-tunable fields (dataset splits, system prompt, …). 
 - `load_tasks(split)` — loader for tasks (`prompt`, `answer`, `info`, …).
-- `system_prompt` on the config — default system message for each rollout (or override with `load_system_prompt` when the prompt depends on files or runtime state).
+- `system_prompt` on the config — default system message for each rollout.
 - `@vf.reward` methods — reward functions for completed rollouts.
 - `load_taskset` / `load_environment` — entrypoints used for Lab workflows.
+
+Keep taskset-specific behavior on the Taskset: load methods, `@vf.*` decorated
+handlers, parsers, validators, and tool methods. Use module-level functions for
+entrypoints and genuinely shared domain utilities.
 
 `pyproject.toml` declares the package name, dependencies, and optional defaults under `[tool.verifiers.eval]`.
 
@@ -71,7 +70,7 @@ The first thing an environment needs is some tasks for the model to attempt. Her
 {"prompt": "The quick brown fox jumps over the lazy dog."}
 ```
 
-Subclass `vf.Taskset` and implement loaders for tasks and the system prompt. Map the dataset in `load_tasks` and attach the reversed string as `answer`:
+Subclass `vf.Taskset` and implement loaders for tasks and the system prompt. The source dataset calls the text field `prompt`; map that to the v1 `question` column so the framework derives the model prompt, and attach the reversed string as `answer`:
 
 ```python
 from difflib import SequenceMatcher
@@ -82,28 +81,30 @@ from datasets import load_dataset
 
 class ReverseTextTasksetConfig(vf.TasksetConfig):
     dataset_name: str = "PrimeIntellect/Reverse-Text-RL"
-    dataset_split: str = "train"
-    system_prompt: vf.PromptInput | vf.SystemPromptConfig | None = (
+    train_split: str = "train"
+    eval_split: str = "train"
+    system_prompt: vf.SystemPrompt = (
         "Reverse the text character-by-character. Put your answer in <reversed_text> tags."
     )
 
 
 class ReverseTextTaskset(vf.Taskset[ReverseTextTasksetConfig]):
     def load_tasks(self, split: vf.TaskSplit = "train") -> vf.Tasks:
-        _ = split
-        ds = load_dataset(self.config.dataset_name, split=self.config.dataset_split).map(
-            lambda x: {"prompt": x["prompt"], "answer": x["prompt"][::-1]}
+        source_split = self.config.train_split if split == "train" else self.config.eval_split
+        dataset = load_dataset(self.config.dataset_name, split=source_split)
+        return dataset.rename_column("prompt", "question").map(
+            lambda row: {
+                "answer": row["question"][::-1],
+            }
         )
-        return ds
 
     @vf.reward(weight=1.0)
     async def lcs_reward(self, task: vf.Task, state: vf.State) -> float:
-        text = ""
-        for message in reversed(state.get("completion") or []):
-            if message.get("role") == "assistant":
-                text = str(message.get("content") or "")
-                break
-        response = text.split("<reversed_text>", 1)[-1].split("</reversed_text>", 1)[0].strip()
+        messages = vf.get_messages(state.get("completion") or [], role="assistant")
+        text = str(messages[-1].content or "") if messages else ""
+        response = (
+            text.split("<reversed_text>", 1)[-1].split("</reversed_text>", 1)[0].strip()
+        )
         return SequenceMatcher(None, response, str(task["answer"])).ratio()
 ```
 
@@ -121,13 +122,13 @@ def load_taskset(config: ReverseTextTasksetConfig) -> ReverseTextTaskset:
 def load_environment(config: vf.EnvConfig) -> vf.Env:
     return vf.Env(
         taskset=vf.load_taskset(config=config.taskset),
-        harness=vf.Harness(config=config.harness),
+        harness=vf.load_harness(config=config.harness),
     )
 ```
 
 The finished implementation lives in [environments/reverse_text/reverse_text.py](../../environments/reverse_text/reverse_text.py).
 
-By default, `vf.Env` sends each prompt to the model and hands the response back to the taskset for scoring. Per-run sampling and turn limits flow through the default harness from eval and RL configs.
+`vf.load_harness(config=config.harness)` resolves the base harness unless the package defines a custom harness loader. The base harness sends each prompt to the model, handles ordinary tool calls, and hands the response back to the taskset for scoring. Sampling flows through eval and RL configs.
 
 ## Check the Package
 
@@ -141,7 +142,7 @@ tags = ["single-turn", "text", "train", "eval"]
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
-    "verifiers>=0.1.15.dev12",
+    "verifiers>=0.1.15.dev17",
     "datasets",
 ]
 
@@ -163,7 +164,7 @@ The `[tool.verifiers.eval]` section allows configuration of per-environment defa
 Run a small eval:
 
 ```bash
-prime eval run reverse-text \
+prime eval run prime/reverse-text \
   -m openai/gpt-5.4-nano \
   -n 10 \
   -r 2 \
@@ -188,20 +189,34 @@ sampling_args = { max_tokens = 512 }
 prime eval run configs/02/reverse-text-eval.toml
 ```
 
-Tune environment config either inline with the CLI or in TOML. Taskset fields
-belong under `taskset`; base harness fields belong under `harness`:
-
-```bash
-prime eval run reverse-text \
-  -m openai/gpt-5.4-nano \
-  -a '{"taskset": {"dataset_split": "train[:100]"}, "harness": {"max_turns": 1}}'
-```
+Tune `TasksetConfig` and `HarnessConfig` with eval TOML blocks. Each field
+validates against the typed config subclass before `load_environment` runs:
 
 ```toml
 [[eval]]
-env_id = "reverse-text"
-taskset = { dataset_split = "train[:100]" }
-harness = { max_turns = 1 }
+env_id = "prime/reverse-text"
+num_examples = 10
+rollouts_per_example = 2
+sampling_args = { max_tokens = 512 }
+
+[eval.harness]
+max_turns = 1
+```
+
+For a one-off CLI override, pass the same child config through the root
+`config` argument:
+
+```bash
+prime eval run prime/reverse-text \
+  -m openai/gpt-5.4-nano \
+  -n 10 \
+  -r 2 \
+  -t 512 \
+  -a '{"config":{"harness":{"max_turns":1}}}'
+```
+
+```bash
+prime eval run configs/02/reverse-text-eval.toml
 ```
 
 ```bash

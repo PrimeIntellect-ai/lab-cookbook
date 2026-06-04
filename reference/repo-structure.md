@@ -1,29 +1,13 @@
 # Repository Structure
 
-Status: TODO
+This is a local map of the cookbook workspace.
 
-## Proposed Shape
+- [guides](../guides/) - ordered walkthroughs.
+- [configs](../configs/) - runnable Prime eval, GEPA, and training configs.
+- [environments](../environments/) - local environment packages used by guides.
+- [reference](./) - thin pointers only; do not duplicate managed guidance here.
+- [`.prime/skills`](../.prime/skills/) - managed Lab skills.
+- [`.prime/lab/templates`](../.prime/lab/templates/) - managed config templates.
 
-```text
-guides/      # ordered Lab walkthroughs
-configs/     # starter configs aligned with prime lab setup
-recipes/     # runnable educational examples
-reference/   # reusable concept and API-adjacent reference
-tracks/      # thin indexes by use case, no duplicate content
-skills/      # agent guidance used by Lab workflows
-```
-
-## Notes
-
-- `guides/` should be the first path for new users.
-- [configs/](../configs/) should remain close to the actual Lab setup output.
-- `recipes/` should contain runnable examples that guides can reference.
-- `reference/` should avoid duplicating product docs that change often.
-- `tracks/` should only link into guides and recipes.
-
-## TODO
-
-- Decide whether existing `cookbook/recipes` should move to top-level `recipes`.
-- Decide whether the repo name should stay `lab-cookbook`.
-- Decide the public docs sync workflow.
-- Decide how to mark planned features in guides.
+Generated guidance files are refreshed by `prime lab sync`. Cookbook-owned
+examples should point to managed guidance instead of restating it.

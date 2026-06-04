@@ -1,12 +1,14 @@
 # Coding Agents and Sandboxes
 
-Evaluate code-producing agents in isolated runtimes.
+Train and evaluate coding agents in isolated runtimes.
 
-Coding environments need more than text comparison. The environment should let the model inspect or write code, execute commands safely in a sandbox, collect logs, and score the result from actual behavior.
+Sandboxed execution environments let the model inspect and write code, run commands safely in a container, collect logs, and score edits programmatically and scalably.
 
-This guide starts with [primeintellect/math-python](https://app.primeintellect.ai/dashboard/environments/primeintellect/math-python), a lightweight Python-tool environment, then moves to [primeintellect/opencode-harbor](https://app.primeintellect.ai/dashboard/environments/primeintellect/opencode-harbor), a full CLI-agent environment that runs OpenCode on Harbor tasks.
+This guide considers two examples of coding agent environments:
+- [prime/math-python](https://app.primeintellect.ai/dashboard/environments/prime/math-python) -- a lightweight Python REPL environment for solving math problems with code
+- [prime/opencode-harbor](https://app.primeintellect.ai/dashboard/environments/prime/opencode-harbor) -- a full CLI agent environment that runs OpenCode on Harbor tasks
 
-## Warm Up with Math Python
+## Sandboxes as Tools
 
 `math-python` asks math questions that are easier to solve with code than by mental arithmetic. The model gets a Python tool backed by a sandbox, uses it for calculations, and returns a final boxed answer.
 
@@ -31,14 +33,20 @@ save_results = true
 env_id = "prime/math-python"
 num_examples = 5
 rollouts_per_example = 2
-sampling_args = { max_tokens = 1024 }
+
+[eval.sampling]
+max_tokens = 1024
 ```
 
 ```bash
 prime eval run configs/09/math-python-eval.toml
 ```
 
-This is the smallest useful sandbox pattern: one task, one Python tool, one isolated runtime, and a deterministic reward.
+This is the smallest useful sandbox pattern: one task, one Python toolset, one isolated runtime, and a deterministic reward. The Python tool starts an IPython kernel inside a plain `python:3.11-slim` sandbox and installs the packages it needs during sandbox setup, so the example shows exactly what is available at execution time.
+
+In the implementation, `MathPythonTaskset` owns the dataset, prompt, reward, and Python tool methods. `MathPythonTaskset.load_toolsets(config)` exposes those tools through a `vf.Toolset` with the sandbox image and package install command attached to that toolset.
+
+When a toolset needs a sandbox, keep the sandbox contract on the `vf.Toolset` that exposes the tools. Use an owned `vf.SandboxConfig(...)` for standalone tasksets like `math-python`. If the toolset should share a CLI/program sandbox when one exists, use `vf.SandboxConfig(prefer="program", ...)`; use `sandbox="program"` only when the toolset cannot run without the harness-owned program sandbox.
 
 ## Move to a CLI Agent
 
@@ -59,7 +67,9 @@ save_results = true
 
 [[eval]]
 env_id = "prime/opencode-harbor"
-taskset = { task_names = ["regex-log"] }
+
+[eval.taskset]
+task_names = ["regex-log"]
 
 [eval.harness]
 max_turns = 4
@@ -78,12 +88,21 @@ env's defaults from `pyproject.toml`) cost roughly **$3.04** end-to-end against
 
 The reward comes from the task tests, not from judging the final message. That makes coding-agent environments useful for training, but it also means broken tests, missing dependencies, or unrealistic timeouts can dominate results.
 
-Use the same override split from the CLI when iterating locally:
+Use the same override split in eval TOML — see
+[configs/09/opencode-harbor.toml](../../configs/09/opencode-harbor.toml):
 
-```bash
-prime eval run prime/opencode-harbor \
-  -m openai/gpt-5.4-mini \
-  -a '{"taskset": {"task_names": ["regex-log"]}, "harness": {"max_turns": 4, "program": {"disabled_tools": ["webfetch", "question"]}}}'
+```toml
+[[eval]]
+env_id = "prime/opencode-harbor"
+
+[eval.taskset]
+task_names = ["regex-log"]
+
+[eval.harness]
+max_turns = 4
+
+[eval.harness.program]
+disabled_tools = ["webfetch", "question"]
 ```
 
 The taskset fields choose Harbor tasks and sandbox defaults. The harness fields
@@ -93,12 +112,12 @@ not the task distribution.
 
 ## How the Pieces Fit
 
-The Hub IDs are `math-python` and `opencode-harbor`. The source packages are `math_python` and `opencode_harbor`.
+The Hub IDs are `prime/math-python` and `prime/opencode-harbor`. After install, the local import/package IDs are `math-python` and `opencode-harbor`.
 
 In `math_python`:
 
 - the Taskset samples math questions
-- the Harness exposes a Python tool in a sandbox
+- the Taskset exposes a Python tool backed by a sandbox
 - the reward checks the boxed answer by symbolic equivalence
 
 In `opencode_harbor`:
@@ -107,7 +126,7 @@ In `opencode_harbor`:
 - the OpenCode Harness runs the CLI agent inside the sandbox
 - the reward is computed from the Harbor verifier output
 
-You do not need to build all of this at once. Start with the smallest sandbox that proves the scoring loop, then add richer task state, files, commands, and full agent harnesses when the task requires them.
+Start with the smallest sandbox that proves the scoring loop, then add richer task state, files, commands, and full agent harnesses when the task requires them.
 
 When the baseline eval runs cleanly, train against the same environment ID as in [Training with RL](../03-training-with-rl/README.md).
 

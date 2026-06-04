@@ -13,5 +13,7 @@ id = "prime/wiki-search"
 
 [env.taskset]
 max_examples = 512
-max_turns = 8
 chroma_db_dir = ".chroma_db/wiki-search-rl"
+
+[env.harness]
+max_turns = 8

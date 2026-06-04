@@ -13,6 +13,7 @@
 - **Primary dataset(s)**: `gsm8k` train (train) and test (eval) via `load_example_dataset`
 - **Source links**: Uses the example loader in `verifiers.utils.data_utils`
 - **Split sizes**: Full GSM8K train (source) and test (eval) splits
+- **Task identity**: assigned by Verifiers when task records are normalized
 
 ### Task
 - **Type**: single-turn
@@ -22,13 +23,13 @@
 Run an evaluation with default settings:
 
 ```bash
-prime eval run gsm8k
+prime eval run prime/gsm8k
 ```
 
 Configure model and sampling:
 
 ```bash
-prime eval run gsm8k \
+prime eval run prime/gsm8k \
   -m gpt-4.1-mini \
   -n 20 -r 3 -t 1024 -T 0.7
 ```
@@ -37,4 +38,3 @@ prime eval run gsm8k \
 | Metric | Meaning |
 | ------ | ------- |
 | `reward` | 1.0 if parsed boxed answer equals target, else 0.0 |
-

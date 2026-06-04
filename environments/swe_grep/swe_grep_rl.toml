@@ -11,3 +11,6 @@ max_tokens = 1024
 
 [[env]]
 id = "prime/swe-grep"
+
+[env.harness]
+max_turns = 2

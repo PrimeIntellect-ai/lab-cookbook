@@ -18,42 +18,31 @@
 Run the environment:
 
 ```bash
-prime eval run opencode-harbor
+prime eval run prime/opencode-harbor
 ```
 
 Configure model and sampling:
 
 ```bash
-prime eval run opencode-harbor -m openai/gpt-4.1-mini -n 20 -r 3 -t 1024 -T 0.7
+prime eval run prime/opencode-harbor -m openai/gpt-4.1-mini -n 20 -r 3 -t 1024 -T 0.7
 ```
 
 Notes:
-- Use `-a` / `--env-args` for nested Taskset/Harness overrides.
-- Use `taskset` for Harbor task selection and `harness` for OpenCode runtime settings.
+- Put Harbor task selection on `taskset` and OpenCode runtime settings on `harness`.
+- Both sections validate against `HarborTasksetConfig` and `OpenCodeConfig`.
 
-### Environment Arguments
+### Configuration
 
-Taskset settings use fields from `tasksets.HarborTasksetConfig`:
-
-```bash
-prime eval run opencode-harbor \
-  -a '{"taskset": {"task_names": ["regex-log"]}}'
-```
-
-Harness settings use fields from `harnesses.OpenCodeConfig`; OpenCode program
-settings live under `harness.program`:
-
-```bash
-prime eval run opencode-harbor \
-  -a '{"harness": {"max_turns": 4, "program": {"disabled_tools": ["webfetch", "question"]}}}'
-```
-
-The same shape works in an eval TOML:
+Taskset settings use fields from `tasksets.HarborTasksetConfig`. Harness
+settings use fields from `harnesses.OpenCodeConfig`; OpenCode program settings
+live under `[eval.harness.program]`:
 
 ```toml
 [[eval]]
-env_id = "opencode-harbor"
-taskset = { task_names = ["regex-log", "qemu-startup"] }
+env_id = "prime/opencode-harbor"
+
+[eval.taskset]
+task_names = ["regex-log", "qemu-startup"]
 
 [eval.harness]
 max_turns = 4

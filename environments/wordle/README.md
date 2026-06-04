@@ -21,21 +21,23 @@ efficiency, and output format.
 ### Quickstart
 
 ```bash
-prime eval run wordle
+prime eval run prime/wordle
 ```
 
-Configure model and sampling:
+Configure model, sampling, and taskset/harness defaults:
 
 ```bash
-prime eval run wordle \
+prime eval run prime/wordle \
   -m openai/gpt-4.1-mini \
-  -n 20 -r 3 -t 1024 -T 0.7 \
-  -a '{"taskset": {"num_train_examples": 100, "num_eval_examples": 20}, "harness": {"max_turns": 6}}'
+  -n 20 -r 3 -t 1024 -T 0.7
 ```
+
+Taskset and harness defaults live in eval TOML — see
+[configs/04/wordle-eval.toml](../../configs/04/wordle-eval.toml).
 
 ### Configuration
 
-Taskset fields (via eval config or `-a`):
+Taskset fields on `WordleTasksetConfig`:
 
 | Field | Type | Default | Description |
 | --- | ---- | ------- | ----------- |

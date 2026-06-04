@@ -20,6 +20,8 @@ venv/
 *.prime
 *uv.lock
 
+.chroma_db/
+
 # Lab generated artifacts
 .env
 /outputs/
@@ -34,3 +36,16 @@ venv/
 .claude/
 .agents/
 .opencode/
+# Lab generated artifacts
+/AGENTS.md
+/CLAUDE.md
+/CLAUDE.local.md
+/.prime/
+/.agents/skills/
+/.claude/skills/
+/.cursor/skills/
+/.factory/skills/
+/.opencode/skills/
+/.pi/skills/
+/environments/AGENTS.md
+

@@ -51,6 +51,7 @@ This adds project structure, example configs, and agent guidance covering enviro
 You can also run `prime lab setup` without flags to configure coding agents interactively.
 
 To update your workspace with the latest Lab-provided configs and guidance, run:
+
 ```bash
 prime lab sync
 ```
@@ -61,10 +62,10 @@ After setup, your workspace contains a few key pieces:
 
 - `configs/` holds example configs for evaluation, training, and related workflows.
 - `environments/` is where your local environment packages live.
-- `AGENTS.md` (and/or `CLAUDE.md`) tells coding agents how to navigate Lab.
+- `AGENTS.md` (and/or `CLAUDE.md`) gives coding agents workspace navigation hints.
 - `.prime/` stores Lab metadata and other local assets.
 
-Most day-to-day work happens in `configs/` and `environments/`; the other files keep Lab in sync with the workspace and help your coding agents follow best practices.
+Most day-to-day work happens in `configs/` and `environments/`; the other files keep Lab in sync with the workspace. For current environment guidance, use the managed workspace guidance and skills that `prime lab sync` refreshes.
 
 ## Check the CLI
 
@@ -80,7 +81,14 @@ See the models available for Hosted Training:
 prime train models
 ```
 
-You should see a Hosted Training model table with model names, availability, inference pricing, and training pricing.
+You should see a table with model names, availability, inference pricing, and training pricing.
+
+Also check the models available for Prime Inference:
+
+```bash
+prime inference models
+```
+These models can be used directly for evaluations, environment actions (e.g. LLM judges), and as "teacher" models for SFT distillation.
 
 ## Next
 

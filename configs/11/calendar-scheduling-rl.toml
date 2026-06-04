@@ -9,4 +9,11 @@ max_tokens = 768
 
 [[env]]
 id = "prime/calendar-scheduling"
-args = { difficulty = "medium", num_train = 512, num_eval = 128, max_turns = 18 }
+
+[env.taskset]
+difficulty = "medium"
+num_train = 512
+num_eval = 128
+
+[env.harness]
+max_turns = 18

@@ -45,84 +45,87 @@ class EthicsDebateUserConfig(vf.UserConfig):
 
 class EthicsDebateTasksetConfig(vf.TasksetConfig):
     dataset_name: str = "ergotts/ethics_questions"
-    dataset_split: str = "train"
+    train_split: str = "train"
+    eval_split: str = "train"
     num_rounds: int = 2
     user: EthicsDebateUserConfig | None = EthicsDebateUserConfig()
-    system_prompt: vf.PromptInput | vf.SystemPromptConfig | None = (
+    system_prompt: vf.SystemPrompt = (
         "You are participating in a structured ethics debate. Follow the current "
         "role assignment in each user message and end every turn with the requested "
         "XML tag."
     )
 
 
-def content_text(content: str | list | None, separator: str = "\n") -> str:
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        chunks: list[str] = []
-        for part in content:
-            if isinstance(part, dict):
-                text = part.get("text")
-                if part.get("type") == "text" and isinstance(text, str):
-                    chunks.append(text)
-        return separator.join(chunks).strip()
-    return ""
-
-
-def last_assistant_text(transcript: list[vf.Message]) -> str:
-    for message in reversed(transcript):
-        if message.role == "assistant":
-            return content_text(message.content)
-    return ""
-
-
-def handoff_tag(actor: str) -> str:
-    return "argument" if actor == ARGUER else "critique"
-
-
-def parse_handoff(actor: str, text: str) -> str | None:
-    tag = handoff_tag(actor)
-    match = re.search(rf"<{re.escape(tag)}>(.*?)</{re.escape(tag)}>", text, re.DOTALL)
-    if match is None:
-        return None
-    content = match.group(1).strip()
-    return content or None
-
-
-def turn_contract(tag: str) -> str:
-    return (
-        f"IMPORTANT: When you are done, wrap your final response in <{tag}>...</{tag}> tags. "
-        f"Do NOT write anything after the closing </{tag}> tag."
-    )
-
-
-def arguer_message(question: str) -> str:
-    return (
-        "You are arguing an ethics question. Present a clear position with reasoning. "
-        "When critiqued, address the weaknesses and strengthen your argument.\n\n"
-        f"Question: {question}\n\n{turn_contract('argument')}"
-    )
-
-
-def critic_message(question: str, argument: str) -> str:
-    return (
-        "You are critiquing an ethical argument. Identify gaps, logical fallacies, "
-        "and missing perspectives. Be specific and constructive.\n\n"
-        f"Question: {question}\n\nArgument to critique:\n{argument}\n\n"
-        f"{turn_contract('critique')}"
-    )
-
-
-def refine_message(critique: str) -> str:
-    return (
-        "You are arguing an ethics question. Present a clear position with reasoning. "
-        "When critiqued, address the weaknesses and strengthen your argument.\n\n"
-        f"Critique received:\n{critique}\n\nRefine your argument.\n\n"
-        f"{turn_contract('argument')}"
-    )
-
-
 class EthicsDebateUser(vf.User[EthicsDebateUserConfig]):
+    @staticmethod
+    def content_text(content: str | list | None, separator: str = "\n") -> str:
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            chunks: list[str] = []
+            for part in content:
+                if isinstance(part, dict):
+                    text = part.get("text")
+                    if part.get("type") == "text" and isinstance(text, str):
+                        chunks.append(text)
+            return separator.join(chunks).strip()
+        return ""
+
+    @classmethod
+    def last_assistant_text(cls, transcript: list[vf.Message]) -> str:
+        for message in reversed(transcript):
+            if message.role == "assistant":
+                return cls.content_text(message.content)
+        return ""
+
+    @staticmethod
+    def handoff_tag(actor: str) -> str:
+        return "argument" if actor == ARGUER else "critique"
+
+    @classmethod
+    def parse_handoff(cls, actor: str, text: str) -> str | None:
+        tag = cls.handoff_tag(actor)
+        match = re.search(
+            rf"<{re.escape(tag)}>(.*?)</{re.escape(tag)}>", text, re.DOTALL
+        )
+        if match is None:
+            return None
+        content = match.group(1).strip()
+        return content or None
+
+    @staticmethod
+    def turn_contract(tag: str) -> str:
+        return (
+            f"IMPORTANT: When you are done, wrap your final response in <{tag}>...</{tag}> "
+            f"tags. Do NOT write anything after the closing </{tag}> tag."
+        )
+
+    @classmethod
+    def arguer_message(cls, question: str) -> str:
+        return (
+            "You are arguing an ethics question. Present a clear position with reasoning. "
+            "When critiqued, address the weaknesses and strengthen your argument.\n\n"
+            f"Question: {question}\n\n{cls.turn_contract('argument')}"
+        )
+
+    @classmethod
+    def critic_message(cls, question: str, argument: str) -> str:
+        return (
+            "You are critiquing an ethical argument. Identify gaps, logical fallacies, "
+            "and missing perspectives. Be specific and constructive.\n\n"
+            f"Question: {question}\n\nArgument to critique:\n{argument}\n\n"
+            f"{cls.turn_contract('critique')}"
+        )
+
+    @classmethod
+    def refine_message(cls, critique: str) -> str:
+        return (
+            "You are arguing an ethics question. Present a clear position with reasoning. "
+            "When critiqued, address the weaknesses and strengthen your argument.\n\n"
+            f"Critique received:\n{critique}\n\nRefine your argument.\n\n"
+            f"{cls.turn_contract('argument')}"
+        )
+
     async def get_response(
         self,
         task: vf.Task,
@@ -130,9 +133,9 @@ class EthicsDebateUser(vf.User[EthicsDebateUserConfig]):
         messages: list[vf.Message],
     ) -> list[vf.UserMessage]:
         actor = str(state.get("debate_actor") or ARGUER)
-        handoff = parse_handoff(actor, last_assistant_text(messages))
+        handoff = self.parse_handoff(actor, self.last_assistant_text(messages))
         if handoff is None:
-            tag = handoff_tag(actor)
+            tag = self.handoff_tag(actor)
             state["rollout_completed_cleanly"] = False
             state["malformed_handoff"] = {
                 "actor": actor,
@@ -141,7 +144,7 @@ class EthicsDebateUser(vf.User[EthicsDebateUserConfig]):
             return []
 
         history = list(state.get("handoff_history") or [])
-        history.append({"actor": actor, "handoff": {handoff_tag(actor): handoff}})
+        history.append({"actor": actor, "handoff": {self.handoff_tag(actor): handoff}})
         state["handoff_history"] = history
         question = str(task["question"])
         num_rounds = int(task["num_rounds"])
@@ -153,29 +156,30 @@ class EthicsDebateUser(vf.User[EthicsDebateUserConfig]):
                 state["final_env_response"] = "Debate complete."
                 return []
             state["debate_actor"] = CRITIC
-            return [vf.UserMessage(content=critic_message(question, handoff))]
+            return [vf.UserMessage(content=self.critic_message(question, handoff))]
 
         state["current_critique"] = handoff
         state["debate_actor"] = ARGUER
-        return [vf.UserMessage(content=refine_message(handoff))]
+        return [vf.UserMessage(content=self.refine_message(handoff))]
 
 
 class EthicsDebateTaskset(vf.Taskset[EthicsDebateTasksetConfig]):
     def load_tasks(self, split: vf.TaskSplit = "train") -> vf.Tasks:
-        _ = split
-        dataset = load_dataset(self.config.dataset_name, split=self.config.dataset_split)
+        source_split = self.config.train_split if split == "train" else self.config.eval_split
+        dataset = load_dataset(self.config.dataset_name, split=source_split)
         num_rounds = self.config.num_rounds
-        for index, row in enumerate(dataset):
-            if not isinstance(row, dict):
-                raise TypeError("Dataset rows must be dicts.")
-            question = str(row["question"])
-            yield {
-                "example_id": index,
-                "question": question,
+        return dataset.map(
+            lambda row: {
+                "question": str(row["question"]),
                 "num_rounds": num_rounds,
-                "prompt": [{"role": "user", "content": arguer_message(question)}],
-                "max_turns": 2 * num_rounds + 1,
+                "prompt": [
+                    {
+                        "role": "user",
+                        "content": EthicsDebateUser.arguer_message(str(row["question"])),
+                    }
+                ],
             }
+        )
 
     @vf.setup
     async def setup_debate(self, task: vf.Task, state: vf.State) -> None:
@@ -222,5 +226,5 @@ def load_taskset(config: EthicsDebateTasksetConfig) -> EthicsDebateTaskset:
 def load_environment(config: vf.EnvConfig) -> vf.Env:
     return vf.Env(
         taskset=vf.load_taskset(config=config.taskset),
-        harness=vf.Harness(config=config.harness),
+        harness=vf.load_harness(config=config.harness),
     )

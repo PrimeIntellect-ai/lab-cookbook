@@ -89,11 +89,11 @@ New tool environments should use `load_toolsets(config)` on a Taskset subclass, 
 1. Subclass `Taskset` and move `source()` logic into `load_tasks(split)`.
 2. Move `@vf.reward` functions onto the class as methods; drop standalone `Rubric` construction.
 3. Export `load_taskset(config: MyTasksetConfig) -> MyTaskset`.
-4. In `load_environment`, return `vf.Env(taskset=vf.load_taskset(config=config.taskset), harness=vf.Harness(config=config.harness))`.
+4. In `load_environment`, return `vf.Env(taskset=vf.load_taskset(config=config.taskset), harness=vf.load_harness(config=config.harness))`.
 5. Smoke-eval with `prime eval run` before pushing.
 
 For harness-backed envs (OpenCode, sandboxes), keep separate `load_harness` — see [opencode_harbor](../../environments/opencode_harbor/opencode_harbor.py).
 
 ## Next
 
-Return to the main curriculum at [Building Your First Environment](../02-building-your-first-environment/README.md), or see [Lab Configuration](../../reference/lab-configuration.md) for platform plumbing.
+Return to the main curriculum at [Building Your First Environment](../02-building-your-first-environment/README.md), or use the public Prime docs for platform plumbing.
