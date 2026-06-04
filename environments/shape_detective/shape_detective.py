@@ -52,7 +52,7 @@ class ShapeDetectiveTasksetConfig(vf.TasksetConfig):
     num_rows: int = 12
     seed: int = 0
     user: ShapeDetectiveUserConfig | None = ShapeDetectiveUserConfig()
-    system_prompt: vf.SystemPrompt | vf.SystemPromptConfig | None = (
+    system_prompt: vf.SystemPrompt = (
         "You are playing Shape Detective. You see a 4x4 grid of tiles numbered 0-15 "
         "(left-to-right, top-to-bottom). Each tile has a shape (circle, square, "
         "triangle, star), a color (red, blue, green, yellow), and a pattern (solid, "

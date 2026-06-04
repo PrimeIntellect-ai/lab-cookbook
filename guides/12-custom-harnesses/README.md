@@ -39,6 +39,8 @@ The loader annotations define the concrete config types. `vf.load_taskset` and
 `vf.load_harness` use those annotations to validate `config.taskset` and
 `config.harness`, so environment entrypoints stay small.
 
+Every guide so far used the framework's built-in rollout loop — the [setup → model turn → env reply → stop → render → cleanup](../04-prompt-optimization/README.md#how-a-multi-turn-rollout-runs) sequence, with the taskset attaching hooks and tools to it. A custom harness program replaces that loop wholesale. The program is one async function that owns the entire rollout: it gets the task and state, drives whatever external agent runtime it wraps, and returns the finished state. The taskset still owns tasks and rewards; the harness owns *how the turns happen*, and when you supply a program, the turns happen however the program says.
+
 Inside the harness program, route third-party model calls through the rollout endpoint:
 
 ```python
@@ -73,7 +75,7 @@ disabled_tools = ["webfetch", "question"]
 ```
 
 ```bash
-prime eval run configs/09/opencode-harbor.toml
+prime eval run configs/10/opencode-harbor.toml
 ```
 
 Use this split as the default rule:
@@ -136,5 +138,7 @@ For a new tool or system prompt, use the default harness. Custom harnesses are f
 
 ## Next
 
+In [Best Practices](../13-best-practices/README.md), step back from any single environment and walk through the habits that keep environments clean.
+
 - [Lab Configuration](../../reference/lab-configuration.md) - thin pointer to managed and public platform docs
-- [Legacy Environments](../13-legacy-environments/README.md) — older Rubric and `source()` patterns you may see in unmigrated Hub packages
+- [Legacy Environments](../14-legacy-environments/README.md) — older Rubric and `source()` patterns you may see in unmigrated Hub packages

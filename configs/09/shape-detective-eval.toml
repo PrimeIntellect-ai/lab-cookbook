@@ -1,4 +1,4 @@
-model = "qwen/qwen3-vl-8b-instruct"
+model = "Qwen/Qwen3.5-4B"
 save_results = true
 
 [[eval]]

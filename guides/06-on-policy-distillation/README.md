@@ -63,7 +63,7 @@ prime train logs <run_id> -f
 
 ## Evaluate the Distilled Adapter
 
-Run the same wordle eval shape you used in [Prompt Optimization](../04-prompt-optimization/README.md):
+Run the same wordle eval shape you used in [Prompt Optimization](../04-prompt-optimization/README.md), against the OPD adapter id:
 
 ```bash
 prime eval run prime/wordle \
@@ -73,34 +73,9 @@ prime eval run prime/wordle \
   -t 1024
 ```
 
-Compare against the SFT-only adapter on the same eval config.
+Compare to the SFT-only adapter on the same eval config. If the OPD adapter doesn't beat it on this eval, the teacher signal is not adding anything — try a stronger teacher, lower `teacher_tau`, or skip distillation and go to pure RL.
 
-## Continue with RL
-
-After distillation, you can run a standard RL job on top of the new adapter to optimize directly against environment reward:
-
-```toml
-# [configs/05/wordle-rl.toml](../../configs/05/wordle-rl.toml)
-model = "openai/gpt-oss-20b:<your-opd-adapter>"
-
-[sampling]
-max_tokens = 512
-reasoning_effort = "medium"
-
-[[env]]
-id = "prime/wordle"
-
-[env.taskset]
-num_train_examples = 512
-num_eval_examples = 128
-
-[env.harness]
-max_turns = 6
-```
-
-```bash
-prime train configs/05/wordle-rl.toml
-```
+Once distillation looks good, run RL directly on the new adapter by swapping the model id in [configs/05/wordle-rl.toml](../../configs/05/wordle-rl.toml) and launching with `prime train`.
 
 ## Next
 

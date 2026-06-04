@@ -80,6 +80,7 @@ dev = [
 
 [tool.uv]
 default-groups = ["dev"]
+upgrade-package = ["verifiers", "tasksets", "harnesses"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["lab_cookbook"]

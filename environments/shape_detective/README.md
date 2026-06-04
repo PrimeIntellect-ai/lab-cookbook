@@ -35,7 +35,7 @@ exactly matches the target index, else `0.0`.
 
 ```bash
 prime eval run prime/shape-detective \
-    --model qwen/qwen3-vl-8b-instruct \
+    --model Qwen/Qwen3.5-4B \
     --provider prime \
     -n 5 -r 3 -t 2048
 ```

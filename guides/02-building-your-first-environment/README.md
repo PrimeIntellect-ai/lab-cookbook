@@ -16,7 +16,7 @@ From your Lab workspace, initialize a local environment package:
 prime env init reverse-text --v1
 ```
 
-This creates `environments/reverse_text/` with `reverse_text.py`, `pyproject.toml`, and a README. Every v1 environment package created with `prime env init --v1` follows the same shape. Open `reverse_text.py`:
+The `--v1` flag scaffolds an environment in the current format — what this cookbook builds throughout. (Verifiers also supports an older format; you only need it when maintaining unmigrated packages, covered in [Legacy Environments](../14-legacy-environments/README.md).) This creates `environments/reverse_text/` with `reverse_text.py`, `pyproject.toml`, and a README, and every environment created this way follows the same shape. Open `reverse_text.py`:
 
 ```python
 import verifiers as vf
@@ -70,7 +70,7 @@ The first thing an environment needs is some tasks for the model to attempt. Her
 {"prompt": "The quick brown fox jumps over the lazy dog."}
 ```
 
-Subclass `vf.Taskset` and implement loaders for tasks and the system prompt. The source dataset calls the text field `prompt`; map that to the v1 `question` column so the framework derives the model prompt, and attach the reversed string as `answer`:
+Subclass `vf.Taskset` and implement loaders for tasks and the system prompt. The source dataset calls the text field `prompt`; map that to the `question` column so the framework derives the model prompt, and attach the reversed string as `answer`:
 
 ```python
 from difflib import SequenceMatcher
@@ -128,7 +128,7 @@ def load_environment(config: vf.EnvConfig) -> vf.Env:
 
 The finished implementation lives in [environments/reverse_text/reverse_text.py](../../environments/reverse_text/reverse_text.py).
 
-`vf.load_harness(config=config.harness)` resolves the base harness unless the package defines a custom harness loader. The base harness sends each prompt to the model, handles ordinary tool calls, and hands the response back to the taskset for scoring. Sampling flows through eval and RL configs.
+`vf.load_harness(config=config.harness)` resolves the base harness unless the package defines a custom harness loader. The base harness runs the rollout loop: it sends the prompt to the model, handles ordinary tool calls, and hands the response back to the taskset for scoring. Reverse-text is the simplest form of that loop — one model turn, then scoring, with nothing in between. Later guides reach environments that take several turns before scoring; the loop is the same, just repeated. Sampling flows through eval and RL configs.
 
 ## Check the Package
 
@@ -139,8 +139,8 @@ Make sure `environments/reverse_text/pyproject.toml` declares the correct depend
 name = "reverse-text"
 description = "Reverse text character by character."
 tags = ["single-turn", "text", "train", "eval"]
-version = "0.1.0"
-requires-python = ">=3.11"
+version = "0.1.2"
+requires-python = ">=3.11,<3.14"
 dependencies = [
     "verifiers>=0.1.15.dev17",
     "datasets",
@@ -151,7 +151,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build]
-include = ["reverse_text.py", "pyproject.toml", "README.md"]
+include = ["reverse_text.py", "pyproject.toml"]
 
 [tool.verifiers.eval]
 num_examples = 5
@@ -239,7 +239,7 @@ Read a few rollouts. For reverse-text, check whether the model copied the string
 
 **Reward hacking.** Expect it, don't hope to avoid it. Classic examples: a keyword bonus the model learns to stuff into every response, a judge that rewards verbosity, a length reward that accidentally flips the gradient. The fix is always the same: sort rollouts by reward, read the top-scoring ones, and ask whether a human would agree. If the highest-rewarded rollout is obviously bad, your reward is broken.
 
-**Metrics vs. rewards.** Not every signal should affect training. Use `@vf.reward(weight=0.0)` on additional Taskset methods to track response length, format compliance, tool-call count, or whatever you want to monitor without injecting signal into the gradient. These show up in rollout metrics and make hacking easier to spot: if training reward climbs but your weight-0 metric is flat, something is wrong.
+**Metrics vs. rewards.** Not every signal should affect training. Use `@vf.metric` methods on the Taskset to track response length, format compliance, tool-call count, or whatever you want to monitor without injecting signal into the gradient. These show up in rollout metrics and make hacking easier to spot: if training reward climbs but a metric you expected to move stays flat, something is wrong.
 
 ## Troubleshooting & QA
 
@@ -249,7 +249,7 @@ Before you push an environment or launch training, run a small QA pass.
 - **Read the rollouts, not just the score.** Look for: prompt shape (system + user as expected), reward matches your judgment, tasks the model can't possibly solve, tasks the model trivially solves.
 - **Common bugs.**
   - Dataset records shaped wrong (e.g. `prompt` is a string when it should be a list of messages).
-  - Reward function silently returning `0.0` on a parse failure — add a metric for "parsed successfully" with `weight=0`.
+  - Reward function silently returning `0.0` on a parse failure — add a `@vf.metric` for "parsed successfully".
   - Sync HTTP/LLM clients inside reward functions or `env_response` — these block the event loop and serialize concurrent rollouts. Use `AsyncOpenAI`, `httpx.AsyncClient`, or `asyncio.to_thread` for unavoidable sync calls.
   - `info` shape changing between records — store as a JSON string when records have different schemas.
   - Judge prompts that return prose instead of a score — fail loudly during eval, not silently in training. If the answer needs extraction, use a parser rather than ad hoc string slicing.

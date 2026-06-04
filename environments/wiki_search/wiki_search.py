@@ -48,7 +48,7 @@ class WikiSearchTasksetConfig(vf.TasksetConfig):
     corpus_dataset: str = "willcb/rare-wiki-pages"
     corpus_split: str = "train"
     chroma_db_dir: str = CHROMA_DB_DIR
-    system_prompt: vf.SystemPrompt | vf.SystemPromptConfig | None = (
+    system_prompt: vf.SystemPrompt = (
         "Use the provided Wikipedia search tools to help answer questions."
     )
 

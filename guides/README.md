@@ -21,6 +21,7 @@ Start with setup if you are new to Lab. Jump to a later guide if you already kno
 | 10 | [Coding Agents and Sandboxes](10-coding-agents-and-sandboxes/README.md) | Evaluate agents that write or run code in sandboxes. |
 | 11 | [Synthetic Agent Environments](11-synthetic-agent-environments/README.md) | Simulate a small world in memory and have an agent interact with it through tools. |
 | 12 | [Custom Harnesses](12-custom-harnesses/README.md) | Run third-party agent libraries through the program pattern. |
-| 13 | [Legacy Environments](13-legacy-environments/README.md) | Reference for unmigrated Rubric and v0 patterns (not for new envs). |
+| 13 | [Best Practices](13-best-practices/README.md) | A deliberate walkthrough of how to write clean environments. |
+| 14 | [Legacy Environments](14-legacy-environments/README.md) | Reference for unmigrated Rubric and v0 patterns (not for new envs). |
 
 For platform plumbing such as accounts, secrets, Hub workflows, hosted runs, and inference deployments, use the public Prime docs. The local [Lab Configuration](../reference/lab-configuration.md) page is only a thin pointer to those sources.

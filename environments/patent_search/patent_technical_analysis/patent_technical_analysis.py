@@ -116,7 +116,7 @@ class PatentTechnicalTasksetConfig(vf.TasksetConfig):
     corpus_file: str = "patents_formatted.json"
     qa_file: str = "patent_qa_level3.jsonl"
     chroma_db_dir: str = CHROMA_DB_DIR
-    system_prompt: vf.SystemPrompt | vf.SystemPromptConfig | None = SYSTEM_PROMPT
+    system_prompt: vf.SystemPrompt = SYSTEM_PROMPT
 
 
 def extract_section_by_header(content: str, header: str) -> str:

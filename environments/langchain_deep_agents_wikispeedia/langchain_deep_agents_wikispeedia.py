@@ -84,9 +84,7 @@ class WikispeediaHarnessConfig(vf.HarnessConfig):
 
 
 class WikispeediaTaskset(vf.Taskset[WikispeediaTasksetConfig]):
-    def load_system_prompt(
-        self, config: WikispeediaTasksetConfig
-    ) -> vf.SystemPrompt | vf.SystemPromptConfig | None:
+    def load_system_prompt(self, config: WikispeediaTasksetConfig) -> vf.SystemPrompt:
         if config.system_prompt is not None:
             return config.system_prompt
         return system_prompt(allow_go_back=config.allow_go_back)
@@ -192,13 +190,11 @@ class WikispeediaTaskset(vf.Taskset[WikispeediaTasksetConfig]):
         return self.format_article(str(path[-1]), links_only=bool(state.get("links_only", False)))
 
     @vf.reward(weight=1.0)
-    async def reached_target(self, task: vf.Task, state: vf.State) -> float:
-        _ = task
+    async def reached_target(self, state: vf.State) -> float:
         return 1.0 if state.get("reached_target", False) else 0.0
 
-    @vf.reward(weight=0.0)
-    async def path_efficiency(self, task: vf.Task, state: vf.State) -> float:
-        _ = task
+    @vf.metric
+    async def path_efficiency(self, state: vf.State) -> float:
         if not state.get("reached_target", False):
             return 0.0
         info = state["info"]
@@ -208,23 +204,20 @@ class WikispeediaTaskset(vf.Taskset[WikispeediaTasksetConfig]):
         return min(1.0, shortest / actual)
 
     @vf.reward(weight=1.0)
-    async def path_efficiency_reward(self, task: vf.Task, state: vf.State) -> float:
-        return self.config.efficiency_weight * await self.path_efficiency(task, state)
+    async def path_efficiency_reward(self, state: vf.State) -> float:
+        return self.config.efficiency_weight * await self.path_efficiency(state)
 
-    @vf.reward(weight=0.0)
-    async def path_length(self, task: vf.Task, state: vf.State) -> float:
-        _ = task
+    @vf.metric
+    async def path_length(self, state: vf.State) -> float:
         return float(max(len(state.get("path", [])) - 1, 0))
 
-    @vf.reward(weight=0.0)
-    async def shortest_path(self, task: vf.Task, state: vf.State) -> float:
-        _ = task
+    @vf.metric
+    async def shortest_path(self, state: vf.State) -> float:
         info = state.get("info", {})
         return float(info.get("shortest_path", 0) if isinstance(info, dict) else 0)
 
-    @vf.reward(weight=0.0)
-    async def agent_timeout(self, task: vf.Task, state: vf.State) -> float:
-        _ = task
+    @vf.metric
+    async def agent_timeout(self, state: vf.State) -> float:
         return 1.0 if state.get("agent_timeout", False) else 0.0
 
     def iter_tool_calls(self, state: vf.State) -> Iterator[str]:
@@ -244,14 +237,12 @@ class WikispeediaTaskset(vf.Taskset[WikispeediaTasksetConfig]):
             return sum(1 for _ in self.iter_tool_calls(state))
         return sum(1 for tool_name in self.iter_tool_calls(state) if tool_name == name)
 
-    @vf.reward(weight=0.0)
-    async def total_tool_calls(self, task: vf.Task, state: vf.State) -> float:
-        _ = task
+    @vf.metric
+    async def total_tool_calls(self, state: vf.State) -> float:
         return float(self.count_tool_calls(state))
 
-    @vf.reward(weight=0.0)
-    async def assistant_turns(self, task: vf.Task, state: vf.State) -> float:
-        _ = task
+    @vf.metric
+    async def assistant_turns(self, state: vf.State) -> float:
         completion = state.get("completion") or []
         return float(
             len(vf.get_messages(completion, role="assistant"))
@@ -259,9 +250,8 @@ class WikispeediaTaskset(vf.Taskset[WikispeediaTasksetConfig]):
             else 0
         )
 
-    @vf.reward(weight=0.0)
-    async def invalid_link_rate(self, task: vf.Task, state: vf.State) -> float:
-        _ = task
+    @vf.metric
+    async def invalid_link_rate(self, state: vf.State) -> float:
         clicks = 0
         invalid = 0
         completion = state.get("completion") or []
@@ -292,49 +282,40 @@ class WikispeediaTaskset(vf.Taskset[WikispeediaTasksetConfig]):
                 invalid += 1
         return float(invalid / clicks) if clicks else 0.0
 
-    @vf.reward(weight=0.0)
-    async def calls_click_link(self, task: vf.Task, state: vf.State) -> float:
-        _ = task
+    @vf.metric
+    async def calls_click_link(self, state: vf.State) -> float:
         return float(self.count_tool_calls(state, "click_link"))
 
-    @vf.reward(weight=0.0)
-    async def calls_go_back(self, task: vf.Task, state: vf.State) -> float:
-        _ = task
+    @vf.metric
+    async def calls_go_back(self, state: vf.State) -> float:
         return float(self.count_tool_calls(state, "go_back"))
 
-    @vf.reward(weight=0.0)
-    async def calls_write_todos(self, task: vf.Task, state: vf.State) -> float:
-        _ = task
+    @vf.metric
+    async def calls_write_todos(self, state: vf.State) -> float:
         return float(self.count_tool_calls(state, "write_todos"))
 
-    @vf.reward(weight=0.0)
-    async def calls_write_file(self, task: vf.Task, state: vf.State) -> float:
-        _ = task
+    @vf.metric
+    async def calls_write_file(self, state: vf.State) -> float:
         return float(self.count_tool_calls(state, "write_file"))
 
-    @vf.reward(weight=0.0)
-    async def calls_read_file(self, task: vf.Task, state: vf.State) -> float:
-        _ = task
+    @vf.metric
+    async def calls_read_file(self, state: vf.State) -> float:
         return float(self.count_tool_calls(state, "read_file"))
 
-    @vf.reward(weight=0.0)
-    async def calls_ls(self, task: vf.Task, state: vf.State) -> float:
-        _ = task
+    @vf.metric
+    async def calls_ls(self, state: vf.State) -> float:
         return float(self.count_tool_calls(state, "ls"))
 
-    @vf.reward(weight=0.0)
-    async def calls_edit_file(self, task: vf.Task, state: vf.State) -> float:
-        _ = task
+    @vf.metric
+    async def calls_edit_file(self, state: vf.State) -> float:
         return float(self.count_tool_calls(state, "edit_file"))
 
-    @vf.reward(weight=0.0)
-    async def calls_grep(self, task: vf.Task, state: vf.State) -> float:
-        _ = task
+    @vf.metric
+    async def calls_grep(self, state: vf.State) -> float:
         return float(self.count_tool_calls(state, "grep"))
 
-    @vf.reward(weight=0.0)
-    async def calls_task(self, task: vf.Task, state: vf.State) -> float:
-        _ = task
+    @vf.metric
+    async def calls_task(self, state: vf.State) -> float:
         return float(self.count_tool_calls(state, "task"))
 
 

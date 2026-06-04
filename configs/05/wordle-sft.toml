@@ -1,5 +1,12 @@
+max_steps = 100
+batch_size = 32
+rollouts_per_example = 4
 model = "openai/gpt-oss-20b"
 loss = "sft"
+
+[sampling]
+max_tokens = 2048
+reasoning_effort = "medium"
 
 [teacher]
 model = "openai/gpt-oss-120b"
@@ -9,4 +16,20 @@ max_tokens = 2048
 reasoning_effort = "medium"
 
 [[env]]
-id = "prime/wordle"
+id = "primeintellect/wordle"
+
+[env.taskset]
+num_train_examples = 512
+num_eval_examples = 128
+
+[env.harness]
+max_turns = 6
+
+[eval]
+interval = 5
+num_examples = 32
+rollouts_per_example = 1
+eval_base_model = true
+
+[[eval.env]]
+id = "primeintellect/wordle"

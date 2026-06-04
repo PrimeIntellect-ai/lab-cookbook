@@ -74,9 +74,7 @@ class SimpleJudgeTasksetConfig(vf.TasksetConfig):
     judge_model: str = "openai/gpt-4.1-mini"
     judge_base_url: str = "https://api.pinference.ai/api/v1"
     judge_api_key_var: str = "PRIME_API_KEY"
-    system_prompt: vf.SystemPrompt | vf.SystemPromptConfig | None = (
-        "Follow the user instruction carefully. Keep answers short."
-    )
+    system_prompt: vf.SystemPrompt = "Follow the user instruction carefully. Keep answers short."
 
 
 class SimpleJudgeTaskset(vf.Taskset[SimpleJudgeTasksetConfig]):

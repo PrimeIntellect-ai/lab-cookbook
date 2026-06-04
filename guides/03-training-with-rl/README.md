@@ -171,9 +171,7 @@ The ratios match the order of the `[[env]]` sections.
 
 ### Environment Overrides
 
-Training uses the same Taskset/Harness config split as eval. Put task data and
-difficulty knobs under `[env.taskset]`; put rollout execution knobs under
-`[env.harness]`.
+Training uses the same `taskset`/`harness` config split as evaluation — the standard `verifiers.v1` config surface. 
 
 ```toml
 [[env]]

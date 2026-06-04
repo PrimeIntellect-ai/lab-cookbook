@@ -108,7 +108,7 @@ Two design choices keep the environment honest:
 - **Budget the oracle.** `check_proposal` is the agent's view of the oracle. Bound the number of calls per rollout (the TUI shows the budget as `Score-check budget`) so the agent cannot brute-force the search space. The remaining budget should be visible in every tool result.
 - **Surface remaining turns.** Tool results include the remaining turn count. The agent learns to plan instead of exploring exhaustively.
 
-This is the same `vf.Toolset` pattern from [Tool Use and Search](../08-tool-use-and-search/README.md), with one extra requirement: the generated world belongs on the serializable `vf.Task`, not in a module global or rollout state. Put task metadata under `task["info"]`, initialize rollout-only progress with `@vf.setup`, and let tools declare hidden `task: vf.Task` and `state: vf.State` arguments; v1 injects both while keeping the model-visible schema clean.
+This is the same `vf.Toolset` pattern from [Tool Use and Search](../08-tool-use-and-search/README.md), with one extra requirement: the generated world belongs on the serializable `vf.Task`, not in a module global or rollout state. Put task metadata under `task["info"]`, initialize rollout-only progress with `@vf.setup`, and let tools declare hidden `task: vf.Task` and `state: vf.State` arguments; the framework injects both while keeping the model-visible schema clean.
 
 ## Designing the Reward
 
@@ -121,6 +121,145 @@ The reward should reflect achieved utility against what was achievable on this s
 Normalizing against the oracle is optional but useful: it gives `score / oracle_best`, which is bounded in `[0, 1]` regardless of how generous the underlying utilities are. Either form works as an RL reward; the unnormalized form is easier to compare to a random baseline.
 
 Avoid composite rewards with many small bonuses. They invite reward hacking and obscure what the agent learned. One clean reward, computed at submission, is usually enough — diagnostic signals (did the agent call `check_proposal`, did it submit before the turn limit, did it ever view constraints) belong as metrics, not as reward terms.
+
+## How Calendar-Scheduling Is Built
+
+[environments/calendar_scheduling/calendar_scheduling.py](../../environments/calendar_scheduling/calendar_scheduling.py) is the calendar example wired up. It imports the world model (`CalendarTask`, generator, oracle, evaluator) from a sibling `calendar_problem` module and exposes one taskset with four tools, one reward, and a handful of metrics.
+
+**Config.** Difficulty and dataset sizing are typed Pydantic fields; generator-level overrides ride along as a nested config:
+
+```python
+class CalendarSchedulingTasksetConfig(vf.TasksetConfig):
+    difficulty: str = "medium"
+    seed: int = 7
+    num_train: int = 512
+    num_eval: int = 128
+    generator_overrides: GenerationOverrides = Field(default_factory=GenerationOverrides)
+    system_prompt: vf.SystemPrompt = SYSTEM_PROMPT
+```
+
+`generator_overrides` is a structured config object the user can override field-by-field from TOML (`[eval.taskset.generator_overrides]`) without exposing the generator internals.
+
+**Per-rollout setup.** A `@vf.setup` hook fires at the start of every rollout to initialize bookkeeping state — the score-check budget, the running list of proposals examined, and the submission slot:
+
+```python
+@vf.setup
+async def setup_calendar(self, task: vf.Task, state: vf.State) -> None:
+    calendar_task = CalendarTask.from_task(task)
+    state["score_checks_remaining"] = int(calendar_task.score_check_budget)
+    state["score_checks_used"] = 0
+    state["proposal_checks"] = []
+    state["submitted"] = False
+    state["submitted_valid"] = False
+    state["submitted_score"] = 0.0
+    state["submitted_payload"] = None
+```
+
+`@vf.setup` attaches to the **start** of the [rollout loop](../04-prompt-optimization/README.md#how-a-multi-turn-rollout-runs) — step 1, before the first model turn — and is the right place for per-rollout bookkeeping that tools mutate later. With [guide 10's](../10-coding-agents-and-sandboxes/README.md) `@vf.cleanup` (loop end) and the `@vf.stop` hook below (loop exit), that completes the lifecycle: `@vf.setup` opens a rollout, `@vf.stop` decides when it ends, `@vf.cleanup` closes it. These hooks are how a taskset changes state at loop boundaries; tools change state mid-loop, but only through the `task`/`state` the framework injects.
+
+**Task generation.** `load_tasks(split)` is deterministic in `seed` and `task_index`. Each task is generated and validated up front (the oracle proves a valid solution exists) before being packaged with `build_example`:
+
+```python
+def load_tasks(self, split: vf.TaskSplit = "train") -> vf.Tasks:
+    if split == "train":
+        num_examples, seed = self.config.num_train, self.config.seed
+    else:
+        num_examples, seed = self.config.num_eval, self.config.seed + 1_000_003
+    tasks: list[vf.Task] = []
+    for index in range(num_examples):
+        task_seed = seed + (index * 1009)
+        task, summary, config = generate_validated_task(
+            seed=task_seed,
+            difficulty=self.config.difficulty,
+            overrides=self.config.generator_overrides,
+        )
+        tasks.append(build_example(task, summary, config))
+    return tasks
+```
+
+Train and eval use disjoint seeds so eval examples never appear in training, even by coincidence. `1_000_003` is just a large prime offset; `1009` between tasks keeps each example seed far from its neighbors.
+
+**Tools.** Four `@staticmethod` tools on the taskset class. The model-visible signature names are `attendee_id`, `day_index`, `start_time_utc`, `duration_minutes`, `room_id`. `task` and `state` are added to the signatures but stripped from the schema — the framework injects both by parameter name and the model never sees them:
+
+```python
+def load_toolsets(self, config: CalendarSchedulingTasksetConfig) -> vf.Toolsets:
+    _ = config
+    return {
+        "calendar": vf.Toolset(
+            tools=[
+                self.check_attendee_calendar,
+                self.view_attendee_constraints,
+                self.check_proposal,
+                self.submit_window,
+            ]
+        )
+    }
+
+@staticmethod
+async def check_proposal(
+    day_index: int,
+    start_time_utc: str,
+    duration_minutes: int,
+    room_id: str,
+    task: vf.Task,
+    state: vf.State,
+) -> str:
+    """Check score and hard-constraint status for a candidate window.
+
+    Args:
+        day_index: Day index in the planning window.
+        start_time_utc: UTC start time in HH:MM format.
+        duration_minutes: Proposed duration in minutes.
+        room_id: Room identifier.
+
+    Returns:
+        JSON with validity, score, attendee utility details, and budgets.
+    """
+    calendar_task = CalendarTask.from_task(task)
+    ...
+    if remaining_checks <= 0:
+        payload["error"] = "score-check budget exhausted"
+        ...
+    evaluation = evaluate_proposal(calendar_task, proposal)
+    state["score_checks_remaining"] = remaining_checks - 1
+    state["score_checks_used"] = int(state.get("score_checks_used", 0)) + 1
+    ...
+    return json.dumps(payload, indent=2, sort_keys=True)
+```
+
+`check_proposal` shows the full pattern: take model arguments, reconstruct the world from `task`, read and decrement the score-check budget on `state`, return a JSON-shaped string the model can re-parse. The score-check budget is the throttle that keeps this from being brute-force search — every probe costs one of a fixed number of checks, and the budget is reported in every tool response.
+
+`submit_window` is the only tool that ends the rollout. Submission flips `state["submitted"] = True` and calls `state.stop("submitted")` so the `@vf.stop` hook below sees it on the next check:
+
+```python
+@vf.stop(priority=50)
+async def has_submission(self, state: vf.State) -> bool:
+    return bool(state.get("submitted", False))
+```
+
+`@vf.stop` is the loop's exit check — it runs after each model turn (step 2 of the loop), and returning `True` ends the rollout. `state.stop("submitted")` inside `submit_window` is the imperative form of the same thing: a tool can signal "we're done" directly. `priority=50` runs this stop before the built-in cheap checks (turn limit, error) so a successful submission terminates immediately without burning extra turns. The framework always provides those built-in stops; you add `@vf.stop` only for task-specific exit conditions.
+
+**Reward and metrics.** One reward, several metrics. The reward gates on validity so an invalid submission scores 0 even if the underlying utility computation succeeded:
+
+```python
+@vf.reward(weight=1.0)
+async def final_score_from_submission(self, state: vf.State) -> float:
+    if not bool(state.get("submitted_valid", False)):
+        return 0.0
+    return float(state.get("submitted_score", 0.0))
+
+@vf.metric
+async def submission_valid(self, state: vf.State) -> float:
+    return 1.0 if bool(state.get("submitted_valid", False)) else 0.0
+
+@vf.metric
+async def submitted_to_optimal_ratio(self, state: vf.State, answer: object) -> float:
+    ...  # 0–1 ratio of achieved to oracle score, useful for cross-task comparison
+```
+
+`@vf.metric` tracks signals that should appear in rollout outputs but never affect the gradient. Use it for diagnostics like "did the agent submit at all?", "how close to the oracle?", or "how much of the score-check budget did the agent use?". These show up alongside the reward in eval output and in W&B during training, which makes reward hacking easy to spot — if reward climbs but `submission_valid` stays flat, something is broken.
+
+Both reward and metric methods accept any subset of the injected names (`task`, `state`, `answer`, `info`, `prompt`, `completion`) — request only what you read. `submitted_to_optimal_ratio` reads both `state` and `answer`; `submission_valid` reads only `state`.
 
 ## One-Shotting It with a Coding Agent
 

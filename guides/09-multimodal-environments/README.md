@@ -11,7 +11,7 @@ The env ships in two modes that share the same scene generator:
 - **single-turn** (max_turns=1) — all three clues in the initial prompt; the model commits with a boxed tile index, such as `\boxed{N}`
 - **multi-turn** (`max_turns=3`, default) — clues revealed across three turns (pattern → color → shape); the model tracks candidates after each clue and commits on the final turn
 
-Both modes are good fits for small native-multimodal models like `qwen/qwen3-vl-8b-instruct`.
+Both modes are good fits for small native-multimodal models like `Qwen/Qwen3.5-4B`.
 
 ## Run It
 
@@ -19,7 +19,7 @@ Run a small eval:
 
 ```bash
 prime eval run prime/shape-detective \
-  -m qwen/qwen3-vl-8b-instruct \
+  -m Qwen/Qwen3.5-4B \
   -n 5 \
   -r 3 \
   -t 2048
@@ -28,8 +28,8 @@ prime eval run prime/shape-detective \
 Or run with a config file:
 
 ```toml
-# [configs/08/shape-detective-eval.toml](../../configs/08/shape-detective-eval.toml)
-model = "qwen/qwen3-vl-8b-instruct"
+# [configs/09/shape-detective-eval.toml](../../configs/09/shape-detective-eval.toml)
+model = "Qwen/Qwen3.5-4B"
 save_results = true
 
 [[eval]]
@@ -43,7 +43,7 @@ mode = "multi"
 ```
 
 ```bash
-prime eval run configs/08/shape-detective-eval.toml
+prime eval run configs/09/shape-detective-eval.toml
 ```
 
 Switch to single-turn with `mode = "single"` under `[eval.taskset]` in eval TOML. The
@@ -280,6 +280,8 @@ A task is a plain dict with four interesting fields:
 
 ## User (Multi-Turn)
 
+Wordle's user in [guide 04](../04-prompt-optimization/README.md#how-a-multi-turn-rollout-runs) just reformatted game feedback. Shape-detective's user is a step up: it drives the conversation forward through a fixed script, revealing one clue per turn and deciding when the rollout ends. It's the same `get_response` slot in the same loop, doing more.
+
 ```python
 class ShapeDetectiveUser(vf.User[ShapeDetectiveUserConfig]):
     async def get_response(self, task, state, messages):
@@ -340,7 +342,7 @@ prime inference models --output json | jq '.data[].id' | grep -iE "vl|qwen3\.5|g
 
 The full catalog is browsable in the Prime Inference docs under the inference / models section. Don't pick a text-only model and hope it ignores the image — most providers reject the request outright; a few silently drop the image, which produces eval numbers that look plausible but are evaluating something else.
 
-For first-pass evals on a small Qwen3-VL-class model, target the smallest variant that fits your latency budget. The shape-detective smoke set runs in seconds and is enough to sanity-check both the eval wiring and the model's basic vision capability.
+For first-pass evals on a small Qwen3.5 model, target the smallest variant that fits your latency budget. The shape-detective smoke set runs in seconds and is enough to sanity-check both the eval wiring and the model's basic vision capability.
 
 ## Failure Modes
 

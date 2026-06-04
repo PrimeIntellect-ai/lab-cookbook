@@ -73,6 +73,73 @@ defines the task's action space, observations, or success condition, it belongs
 to the taskset. If code only describes how an arbitrary task is attempted, it
 belongs to the harness.
 
+`RULE 1.4 PROPOSED` — Defensive code is not allowed. The environment operates
+under clear assumptions about what types it works with. Code that exists only to
+handle hypothetical cases the env will never actually see — multimodal content
+in a text-only task, unexpected `None`s in fields the framework guarantees,
+fallback branches for "what if" — is forbidden. If you find yourself reaching
+for it, the type is wrong upstream and the fix is to narrow the type, not to
+spread guards downstream.
+
+`RULE 1.5 PROPOSED` — Strict typing. Use the strictest type appropriate at the
+boundary. Do not abuse custom types or union types to defer narrowing. Adopt
+native `verifiers` types (`vf.Task`, `vf.State`, `vf.Message`,
+`vf.AssistantMessage`, `vf.UserMessage`, `vf.TextContentPart`, `vf.JsonData`,
+`vf.SystemPrompt`, `vf.Toolset`, `vf.SandboxConfig`, ...) as early in the chain
+as possible. Pass typed objects through, not raw dicts.
+
+`RULE 1.6 PROPOSED` — Backdoors out of a wider type are, in order of preference:
+
+1. **Explicit transformation**, in-line. `str(x or "")`, `int(value)`,
+   `dict(payload)`, `vf.UserMessage(content=text)`. The transformation itself is
+   the narrowing; the result type is concrete.
+2. **`assert isinstance(x, T)`**, in-line — only allowed when `x` originates
+   outside the framework (raw `datasets` rows, third-party SDK responses,
+   `json.loads` output). Asserts on values that came out of `vf` are forbidden —
+   if `vf` returns a wider type than you need, the assumption should be
+   expressed by the caller through transformation or by tightening the
+   framework type.
+
+`cast(T, x)` is almost always wrong. It silences the type checker without
+producing a real value of `T`; the runtime can still hold something else. Reach
+for it only when there is no transformation that preserves identity and the
+type checker is provably wrong about a specific call site.
+
+`RULE 1.7 PROPOSED` — Linter errors are evidence the code is wrong, not noise
+to suppress. Do not add `# pyright: ignore`, `# type: ignore`, or equivalent
+suppressions. If the type checker rejects what you wrote, restructure until it
+accepts (typically by following 1.4–1.6).
+
+`RULE 1.8 PROPOSED` — Basic message manipulation lives in-line at the call
+site. Reading text off `message.content`, filtering `vf.get_messages(...)` by
+role, extracting tagged spans with `re.search` — these are one or two lines and
+should sit inside the reward or user method that needs them. Wrapping them in a
+module-level helper or a `@staticmethod` "for reuse" is a code smell unless the
+same logic is genuinely shared across owners that cannot reach it through the
+class hierarchy. The cost of a small amount of repetition is lower than the
+cost of a vague helper that hides the type contract.
+
+`RULE 1.9 PROPOSED` — Classify the artifact before choosing a representation.
+**Content** (prompts, fixed instructions, message templates, fixtures) is
+represented as visible literals: a module-level string constant, or a single
+`.format()` / f-string template whose only interpolations are *task data*
+(`{question}`, `{argument}`). **Logic / behavior** is represented as functions.
+
+- Do not build a prompt by calling helper functions that return prompt
+  fragments. A reader must see exactly what the model receives by reading one
+  literal, without chasing a call graph.
+- Do not factor a shared sentence out of two prompts to deduplicate it. Repeat
+  the sentence. For content, legibility outranks deduplication; DRY is a code
+  heuristic and does not apply.
+- "It repeats" and "it has a varying part" justify a function only for
+  behavior. For content they justify a template with a data placeholder, not a
+  builder function.
+
+The failure this prevents: pattern-matching on surface structure (repeated text
++ a varying slot) and reaching for `def`, instead of first asking whether the
+thing is content or logic. Ask that question first; it selects the
+representation.
+
 > OPEN QUESTION 1.a: Where is the boundary for tools that are execution
 > mechanics but task-flavored (e.g. a `submit_answer` tool)? `submit_window` in
 > calendar-scheduling defines the success condition and is currently treated as a
@@ -172,6 +239,25 @@ split names.
 are final. Customize via config, public load methods, lifecycle decorators, and
 program config. Do not override `__init__`.
 
+`RULE 4.6 PROPOSED` — No empty config subclasses for registry routing. If your
+env needs a custom `vf.User` subclass paired with a reusable taskset (e.g.
+`TextArenaUser` / `TextArenaUserConfig`), do *not* create
+`MyUserConfig(TextArenaUserConfig): pass` solely so the user-type registry maps
+back to your subclass. Override the typed loader instead — `load_user`,
+`load_taskset`, `load_harness`, `load_toolsets`, `load_objects`,
+`load_artifacts` — and instantiate the desired class directly:
+
+```python
+class MyTaskset(TextArenaTaskset[MyTasksetConfig]):
+    def load_user(self, config: vf.UserConfig) -> MyUser:
+        return MyUser(config=config)
+```
+
+The loader hook is the routing contract. Empty config subclasses are
+load-bearing only because some other system is being routed through
+registration metadata; replacing them with an explicit `load_*` override moves
+the routing into typed code where it can be reviewed.
+
 > OPEN QUESTION 4.a: `Taskset`, `Harness`, `User`, and `Toolset` all have `@final`
 > constructors (`vf.Toolset` is additionally a frozen dataclass; see 11.5). Is
 > final `__init__` across these owner types the intended permanent design, or a
@@ -248,6 +334,12 @@ sides. Strategies: `HT` (default), `TH`, `H_OR_T`, `T_OR_H`, `H`, `T`, `REJECT`.
 `vf.SystemPromptConfig(path="system_prompt.txt")`. Override
 `load_system_prompt(config)` only when prompt construction is computed.
 
+`RULE 6.5 PROPOSED` — Prompts are content (see RULE 1.9): a module-level string
+constant or a `.format()` template with data placeholders, or a packaged
+`prompts/*.txt` file. Never a prompt built by composing helper functions, and
+never a shared sentence factored out of multiple prompts to deduplicate it.
+When two prompts share wording, repeat it so each prompt reads as one literal.
+
 > AUTOMATIC 6.a IMPLICIT: The author never assembles the final system message; the
 > harness injects it into the message list during `setup_state`. The author only
 > supplies the two sides + strategy.
@@ -275,16 +367,19 @@ async def submission_valid(self, state: vf.State) -> float:
 
 `RULE 7.2 IMPLICIT` — Reward and metric functions request rollout data by
 parameter name (`task`, `state`, `answer`, and so on). The framework injects
-what they ask for.
+what they ask for. Declare exactly the parameters the body reads.
+
+`RULE 7.3 PROPOSED` — Monitor-only signals use `@vf.metric`, not
+`@vf.reward(weight=0.0)`. A reward — even a zero-weighted one — is part of the
+scoring surface; a metric is observability. Use `@vf.reward(weight=...)` only
+for signals that contribute to the final score, and `@vf.metric` for everything
+tracked for diagnosis (submission validity, oracle ratios, budget usage, parse
+success). `weight=0.0` rewards in new environments are a code smell.
 
 > STUB 7.a: Exact set of injectable parameter names for rewards/metrics, group
 > vs single semantics, and how `weight` combines into final reward.
 
 > STUB 7.b: `advantages` and `scoring` config — what they are, when to use them.
-
-> OPEN QUESTION 7.c: Metrics vs rewards-with-weight-0 — is there a first-class
-> `@vf.metric` (as used in calendar-scheduling) AND a `weight=0` reward path,
-> and which is golden?
 
 ---
 
@@ -496,7 +591,6 @@ max_turns = 4
 - 4.a — Is `final __init__` permanent design across owners?
 - 5.b — Golden pattern for procedurally generated tasksets.
 - 6.b — Default system-prompt strategy for the cookbook (`HT` vs `TH`).
-- 7.c — Metrics vs weight-0 rewards.
 - 8.b — `@vf.update` vs inline state mutation.
 - 8.c — Lifecycle hooks on toolset vs taskset; precedence.
 - 9.c — Public surface for `state["trajectory"]` / `get_max_turns` default.
