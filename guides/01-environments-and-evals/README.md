@@ -102,6 +102,9 @@ num_examples = 20
 rollouts_per_example = 1
 sampling_args = { max_tokens = 1024 }
 
+# The [eval.*] tables below bind to the LAST [[eval]] block above (wordle) —
+# this is TOML array-of-tables behavior, not a suite-wide default. gsm8k is
+# single-turn and takes no overrides here.
 [eval.taskset]
 num_eval_examples = 20
 
@@ -116,8 +119,15 @@ prime eval run configs/01/first-eval-suite.toml
 
 Use this pattern when you want to compare model behavior across environments,
 compare a base model to a trained adapter, or re-run the same checks after
-changing a prompt or config. Environment-specific overrides stay next to each
-`[[eval]]`: `taskset` changes the task source or difficulty, while `harness`
+changing a prompt or config.
+
+A `[eval.taskset]` or `[eval.harness]` table binds to the **most recent**
+`[[eval]]` block above it — standard TOML array-of-tables behavior, not a
+suite-wide default. In the example above, `num_eval_examples` and `max_turns =
+6` apply to **wordle** only (the last `[[eval]]`); gsm8k, being single-turn,
+takes no overrides. To override gsm8k instead, place its `[eval.taskset]` /
+`[eval.harness]` tables immediately after gsm8k's `[[eval]]` block and before
+wordle's. `taskset` changes the task source or difficulty, while `harness`
 changes rollout execution.
 
 ## Next

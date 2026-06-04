@@ -2,10 +2,9 @@
 
 This guide uses [simple-judge](../../environments/simple_judge/simple_judge.py), a local taskset with one yes/no judge criterion per task. It's the smallest useful pattern for adding LLM-judged instruction following.
 
-## Install and Eval
+## Eval
 
 ```bash
-prime env install simple-judge
 prime eval run prime/simple-judge -m openai/gpt-4.1-mini -n 6 -r 2
 ```
 

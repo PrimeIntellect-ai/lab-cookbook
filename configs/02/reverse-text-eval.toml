@@ -2,7 +2,7 @@ model = "openai/gpt-5.4-nano"
 save_results = true
 
 [[eval]]
-env_id = "prime/reverse-text"
+env_id = "reverse-text"
 num_examples = 10
 rollouts_per_example = 2
 sampling_args = { max_tokens = 512 }

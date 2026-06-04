@@ -13,6 +13,9 @@ num_examples = 20
 rollouts_per_example = 1
 sampling_args = { max_tokens = 1024 }
 
+# The [eval.*] tables below bind to the LAST [[eval]] block above (wordle) —
+# this is TOML array-of-tables behavior, not a suite-wide default. gsm8k is
+# single-turn and takes no overrides here.
 [eval.taskset]
 num_eval_examples = 20
 

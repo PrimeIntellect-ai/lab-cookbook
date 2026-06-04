@@ -159,12 +159,22 @@ rollouts_per_example = 3
 ```
 The `[tool.verifiers.eval]` section allows configuration of per-environment default settings for evaluations.
 
+Install the local package into your workspace:
+
+```bash
+prime env install reverse-text
+```
+
+`prime env install <name>` builds and installs the environment from your local `environments/` folder so it can be imported and run. You usually don't need to run it by hand before an eval — `prime eval run` installs the local package automatically — but it's the explicit way to (re)install after changing dependencies, or to make the package available without running an eval.
+
 ## Evaluate It
+
+> **Run your own code, not the Hub copy.** Refer to the environment by its **bare name** (`reverse-text`) so Lab loads the package from your local `environments/` folder — the code you just wrote. A namespaced slug like `prime/reverse-text` always resolves to the *published* copy on the Hub, so your local edits would be silently ignored. The CLI prints which source it used: look for `Using local environment 'reverse-text'` (rather than `Using remote environment ...`) to confirm you are evaluating your own work.
 
 Run a small eval:
 
 ```bash
-prime eval run prime/reverse-text \
+prime eval run reverse-text \
   -m openai/gpt-5.4-nano \
   -n 10 \
   -r 2 \
@@ -179,7 +189,7 @@ model = "openai/gpt-5.4-nano"
 save_results = true
 
 [[eval]]
-env_id = "prime/reverse-text"
+env_id = "reverse-text"
 num_examples = 10
 rollouts_per_example = 2
 sampling_args = { max_tokens = 512 }
@@ -194,7 +204,7 @@ validates against the typed config subclass before `load_environment` runs:
 
 ```toml
 [[eval]]
-env_id = "prime/reverse-text"
+env_id = "reverse-text"
 num_examples = 10
 rollouts_per_example = 2
 sampling_args = { max_tokens = 512 }
@@ -207,7 +217,7 @@ For a one-off CLI override, pass the same child config through the root
 `config` argument:
 
 ```bash
-prime eval run prime/reverse-text \
+prime eval run reverse-text \
   -m openai/gpt-5.4-nano \
   -n 10 \
   -r 2 \
