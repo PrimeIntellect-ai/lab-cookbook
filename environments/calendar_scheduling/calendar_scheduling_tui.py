@@ -249,12 +249,8 @@ def render_problem(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Render a calendar scheduling task TUI"
-    )
-    parser.add_argument(
-        "--difficulty", default="medium", choices=["easy", "medium", "hard"]
-    )
+    parser = argparse.ArgumentParser(description="Render a calendar scheduling task TUI")
+    parser.add_argument("--difficulty", default="medium", choices=["easy", "medium", "hard"])
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument(
         "--show-oracle",

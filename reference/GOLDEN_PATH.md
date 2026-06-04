@@ -368,7 +368,11 @@ show or hide toolsets and tools, not define them inline.
 ```python
 class SearchTaskset(vf.Taskset[SearchTasksetConfig]):
     def load_toolsets(self, config: SearchTasksetConfig) -> vf.Toolsets:
-        return {"search": vf.Toolset(tools=[search])}
+        return {"search": vf.Toolset(tools=[self.search])}
+
+    @staticmethod
+    async def search(query: str, task: vf.Task, state: vf.State) -> str:
+        ...
 ```
 
 `RULE 11.2 IMPLICIT` — A tool is any callable. The model-visible schema is
@@ -386,32 +390,18 @@ concurrent rollouts. Per-rollout data must come from the injected `task` and
 toolset or taskset instance.
 
 `RULE 11.5 CONFIRMED` — `vf.Toolset` is a `frozen=True` dataclass with a
-`@final __init__`. It cannot be subclassed to carry custom construction or
-instance state.
+`@final __init__`. Treat it as the data/config object that exposes tools, not as
+a subclass extension point. Do not subclass `vf.Toolset` in cookbook examples.
 
-> OPEN QUESTION 11.a: **Should `vf.Toolset` be `final`?** It currently is, which
-> blocks a self-contained toolset subclass that owns its tools as instance
-> methods plus its own lifecycle. If toolsets are meant to be self-contained
-> units, finality fights that. Keep final (toolset is pure data/config, tools
-> live elsewhere) or relax it (toolset can be a real class with bound methods and
-> lifecycle)?
+`RULE 11.6 CONFIRMED` — Put task-specific tools directly on the `Taskset` class
+by default. Use static methods when the tool only needs injected `task` and
+`state`; use instance methods when the tool needs taskset-owned objects. Attach
+those methods to a plain `vf.Toolset` from `load_toolsets`.
 
-> OPEN QUESTION 11.b: **Should toolset tool methods be `Taskset` class methods
-> with `self` access?** Three options appear in the cookbook:
-> 1. Taskset instance methods passed as `self.tool` (wiki_search, swe_grep,
->    math_python) — tool gets `self`, can share taskset-owned resources.
-> 2. Module-level free functions passed by reference (calendar-scheduling; patent
->    envs via closures) — no `self`, pure over injected `task`/`state`.
-> 3. `@staticmethod` on a `vf.Toolset` subclass via a `create()` factory (former
->    calendar-scheduling) — non-idiomatic.
-> Resolve to one rule, including when a tool legitimately needs taskset-owned
-> state (option 1) versus when it should be a free function (option 2).
-
-> OPEN QUESTION 11.c: A rule against detached helper functions at the bottom of an
-> environment file is in tension with module-level tool functions (option 2),
-> which calendar-scheduling currently uses. Are exported tool functions exempt
-> because they are first-class tools rather than helpers, or does the anti-clutter
-> rule push tools onto the taskset (option 1)?
+`RULE 11.7 CONFIRMED` — Closure or module-level tool callables are acceptable
+when the tool assembly is local and clearer that way, but they are not a
+separate toolset abstraction. They are still ordinary callables attached to a
+plain `vf.Toolset`.
 
 > STUB 11.d: `Toolset` capabilities beyond `tools=`: `show`/`hide`, `bindings`,
 > `objects`, `artifacts`, `write`, `scope` (`rollout`/`group`/`global`),

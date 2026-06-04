@@ -78,7 +78,16 @@ class CalendarSchedulingTaskset(vf.Taskset[CalendarSchedulingTasksetConfig]):
 
     def load_toolsets(self, config: CalendarSchedulingTasksetConfig) -> vf.Toolsets:
         _ = config
-        return {"calendar": CalendarSchedulingToolset.create()}
+        return {
+            "calendar": vf.Toolset(
+                tools=[
+                    self.check_attendee_calendar,
+                    self.view_attendee_constraints,
+                    self.check_proposal,
+                    self.submit_window,
+                ]
+            )
+        }
 
     @vf.stop(priority=50)
     async def has_submission(self, state: vf.State) -> bool:
@@ -152,19 +161,6 @@ class CalendarSchedulingTaskset(vf.Taskset[CalendarSchedulingTasksetConfig]):
     @vf.metric
     async def score_checks_remaining(self, state: vf.State) -> float:
         return float(state.get("score_checks_remaining", 0))
-
-
-class CalendarSchedulingToolset(vf.Toolset):
-    @classmethod
-    def create(cls) -> "CalendarSchedulingToolset":
-        return cls(
-            tools=[
-                cls.check_attendee_calendar,
-                cls.view_attendee_constraints,
-                cls.check_proposal,
-                cls.submit_window,
-            ]
-        )
 
     @staticmethod
     async def check_attendee_calendar(

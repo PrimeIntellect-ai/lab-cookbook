@@ -27,9 +27,7 @@ def _download(url: str, dest: Path) -> None:
     if dest.exists():
         return
     dest.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_str = tempfile.mkstemp(
-        prefix=f".{dest.name}.", suffix=".part", dir=dest.parent
-    )
+    fd, tmp_str = tempfile.mkstemp(prefix=f".{dest.name}.", suffix=".part", dir=dest.parent)
     os.close(fd)
     tmp = Path(tmp_str)
     logger.info("Downloading %s ...", url)
@@ -114,9 +112,7 @@ def _load_articles(graph_dir: Path, articles_dir: Path) -> dict[str, str]:
     for name in article_names:
         text_path = articles_dir / f"{name}.txt"
         if text_path.exists():
-            articles[name] = text_path.read_text(
-                encoding="utf-8", errors="replace"
-            ).strip()
+            articles[name] = text_path.read_text(encoding="utf-8", errors="replace").strip()
         else:
             logger.debug("No text file for article: %s", name)
 
@@ -138,9 +134,7 @@ def _load_links(graph_dir: Path, valid: set[str]) -> dict[str, list[str]]:
     return adj
 
 
-def _load_distance_matrix(
-    graph_dir: Path, valid: set[str]
-) -> dict[str, dict[str, int]]:
+def _load_distance_matrix(graph_dir: Path, valid: set[str]) -> dict[str, dict[str, int]]:
     """Load the precomputed shortest-path distance matrix.
 
     Each row is a string of single-digit distances (or '_' for unreachable),
@@ -250,9 +244,7 @@ def _load_human_stats(graph_dir: Path) -> dict[tuple[str, str], HumanStats]:
         out[key] = {
             "human_attempts": attempts,
             "human_success_rate": round(success_rate, 3),
-            "human_avg_rating": round(avg_rating, 2)
-            if avg_rating is not None
-            else None,
+            "human_avg_rating": round(avg_rating, 2) if avg_rating is not None else None,
         }
 
     logger.info("Loaded human play stats for %d pairs.", len(out))
@@ -285,9 +277,7 @@ class WikiGraph:
         links = _load_links(graph_dir, valid)
         distances = _load_distance_matrix(graph_dir, valid)
         human_stats = _load_human_stats(graph_dir)
-        return cls(
-            articles=articles, links=links, distances=distances, human_stats=human_stats
-        )
+        return cls(articles=articles, links=links, distances=distances, human_stats=human_stats)
 
     def get_text(self, article: str) -> str:
         return self.articles[article]
@@ -374,9 +364,7 @@ class WikiGraph:
             return pairs
 
         targets_set = set(targets)
-        by_bucket: dict[int, list[WikiPair]] = {
-            d: [] for d in range(min_dist, max_dist + 1)
-        }
+        by_bucket: dict[int, list[WikiPair]] = {d: [] for d in range(min_dist, max_dist + 1)}
         for s in sources:
             row = self.distances.get(s)
             if not row:

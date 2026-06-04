@@ -124,10 +124,7 @@ class SweGrepTaskset(vf.Taskset[SweGrepTasksetConfig]):
         output = result.stdout or ""
         if not output.strip():
             return "No matches found"
-        lines = [
-            line[:300] + "..." if len(line) > 300 else line
-            for line in output.split("\n")
-        ]
+        lines = [line[:300] + "..." if len(line) > 300 else line for line in output.split("\n")]
         if len(lines) > max_lines:
             output = "\n".join(lines[:max_lines])
             return (

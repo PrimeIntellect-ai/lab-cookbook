@@ -27,9 +27,7 @@ class ReverseTextTaskset(vf.Taskset[ReverseTextTasksetConfig]):
     async def lcs_reward(self, task: vf.Task, state: vf.State) -> float:
         messages = vf.get_messages(state.get("completion") or [], role="assistant")
         text = str(messages[-1].content or "") if messages else ""
-        response = (
-            text.split("<reversed_text>", 1)[-1].split("</reversed_text>", 1)[0].strip()
-        )
+        response = text.split("<reversed_text>", 1)[-1].split("</reversed_text>", 1)[0].strip()
         return SequenceMatcher(None, response, str(task["answer"])).ratio()
 
 

@@ -34,7 +34,7 @@ class WordleUser(TextArenaUser):
                 if isinstance(part, vf.TextContentPart):
                     chunks.append(part.text)
                 elif isinstance(part, dict):
-                    text = cast(dict[str, object], part).get("text")
+                    text = cast(vf.JsonData, part).get("text")
                     if isinstance(text, str):
                         chunks.append(text)
             return "\n".join(chunks)
@@ -48,9 +48,7 @@ class WordleUser(TextArenaUser):
             return response
         if not response:
             return []
-        latest_feedback = self.content_text(response[-1].content).split("[GAME]")[
-            -1
-        ].strip()
+        latest_feedback = self.content_text(response[-1].content).split("[GAME]")[-1].strip()
         if "Feedback:" in latest_feedback:
             latest_feedback = latest_feedback.split("Feedback:")[-1]
         return [vf.UserMessage(content=latest_feedback)]

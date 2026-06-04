@@ -136,9 +136,7 @@ class WikiSearchTaskset(vf.Taskset[WikiSearchTasksetConfig]):
         self.wiki = load_wiki(config)
         self.chroma_semaphore = asyncio.Semaphore(100)
         return {
-            "wiki": vf.Toolset(
-                tools=[self.search_pages, self.view_sections, self.read_section]
-            )
+            "wiki": vf.Toolset(tools=[self.search_pages, self.view_sections, self.read_section])
         }
 
     async def search_pages(self, query: str) -> vf.JsonData:
@@ -172,9 +170,7 @@ class WikiSearchTaskset(vf.Taskset[WikiSearchTasksetConfig]):
                     }
                 )
         if not sections:
-            sections.append(
-                {"section_id": f"{page_id}:full", "section_name": "Full Page"}
-            )
+            sections.append({"section_id": f"{page_id}:full", "section_name": "Full Page"})
         return {"sections": sections}
 
     async def read_section(self, section_id: str) -> str:

@@ -1,10 +1,11 @@
 import asyncio
 import json
 from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
-from typing import Any, Protocol, cast
+from typing import Protocol, cast
 
 import verifiers as vf
 from datasets import Dataset
+from langchain_core.language_models.chat_models import BaseChatModel
 
 if __package__:
     from .wiki_graph import WikiGraph, WikiPair, load_wiki_graph
@@ -15,6 +16,16 @@ else:
 class AgentMessage(Protocol):
     role: str
     content: object
+
+
+class ChatOpenAIConstructor(Protocol):
+    def __call__(
+        self,
+        *,
+        model: str,
+        base_url: str,
+        api_key: str,
+    ) -> BaseChatModel: ...
 
 
 def system_prompt(allow_go_back: bool = True) -> str:
@@ -67,9 +78,7 @@ class WikispeediaTasksetConfig(vf.TasksetConfig):
 
 
 class WikispeediaHarnessConfig(vf.HarnessConfig):
-    program: vf.ProgramConfig = vf.ProgramConfig(
-        fn="run_langchain_deep_agents_wikispeedia_program"
-    )
+    program: vf.ProgramConfig = vf.ProgramConfig(fn="run_langchain_deep_agents_wikispeedia_program")
     max_turns: int = 50
     timeout_seconds: float = 1200.0
 
@@ -114,8 +123,7 @@ class WikispeediaTaskset(vf.Taskset[WikispeediaTasksetConfig]):
         for source, target, dist in pairs:
             starting = self.format_article(source, links_only=self.config.links_only)
             prompt_text = (
-                f"Your mission: {source} >> {target}\n\n"
-                f"Here is the starting article:\n\n{starting}"
+                f"Your mission: {source} >> {target}\n\nHere is the starting article:\n\n{starting}"
             )
             info: vf.JsonData = {
                 "source": source,
@@ -155,8 +163,7 @@ class WikispeediaTaskset(vf.Taskset[WikispeediaTasksetConfig]):
         if normalized is None or normalized not in available:
             avail_str = ", ".join(available) if available else "(none)"
             return (
-                f"'{article}' is not a valid link from '{current}'.\n"
-                f"Available links: {avail_str}"
+                f"'{article}' is not a valid link from '{current}'.\nAvailable links: {avail_str}"
             )
         state["current_article"] = normalized
         path = state["path"]
@@ -182,9 +189,7 @@ class WikispeediaTaskset(vf.Taskset[WikispeediaTasksetConfig]):
             return "You are already at the starting article. Cannot go back."
         path.pop()
         state["current_article"] = path[-1]
-        return self.format_article(
-            str(path[-1]), links_only=bool(state.get("links_only", False))
-        )
+        return self.format_article(str(path[-1]), links_only=bool(state.get("links_only", False)))
 
     @vf.reward(weight=1.0)
     async def reached_target(self, task: vf.Task, state: vf.State) -> float:
@@ -225,9 +230,7 @@ class WikispeediaTaskset(vf.Taskset[WikispeediaTasksetConfig]):
     def iter_tool_calls(self, state: vf.State) -> Iterator[str]:
         completion = state.get("completion") or []
         messages = (
-            vf.get_messages(completion, role="assistant")
-            if isinstance(completion, list)
-            else []
+            vf.get_messages(completion, role="assistant") if isinstance(completion, list) else []
         )
         for msg in messages:
             tool_calls = msg.tool_calls
@@ -364,8 +367,7 @@ def serialize_agent_completion(
                 model_dump(mode="json", exclude_none=True)
                 if callable(model_dump)
                 else {
-                    "role": getattr(message, "role", None)
-                    or getattr(message, "type", "assistant"),
+                    "role": getattr(message, "role", None) or getattr(message, "type", "assistant"),
                     "content": getattr(message, "content", str(message)),
                     "name": getattr(message, "name", None),
                     "tool_call_id": getattr(message, "tool_call_id", None),
@@ -386,9 +388,7 @@ def serialize_agent_completion(
                     continue
                 tool_call_payload = dict(tool_call)
                 name = tool_call_payload.get("name")
-                tool_id = tool_call_payload.get("id") or tool_call_payload.get(
-                    "tool_call_id"
-                )
+                tool_id = tool_call_payload.get("id") or tool_call_payload.get("tool_call_id")
                 if isinstance(tool_id, str) and isinstance(name, str):
                     call_names[tool_id] = name
                 arguments = tool_call_payload.get("arguments")
@@ -465,7 +465,8 @@ def make_langchain_deep_agents_program(
         endpoint_client = cast(OpenAI, state.get_client(api="chat", sync=True))
         endpoint_api_key = endpoint_client.api_key
         endpoint_client.close()
-        model = cast(Any, ChatOpenAI)(
+        chat_model = cast(ChatOpenAIConstructor, ChatOpenAI)
+        model = chat_model(
             model=endpoint_config.model,
             base_url=endpoint_config.base_url,
             api_key=endpoint_api_key,
@@ -476,8 +477,7 @@ def make_langchain_deep_agents_program(
         system_prompt_messages = state.get("system_prompt")
         if isinstance(system_prompt_messages, list):
             state_system_prompt = "\n\n".join(
-                str(message.content or "")
-                for message in vf.get_messages(system_prompt_messages)
+                str(message.content or "") for message in vf.get_messages(system_prompt_messages)
             )
         agent = create_deep_agent(
             model=model,
@@ -498,9 +498,7 @@ def make_langchain_deep_agents_program(
         except (TimeoutError, GraphRecursionError) as exc:
             state["agent_timeout"] = True
             state.stop(
-                "agent_timeout"
-                if isinstance(exc, TimeoutError)
-                else "agent_recursion_limit"
+                "agent_timeout" if isinstance(exc, TimeoutError) else "agent_recursion_limit"
             )
             state.setdefault("agent_completion", [])
             return state

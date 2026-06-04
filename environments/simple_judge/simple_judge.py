@@ -87,12 +87,8 @@ class SimpleJudgeTaskset(vf.Taskset[SimpleJudgeTasksetConfig]):
     @vf.reward(weight=1.0)
     async def judge_reward(self, task: vf.Task, state: vf.State) -> float:
         vf.ensure_keys([self.config.judge_api_key_var])
-        assistant_messages = vf.get_messages(
-            state.get("completion") or [], role="assistant"
-        )
-        response_text = (
-            str(assistant_messages[-1].content or "") if assistant_messages else ""
-        )
+        assistant_messages = vf.get_messages(state.get("completion") or [], role="assistant")
+        response_text = str(assistant_messages[-1].content or "") if assistant_messages else ""
         user_messages = vf.get_messages(task.get("prompt") or [], role="user")
         user_message = str(user_messages[-1].content or "") if user_messages else ""
         info = task.get("info") or {}

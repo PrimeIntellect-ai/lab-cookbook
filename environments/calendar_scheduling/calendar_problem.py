@@ -4,7 +4,7 @@ import random
 import statistics
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
-from typing import Iterable
+from typing import Iterable, cast
 
 import verifiers as vf
 
@@ -14,13 +14,13 @@ MINUTES_PER_SLOT = 60 // SLOTS_PER_HOUR
 DAY_SLOTS = 24 * SLOTS_PER_HOUR
 EPSILON = 1e-9
 
-JsonObject = dict[str, object]
+JsonObject = vf.JsonData
 
 
 def _object(payload: object, label: str) -> JsonObject:
     if not isinstance(payload, dict):
         raise ValueError(f"{label} must be a JSON object")
-    return {str(key): value for key, value in payload.items()}
+    return cast(JsonObject, {str(key): value for key, value in payload.items()})
 
 
 def _required(data: JsonObject, key: str) -> object:
@@ -222,8 +222,7 @@ class CalendarTask:
             meeting_duration_slots=_int(data, "meeting_duration_slots"),
             score_check_budget=_int(data, "score_check_budget"),
             attendees=tuple(
-                AttendeeSpec.from_dict(attendee)
-                for attendee in _objects(data, "attendees")
+                AttendeeSpec.from_dict(attendee) for attendee in _objects(data, "attendees")
             ),
             rooms=tuple(RoomSpec.from_dict(room) for room in _objects(data, "rooms")),
         )
@@ -278,9 +277,7 @@ class ProposalEvaluation:
             "score": round(self.score, 4) if rounded else self.score,
             "hard_violations": list(self.hard_violations),
             "attendee_utilities": attendee_utilities,
-            "attendee_notes": {
-                key: list(notes) for key, notes in self.attendee_notes.items()
-            },
+            "attendee_notes": {key: list(notes) for key, notes in self.attendee_notes.items()},
             "attendees_who_can_attend": list(self.attendees_who_can_attend),
         }
 
@@ -301,9 +298,7 @@ class SolverSummary:
             "best_score": self.best_score,
             "random_baseline_score": self.random_baseline_score,
             "near_optimal_count": self.near_optimal_count,
-            "best_proposals": [
-                proposal.to_dict(task) for proposal in self.best_proposals[:top_k]
-            ],
+            "best_proposals": [proposal.to_dict(task) for proposal in self.best_proposals[:top_k]],
         }
 
 
@@ -508,9 +503,7 @@ def get_generation_config(
     normalized_difficulty = difficulty.lower().strip()
     if normalized_difficulty not in PRESET_CONFIGS:
         allowed = ", ".join(sorted(PRESET_CONFIGS))
-        raise ValueError(
-            f"Unknown difficulty '{difficulty}'. Allowed values: {allowed}"
-        )
+        raise ValueError(f"Unknown difficulty '{difficulty}'. Allowed values: {allowed}")
 
     config = PRESET_CONFIGS[normalized_difficulty]
     if overrides is None:
@@ -574,9 +567,7 @@ def make_proposal(
     duration_minutes: int,
     room_id: str,
 ) -> tuple[MeetingProposal | None, str | None]:
-    success, slot_in_day, error = parse_time_to_slot(
-        start_time_utc, task.slots_per_hour
-    )
+    success, slot_in_day, error = parse_time_to_slot(start_time_utc, task.slots_per_hour)
     if not success:
         return None, error
     if slot_in_day is None:
@@ -735,9 +726,7 @@ def _generate_task(seed: int, config: GenerationConfig) -> CalendarTask:
             late_penalty_per_hour=_sample_float(rng, config.late_penalty_range),
             day_penalty_per_day=_sample_float(rng, config.day_penalty_range),
             back_to_back_penalty=_sample_float(rng, config.back_to_back_penalty_range),
-            optional_absence_penalty=_sample_float(
-                rng, config.optional_absence_penalty_range
-            ),
+            optional_absence_penalty=_sample_float(rng, config.optional_absence_penalty_range),
         )
         attendees.append(attendee)
 
@@ -813,9 +802,7 @@ def _interval_overlaps_blocks(
     blocks: tuple[tuple[int, int], ...],
 ) -> bool:
     return any(
-        intervals_overlap(
-            start_slot_absolute, end_slot_absolute, block_start, block_end
-        )
+        intervals_overlap(start_slot_absolute, end_slot_absolute, block_start, block_end)
         for block_start, block_end in blocks
     )
 
@@ -831,9 +818,7 @@ def _is_back_to_back(
     )
 
 
-def evaluate_proposal(
-    task: CalendarTask, proposal: MeetingProposal
-) -> ProposalEvaluation:
+def evaluate_proposal(task: CalendarTask, proposal: MeetingProposal) -> ProposalEvaluation:
     hard_violations: list[str] = []
     attendee_utilities: dict[str, float] = {}
     attendee_notes: dict[str, tuple[str, ...]] = {}
@@ -865,17 +850,13 @@ def evaluate_proposal(
     if end_slot_absolute > task.num_days * day_slots:
         hard_violations.append("Meeting extends beyond the scheduling horizon")
 
-    room = next(
-        (current for current in task.rooms if current.room_id == proposal.room_id), None
-    )
+    room = next((current for current in task.rooms if current.room_id == proposal.room_id), None)
     if room is None:
         available_rooms = ", ".join(room.room_id for room in task.rooms)
         hard_violations.append(
             f"Unknown room '{proposal.room_id}'. Available rooms: {available_rooms}"
         )
-    elif _interval_overlaps_blocks(
-        start_slot_absolute, end_slot_absolute, room.unavailable_blocks
-    ):
+    elif _interval_overlaps_blocks(start_slot_absolute, end_slot_absolute, room.unavailable_blocks):
         hard_violations.append(
             f"Room {proposal.room_id} is unavailable for part of the proposed window"
         )
@@ -899,18 +880,12 @@ def evaluate_proposal(
         )
 
         violates_hard_time = False
-        if (
-            attendee.hard_start_hour is not None
-            and local_start_hour < attendee.hard_start_hour
-        ):
+        if attendee.hard_start_hour is not None and local_start_hour < attendee.hard_start_hour:
             violates_hard_time = True
             notes.append(
                 f"Local start {local_start_hour:.1f}h is before hard bound {attendee.hard_start_hour:.1f}h"
             )
-        if (
-            attendee.hard_end_hour is not None
-            and local_end_hour > attendee.hard_end_hour
-        ):
+        if attendee.hard_end_hour is not None and local_end_hour > attendee.hard_end_hour:
             violates_hard_time = True
             notes.append(
                 f"Local end {local_end_hour:.1f}h is after hard bound {attendee.hard_end_hour:.1f}h"
@@ -927,9 +902,7 @@ def evaluate_proposal(
             notes.append("Conflicts with attendee busy calendar")
 
         if attendee.required and not can_attend:
-            hard_violations.append(
-                f"Required attendee {attendee.attendee_id} cannot attend"
-            )
+            hard_violations.append(f"Required attendee {attendee.attendee_id} cannot attend")
 
         utility = 1.0
         if not can_attend:
@@ -960,13 +933,9 @@ def evaluate_proposal(
                 notes.append(
                     f"Day-distance penalty: {day_distance} * {attendee.day_penalty_per_day:.2f}"
                 )
-            if _is_back_to_back(
-                start_slot_absolute, end_slot_absolute, attendee.busy_blocks
-            ):
+            if _is_back_to_back(start_slot_absolute, end_slot_absolute, attendee.busy_blocks):
                 utility -= attendee.back_to_back_penalty
-                notes.append(
-                    f"Back-to-back penalty: {attendee.back_to_back_penalty:.2f}"
-                )
+                notes.append(f"Back-to-back penalty: {attendee.back_to_back_penalty:.2f}")
 
         attendee_utilities[attendee.attendee_id] = min(1.0, max(0.0, utility))
         attendee_notes[attendee.attendee_id] = tuple(notes)
@@ -1026,9 +995,7 @@ def solve_task(task: CalendarTask, near_optimal_delta: float) -> SolverSummary:
 
     random_baseline = statistics.fmean(all_scores) if all_scores else 0.0
     near_optimal_count = sum(
-        1
-        for score in valid_scores
-        if best_score > 0 and score >= best_score - near_optimal_delta
+        1 for score in valid_scores if best_score > 0 and score >= best_score - near_optimal_delta
     )
 
     return SolverSummary(
@@ -1041,9 +1008,7 @@ def solve_task(task: CalendarTask, near_optimal_delta: float) -> SolverSummary:
     )
 
 
-def _task_quality_key(
-    summary: SolverSummary, config: GenerationConfig
-) -> tuple[float, float]:
+def _task_quality_key(summary: SolverSummary, config: GenerationConfig) -> tuple[float, float]:
     if summary.total_candidates == 0:
         return (0.0, 0.0)
     valid_ratio = summary.valid_candidates / summary.total_candidates
@@ -1106,9 +1071,7 @@ def render_task_brief(task: CalendarTask) -> str:
     lines.append("")
     lines.append("Scoring:")
     lines.append("- A submission gets score 0.0 if any hard constraint is violated.")
-    lines.append(
-        "- Otherwise score = weighted average attendee utility (each utility in [0, 1])."
-    )
+    lines.append("- Otherwise score = weighted average attendee utility (each utility in [0, 1]).")
     lines.append("- Weights are normalized to sum to 1 for this task.")
     lines.append("")
     lines.append(
@@ -1157,9 +1120,7 @@ def build_example(
     prompt = [{"role": "user", "content": render_task_brief(task)}]
     answer_payload = {
         "optimal_score": summary.best_score,
-        "optimal_windows": [
-            proposal.to_dict(task) for proposal in summary.best_proposals[:5]
-        ],
+        "optimal_windows": [proposal.to_dict(task) for proposal in summary.best_proposals[:5]],
         "valid_candidates": summary.valid_candidates,
         "total_candidates": summary.total_candidates,
     }

@@ -85,9 +85,7 @@ class EthicsDebateUser(vf.User[EthicsDebateUserConfig]):
     @classmethod
     def parse_handoff(cls, actor: str, text: str) -> str | None:
         tag = cls.handoff_tag(actor)
-        match = re.search(
-            rf"<{re.escape(tag)}>(.*?)</{re.escape(tag)}>", text, re.DOTALL
-        )
+        match = re.search(rf"<{re.escape(tag)}>(.*?)</{re.escape(tag)}>", text, re.DOTALL)
         if match is None:
             return None
         content = match.group(1).strip()
