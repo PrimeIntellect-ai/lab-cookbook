@@ -35,13 +35,13 @@ Training configs use nested tables under the relevant `[[env]]` block:
 [[env]]
 id = "prime/opencode-harbor"
 
-[env.taskset]
+[env.args.taskset]
 task_names = ["regex-log"]
 
-[env.harness]
+[env.args.harness]
 max_turns = 4
 
-[env.harness.program]
+[env.args.harness.program]
 disabled_tools = ["webfetch", "question"]
 ```
 

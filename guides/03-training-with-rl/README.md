@@ -171,19 +171,19 @@ The ratios match the order of the `[[env]]` sections.
 
 ### Environment Overrides
 
-Training uses the same Taskset/Harness config split as eval. Put task data and
-difficulty knobs under `[env.taskset]`; put rollout execution knobs under
-`[env.harness]`.
+Training uses the same Taskset/Harness config split as eval, passed through the
+environment `args` object. Put task data and difficulty knobs under
+`[env.args.taskset]`; put rollout execution knobs under `[env.args.harness]`.
 
 ```toml
 [[env]]
 id = "prime/wordle"
 
-[env.taskset]
+[env.args.taskset]
 num_train_examples = 512
 num_eval_examples = 128
 
-[env.harness]
+[env.args.harness]
 max_turns = 6
 ```
 

@@ -15,15 +15,16 @@ In [Warm Starts with SFT](../05-warm-starts-with-sft/README.md), a stronger teac
 
 ## Write a Distillation Config
 
-Start from the SFT adapter on `prime/wordle`, add a teacher, and set `teacher_tau` to control distillation strength:
+Start from the SFT adapter on `prime/wordle`, set `loss = "opd"`, and add a
+teacher model:
 
 ```toml
 # [configs/06/wordle-opd.toml](../../configs/06/wordle-opd.toml)
 model = "openai/gpt-oss-20b:my-sft-lora-distilled-from-oss-120b-distill"
+loss = "opd"
 
 [teacher]
 model = "openai/gpt-oss-120b"
-teacher_tau = 0.5
 
 [sampling]
 max_tokens = 512
@@ -32,22 +33,26 @@ reasoning_effort = "medium"
 [[env]]
 id = "prime/wordle"
 
-[env.taskset]
+[env.args.taskset]
 num_train_examples = 512
 num_eval_examples = 128
 
-[env.harness]
+[env.args.harness]
 max_turns = 6
 ```
 
 The key fields are:
 
 - `model` — student adapter
+- `loss = "opd"` — switches the hosted run from RL to on-policy distillation
 - `[teacher].model` — teacher for token-level logprob feedback
-- `[teacher].teacher_tau` — distillation weight (`0` disables distillation)
-- `[teacher].adv_tau` — optional weight on the RL advantage signal
 - `[[env]]` — environment id
-- `[env.taskset]` / `[env.harness]` — per-environment task and rollout overrides
+- `[env.args.taskset]` / `[env.args.harness]` — per-environment task and
+  rollout overrides
+
+The hosted CLI config only needs the public teacher model. Hosted Training
+resolves the teacher endpoint for the runtime; do not add a local
+`teacher.client` block to this cookbook config.
 
 ## Launch Training
 
@@ -90,11 +95,11 @@ reasoning_effort = "medium"
 [[env]]
 id = "prime/wordle"
 
-[env.taskset]
+[env.args.taskset]
 num_train_examples = 512
 num_eval_examples = 128
 
-[env.harness]
+[env.args.harness]
 max_turns = 6
 ```
 

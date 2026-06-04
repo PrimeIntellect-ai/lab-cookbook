@@ -35,11 +35,11 @@ reasoning_effort = "medium"
 [[env]]
 id = "prime/wordle"
 
-[env.taskset]
+[env.args.taskset]
 num_train_examples = 512
 num_eval_examples = 128
 
-[env.harness]
+[env.args.harness]
 max_turns = 6
 ```
 
@@ -49,11 +49,10 @@ The key fields are:
 
 - loss = "sft" switches the run from RL to SFT.
 - `[teacher].model` selects the model that generates demonstrations.
-- [teacher].replay controls whether the run reuses saved demonstrations instead of generating fresh ones.
 - `[teacher.sampling]` controls teacher generation.
 - `[[env]]` points to the environment that defines tasks and scoring.
-- `[env.taskset]` and `[env.harness]` tune the same environment components you
-  used during eval.
+- `[env.args.taskset]` and `[env.args.harness]` tune the same environment
+  components you used during eval.
 
 ## Launch Training
 
@@ -82,11 +81,11 @@ reasoning_effort = "medium"
 [[env]]
 id = "prime/wordle"
 
-[env.taskset]
+[env.args.taskset]
 num_train_examples = 512
 num_eval_examples = 128
 
-[env.harness]
+[env.args.harness]
 max_turns = 6
 ```
 
