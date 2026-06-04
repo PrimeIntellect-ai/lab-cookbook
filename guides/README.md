@@ -23,4 +23,4 @@ Start with setup if you are new to Lab. Jump to a later guide if you already kno
 | 12 | [Custom Harnesses](12-custom-harnesses/README.md) | Run third-party agent libraries through the program pattern. |
 | 13 | [Legacy Environments](13-legacy-environments/README.md) | Reference for unmigrated Rubric and v0 patterns (not for new envs). |
 
-For platform plumbing (accounts, secrets, Hub workflows, hosted runs, inference deployments), see [Lab Configuration](../reference/lab-configuration.md) in the reference section.
+For platform plumbing such as accounts, secrets, Hub workflows, hosted runs, and inference deployments, use the public Prime docs. The local [Lab Configuration](../reference/lab-configuration.md) page is only a thin pointer to those sources.

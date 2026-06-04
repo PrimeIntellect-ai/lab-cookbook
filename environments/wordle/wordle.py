@@ -1,4 +1,5 @@
 import re
+from typing import cast
 
 import verifiers as vf
 from tasksets.textarena import (
@@ -17,11 +18,27 @@ class WordleTasksetConfig(TextArenaTasksetConfig):
     game: str = "Wordle-v0"
     answer_state_key: str = "secret_word"
     user: WordleUserConfig | None = WordleUserConfig()
-    system_prompt: vf.PromptInput | vf.SystemPromptConfig | None = None
+    system_prompt: vf.SystemPrompt | vf.SystemPromptConfig | None = None
 
 
 class WordleUser(TextArenaUser):
     config: WordleUserConfig
+
+    @staticmethod
+    def content_text(content: object) -> str:
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            chunks: list[str] = []
+            for part in content:
+                if isinstance(part, vf.TextContentPart):
+                    chunks.append(part.text)
+                elif isinstance(part, dict):
+                    text = cast(vf.JsonData, part).get("text")
+                    if isinstance(text, str):
+                        chunks.append(text)
+            return "\n".join(chunks)
+        return ""
 
     async def get_response(
         self, task: vf.Task, state: vf.State, messages: list[vf.Message]
@@ -29,10 +46,9 @@ class WordleUser(TextArenaUser):
         response = await super().get_response(task, state, messages)
         if state.get("done") is True:
             return response
-        assert len(response) == 1
-        content = response[0].content
-        assert isinstance(content, str)
-        latest_feedback = content.split("[GAME]")[-1].strip()
+        if not response:
+            return []
+        latest_feedback = self.content_text(response[-1].content).split("[GAME]")[-1].strip()
         if "Feedback:" in latest_feedback:
             latest_feedback = latest_feedback.split("Feedback:")[-1]
         return [vf.UserMessage(content=latest_feedback)]
@@ -44,7 +60,7 @@ class WordleTaskset(TextArenaTaskset[WordleTasksetConfig]):
 
     def load_system_prompt(
         self, config: WordleTasksetConfig
-    ) -> vf.PromptInput | vf.SystemPromptConfig | None:
+    ) -> vf.SystemPrompt | vf.SystemPromptConfig | None:
         if config.system_prompt is not None:
             return config.system_prompt
         return vf.SystemPromptConfig(path="prompts/system_prompt.txt")
@@ -58,11 +74,8 @@ class WordleTaskset(TextArenaTaskset[WordleTasksetConfig]):
         assert isinstance(answer, str)
         completion = state.get("completion") or []
         assert isinstance(completion, list)
-        for message in reversed(vf.get_messages(completion)):
-            if not isinstance(message, vf.AssistantMessage):
-                continue
-            content = message.content
-            assert isinstance(content, str)
+        for message in reversed(vf.get_messages(completion, role="assistant")):
+            content = WordleUser.content_text(message.content)
             matches = self.guesses(content)
             if matches:
                 return 1.0 if matches[-1].strip() == f"[{answer}]" else 0.0
@@ -76,11 +89,8 @@ class WordleTaskset(TextArenaTaskset[WordleTasksetConfig]):
         assert isinstance(completion, list)
         guess = ""
         num_guesses = 0
-        for message in vf.get_messages(completion):
-            if not isinstance(message, vf.AssistantMessage):
-                continue
-            content = message.content
-            assert isinstance(content, str)
+        for message in vf.get_messages(completion, role="assistant"):
+            content = WordleUser.content_text(message.content)
             if re.search(self.guess_pattern, content, re.DOTALL):
                 num_guesses += 1
                 matches = self.guesses(content)
@@ -96,21 +106,15 @@ class WordleTaskset(TextArenaTaskset[WordleTasksetConfig]):
         assert isinstance(answer, str)
         completion = state.get("completion") or []
         assert isinstance(completion, list)
-        for message in reversed(vf.get_messages(completion)):
-            if not isinstance(message, vf.AssistantMessage):
-                continue
-            content = message.content
-            assert isinstance(content, str)
+        for message in reversed(vf.get_messages(completion, role="assistant")):
+            content = WordleUser.content_text(message.content)
             matches = self.guesses(content)
             if matches:
                 if matches[-1].strip() == f"[{answer}]":
                     return 0.0
                 break
-        for message in reversed(vf.get_messages(completion)):
-            if not isinstance(message, vf.UserMessage):
-                continue
-            content = message.content
-            assert isinstance(content, str)
+        for message in reversed(vf.get_messages(completion, role="user")):
+            content = WordleUser.content_text(message.content)
             parts = content.strip().split("\n")
             if len(parts) == 3:
                 scoring = parts[1].strip()
@@ -123,12 +127,9 @@ class WordleTaskset(TextArenaTaskset[WordleTasksetConfig]):
         completion = state.get("completion") or []
         assert isinstance(completion, list)
         found = False
-        for message in vf.get_messages(completion):
-            if not isinstance(message, vf.AssistantMessage):
-                continue
+        for message in vf.get_messages(completion, role="assistant"):
             found = True
-            content = message.content
-            assert isinstance(content, str)
+            content = WordleUser.content_text(message.content)
             if len(self.guesses(content)) != 1:
                 return 0.0
         return 1.0 if found else 0.0
@@ -141,5 +142,5 @@ def load_taskset(config: WordleTasksetConfig) -> WordleTaskset:
 def load_environment(config: vf.EnvConfig) -> vf.Env:
     return vf.Env(
         taskset=vf.load_taskset(config=config.taskset),
-        harness=vf.Harness(config=config.harness),
+        harness=vf.load_harness(config=config.harness),
     )

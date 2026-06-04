@@ -3,8 +3,6 @@ loss = "sft"
 
 [teacher]
 model = "openai/gpt-oss-120b"
-save = true
-replay = false
 
 [teacher.sampling]
 max_tokens = 2048

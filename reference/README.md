@@ -1,13 +1,21 @@
 # Reference
 
-Short, cookbook-scoped summaries of the most important platform surface, with links out to the full [public docs](https://docs.primeintellect.ai) for depth. Use these when you need to look something up while working through the [guides](../guides/README.md).
+Reference pages in this cookbook are intentionally thin. Canonical Lab and
+Verifiers guidance is managed by Prime Lab sync and the bundled workspace
+skills:
+
+- [Workspace guidance](../AGENTS.md)
+- [Environment guidance](../environments/AGENTS.md)
+- [Managed skills](../.prime/skills/)
+- [Managed config templates](../.prime/lab/templates/configs/)
+
+Use the [guides](../guides/README.md) for worked examples. Use public Prime and
+Verifiers docs for product and API reference.
 
 ## Pages
 
-- [Lab Configuration](lab-configuration.md) — accounts, teams, secrets, Hub workflows, hosted runs, inference deployments.
-- [Glossary](glossary.md) — concise definitions for Lab, Verifiers, evaluation, and RL training terms.
-- [Repository Structure](repo-structure.md)
-- TODO: config schema reference
-- TODO: environment pattern reference
-- TODO: reward design reference
-- TODO: troubleshooting
+- [Lab Configuration](lab-configuration.md) - pointers for platform setup docs.
+- [Glossary](glossary.md) - deprecated; guide-local definitions are preferred.
+- [Repository Structure](repo-structure.md) - local workspace map.
+- [Environment Best Practices](best-practices.md) - deprecated in favor of
+  managed guidance and skills.

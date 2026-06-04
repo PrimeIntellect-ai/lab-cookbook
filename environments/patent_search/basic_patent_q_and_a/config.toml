@@ -7,4 +7,4 @@ rollouts_per_example = 8
 max_tokens = 1024
 
 [[env]]
-id = "primeintellect/basic-patent-q-and-a"
+id = "prime/basic-patent-q-and-a"

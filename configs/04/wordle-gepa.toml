@@ -1,11 +1,16 @@
-model = "openai/gpt-5.5"
-reflection_model = "openai/gpt-5.5"
+model = "openai/gpt-5.4-nano"
+reflection_model = "openai/gpt-5.4-nano"
 save_to_environment = true
 
 [[env]]
-env_id = "wordle"
-taskset = { num_train_examples = 100, num_eval_examples = 50 }
-harness = { max_turns = 6 }
+env_id = "prime/wordle"
+
+[env.taskset]
+num_train_examples = 100
+num_eval_examples = 50
+
+[env.harness]
+max_turns = 6
 
 [gepa]
 max_calls = 500

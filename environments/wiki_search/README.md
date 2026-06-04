@@ -12,10 +12,10 @@ The stack:
 
 - `WikiSearchTasksetConfig`: dataset, judge, embedding, and corpus defaults
 - `vf.Taskset`: tasks from `willcb/wiki-trivia-questions-v4`, plus the toolset and judge reward
-- `vf.Toolset`: ships the three Wikipedia tools and lazily builds the shared ChromaDB index via `objects`/`bindings`
+- `vf.Toolset`: ships the three Wikipedia tools and builds the shared ChromaDB index when the taskset loads
 - `vf.Harness`: runs the default endpoint-backed tool loop
 
-The shared corpus (`wiki` dict containing the Chroma collection and `page_id → title` / `page_id → content` maps) is injected into each tool through `Toolset.bindings` rather than module-level globals or closures.
+The shared corpus (`WikiIndex`, containing the Chroma collection and `page_id -> title` / `page_id -> content` maps) is closed over by the taskset-owned tools. The only process-level constant is the default Chroma path.
 
 ## Tools exposed to the model
 
@@ -26,59 +26,72 @@ The shared corpus (`wiki` dict containing the Chroma collection and `page_id →
 ## Datasets
 
 - **Questions**: `willcb/wiki-trivia-questions-v4` (HF, `train` split)
-- **Corpus**: `willcb/rare-wiki-pages` (HF, `train` split), indexed into a persistent ChromaDB collection (`wiki_titles`) under `.chroma_db` on first run.
+- **Corpus**: `willcb/rare-wiki-pages` (HF, `train` split), indexed into a persistent ChromaDB collection (`wiki_titles`) under `.chroma_db/wiki-search` on first run.
 
 The index is built lazily — the corpus + collection load runs the first time a rollout needs the tools, which allows multiple env instances to share work without colliding at construction time.
 
 ## Reward design
 
-A single judge reward (weight `1.0`): a `gpt-4.1-mini` yes/no on whether the final response is correct and coherent given the ground-truth answer. Incoherent responses score 0 even if the answer is buried inside them.
+A single judge reward (weight `1.0`): `openai/gpt-4.1-mini` through Prime Inference returns yes/no on whether the final response is correct and coherent given the ground-truth answer. Incoherent responses score 0 even if the answer is buried inside them.
 
-The judge call lives in a `@vf.update` handler (`score_with_judge`) that receives the `AsyncOpenAI` client and model name through the same `Toolset.bindings` mechanism the tools use. The reward function (`judge_reward`) just reads `state["judge_score"]` — no factory, no closure-captured client.
+The judge call lives directly in `judge_reward` and uses its own `AsyncOpenAI`
+client built from `WikiSearchTasksetConfig`. It does not use the rollout
+endpoint proxy.
 
 ## Required environment variables
 
-- `OPENAI_API_KEY` — used by both the judge and the embedding model. Override with `judge_api_key_var` / `embed_api_key_var` if you point either component at another provider.
+- `PRIME_API_KEY` — default key for Prime Inference judge and embedding calls.
 
-Keys are validated by a Pydantic `model_validator` on `WikiSearchTasksetConfig`, so missing env vars fail fast at config construction time.
+Keys are validated by the Taskset component that owns each dependency:
+embedding keys in `load_toolsets(config)`, judge keys in `judge_reward`.
 
 ## Quickstart
 
 Run an eval with defaults:
 
 ```bash
-prime eval run wiki-search
+prime eval run prime/wiki-search
 ```
 
 Configure model and sampling:
 
 ```bash
-prime eval run wiki-search \
+prime eval run prime/wiki-search \
   -m openai/gpt-4.1-mini \
   -n 20 -r 3
 ```
 
-The first run downloads the corpus and builds the Chroma index; subsequent runs reuse `.chroma_db`.
+The first run downloads the corpus and builds the Chroma index; subsequent runs reuse `.chroma_db/wiki-search`.
 
-## Environment arguments
+## Configuration
 
-All fields live on `WikiSearchTasksetConfig` and can be overridden through the v1 config pipeline (TOML or `-a` JSON for fields under `taskset.*`).
+Dataset, corpus, embedding, and judge fields live on `WikiSearchTasksetConfig`.
+The rollout budget belongs to the base harness:
+
+```toml
+[eval.taskset]
+max_examples = 250
+chroma_db_dir = ".chroma_db/wiki-search-small"
+
+[eval.harness]
+max_turns = 8
+```
 
 | Arg | Type | Default | Description |
 | --- | ---- | ------- | ----------- |
 | `dataset_name` | str | `"willcb/wiki-trivia-questions-v4"` | HF dataset of trivia Q&A tasks |
-| `dataset_split` | str | `"train"` | Split used as the prompt source |
+| `train_split` | str | `"train"` | Source split for training tasks |
+| `eval_split` | str | `"train"` | Source split for eval tasks |
 | `max_examples` | int? | `None` | Optional cap on tasks yielded |
-| `max_turns` | int | `10` | Per-rollout turn cap |
-| `judge_model` | str | `"gpt-4.1-mini"` | Judge model id |
-| `judge_base_url` | str | OpenAI v1 | Judge endpoint base URL |
-| `judge_api_key_var` | str | `"OPENAI_API_KEY"` | Env var holding the judge API key |
+| `judge_model` | str | `"openai/gpt-4.1-mini"` | Judge model id |
+| `judge_base_url` | str | Prime Inference v1 | Judge endpoint base URL |
+| `judge_api_key_var` | str | `"PRIME_API_KEY"` | Env var holding the judge API key |
 | `embed_model` | str | `"text-embedding-3-small"` | Title-embedding model |
-| `embed_base_url` | str | OpenAI v1 | Embedding provider base URL |
-| `embed_api_key_var` | str | `"OPENAI_API_KEY"` | Env var holding the embedding API key |
+| `embed_base_url` | str | Prime Inference v1 | Embedding provider base URL |
+| `embed_api_key_var` | str | `"PRIME_API_KEY"` | Env var holding the embedding API key |
 | `corpus_dataset` | str | `"willcb/rare-wiki-pages"` | HF dataset of Wikipedia pages |
 | `corpus_split` | str | `"train"` | Corpus split |
-| `chroma_db_dir` | str | `.chroma_db` | Path to the persistent ChromaDB store |
+| `chroma_db_dir` | str | `.chroma_db/wiki-search` | Path to the persistent ChromaDB store |
 
 ## Files
 

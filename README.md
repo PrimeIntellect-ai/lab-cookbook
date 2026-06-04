@@ -20,3 +20,18 @@ Create, evaluate, train and deploy your own agents with Prime Intellect Lab.
 14. [Legacy Environments](guides/13-legacy-environments/README.md) — reference only; not part of the main path
 
 For platform reference (accounts, secrets, Hub workflows, hosted runs, inference deployments), see [Lab Configuration](reference/lab-configuration.md). For quick definitions of Lab, Verifiers, evaluation, and RL terms, see the [Glossary](reference/glossary.md).
+
+
+### Repository Structure
+
+This is a local map of the cookbook workspace.
+
+- [guides](/guides/) - ordered walkthroughs.
+- [configs](/configs/) - runnable Prime eval, GEPA, and training configs.
+- [environments](/environments/) - local environment packages used by guides.
+- [reference](./) - thin pointers only; do not duplicate managed guidance here.
+- [`.prime/skills`](/.prime/skills/) - managed Lab skills.
+- [`.prime/lab/templates`](/.prime/lab/templates/) - managed config templates.
+
+Generated guidance files are refreshed by `prime lab sync`. Cookbook-owned
+examples should point to managed guidance instead of restating it.

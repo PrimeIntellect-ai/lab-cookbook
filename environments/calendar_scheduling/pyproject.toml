@@ -1,0 +1,30 @@
+[project]
+name = "calendar-scheduling"
+description = "V1 taskset environment for constrained meeting scheduling with calendar tools"
+tags = ["tool-use", "calendar", "scheduling", "train", "eval"]
+version = "0.1.5"
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "verifiers>=0.1.15.dev17",
+    "rich>=13.9.0",
+]
+
+[project.scripts]
+calendar-scheduling-tui = "calendar_scheduling_tui:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = [
+    "calendar_scheduling.py",
+    "calendar_problem.py",
+    "calendar_scheduling_tui.py",
+    "README.md",
+    "pyproject.toml",
+]
+
+[tool.verifiers.eval]
+num_examples = 12
+rollouts_per_example = 2

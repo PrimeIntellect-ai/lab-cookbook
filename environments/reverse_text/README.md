@@ -12,6 +12,7 @@ the true reversal.
 ### Datasets
 - **Primary dataset(s)**: [PrimeIntellect/Reverse-Text-RL](https://huggingface.co/datasets/PrimeIntellect/Reverse-Text-RL) train split
 - **Split sizes**: full train split for tasks
+- **Task identity**: assigned by Verifiers when task records are normalized
 
 ### Task
 - **Type**: single-turn
@@ -21,13 +22,13 @@ the true reversal.
 ### Quickstart
 
 ```bash
-prime eval run reverse-text
+prime eval run prime/reverse-text
 ```
 
 Configure model and sampling:
 
 ```bash
-prime eval run reverse-text \
+prime eval run prime/reverse-text \
   -m openai/gpt-4.1-mini \
   -n 20 -r 3 -t 1024 -T 0.7
 ```

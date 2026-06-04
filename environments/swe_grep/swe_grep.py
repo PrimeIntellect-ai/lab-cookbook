@@ -42,17 +42,9 @@ With only 2 turns, you must parallelize your searches to find all relevant files
 class SweGrepTasksetConfig(vf.TasksetConfig):
     dataset_name: str = "cdreetz/swe-grep-v2"
     train_ratio: float = 0.9
-    max_turns: int = 2
     repo_url: str = "https://github.com/microsoft/vscode.git"
     repo_path: str = "vscode"
-    system_prompt: vf.PromptInput | vf.SystemPromptConfig | None = SYSTEM_PROMPT
-
-
-def assistant_text(state: vf.State) -> str:
-    messages = vf.get_messages(state.get("completion") or [], role="assistant")
-    if not messages:
-        return ""
-    return str(messages[-1].content or "")
+    system_prompt: vf.SystemPrompt = SYSTEM_PROMPT
 
 
 @functools.lru_cache(maxsize=8)
@@ -68,108 +60,21 @@ def load_splits(dataset_name: str, train_ratio: float) -> tuple[Dataset, Dataset
 
 
 class SweGrepTaskset(vf.Taskset[SweGrepTasksetConfig]):
+    def assistant_text(self, state: vf.State) -> str:
+        messages = vf.get_messages(state.get("completion") or [], role="assistant")
+        if not messages:
+            return ""
+        return str(messages[-1].content or "")
+
     def load_tasks(self, split: vf.TaskSplit = "train") -> vf.Tasks:
         train, test = load_splits(self.config.dataset_name, self.config.train_ratio)
-        dataset = train if split == "train" else test
-        for index, raw_row in enumerate(dataset):
-            if not isinstance(raw_row, dict):
-                raise TypeError("Dataset rows must be dicts.")
-            question = str(raw_row["question"])
-            yield {
-                **raw_row,
-                "example_id": index,
-                "prompt": [{"role": "user", "content": question}],
-                "max_turns": self.config.max_turns,
-            }
+        return train if split == "train" else test
 
     def load_toolsets(self, config: SweGrepTasksetConfig) -> vf.Toolsets:
         _ = config
-        repo_path = self.config.repo_path
-
-        async def grep_tool(
-            pattern: str,
-            sandbox,
-            state,
-            *,
-            path: str = repo_path,
-            file_pattern: str = "",
-            context_lines: int = 2,
-            case_insensitive: bool = False,
-        ) -> str:
-            """Search for a pattern in files using ripgrep."""
-            _ = state
-            max_lines = 50
-            flags = ["-n", "--max-filesize", "100K"]
-            if context_lines > 0:
-                flags.extend(["-C", str(min(context_lines, 5))])
-            if case_insensitive:
-                flags.append("-i")
-            if file_pattern:
-                if file_pattern.startswith(".") and not file_pattern.startswith("*"):
-                    file_pattern = "*" + file_pattern
-                flags.extend(["-g", shlex.quote(file_pattern)])
-            command = (
-                f"rg {' '.join(flags)} {shlex.quote(pattern)} {shlex.quote(path)} "
-                f"2>&1 | head -{max_lines + 1}"
-            )
-            result = await sandbox.execute(command)
-            if result.exit_code:
-                error = (result.stderr or result.stdout or "")[:100]
-                return f"Error: {error}"
-            output = result.stdout or ""
-            if not output.strip():
-                return "No matches found"
-            lines = [line[:300] + "..." if len(line) > 300 else line for line in output.split("\n")]
-            if len(lines) > max_lines:
-                output = "\n".join(lines[:max_lines])
-                return (
-                    f"{output}\n\n[TRUNCATED - results exceed {max_lines} lines. "
-                    "Narrow your search with a more specific pattern or file_pattern]"
-                )
-            return output
-
-        async def list_files(path: str, sandbox, state) -> str:
-            """List files and directories at a path."""
-            _ = state
-            result = await sandbox.execute(f"ls -la {shlex.quote(path)}")
-            if result.exit_code:
-                error = (result.stderr or result.stdout or "")[:100]
-                return f"Error: {error}"
-            output = result.stdout or ""
-            return output.strip() or "Empty directory"
-
-        async def read_file(
-            file_path: str,
-            sandbox,
-            state,
-            *,
-            start_line: int = 1,
-            num_lines: int = 100,
-        ) -> str:
-            """Read lines from a file."""
-            _ = state
-            num_lines = min(num_lines, 50)
-            end_line = start_line + num_lines - 1
-            command = f"sed -n '{start_line},{end_line + 1}p' {shlex.quote(file_path)}"
-            result = await sandbox.execute(command)
-            if result.exit_code:
-                error = (result.stderr or result.stdout or "")[:100]
-                return f"Error: {error}"
-            output = result.stdout or ""
-            if not output.strip():
-                return f"No content at lines {start_line}-{end_line}"
-            lines = output.split("\n")
-            if len(lines) > num_lines:
-                output = "\n".join(lines[:num_lines])
-                return (
-                    f"Lines {start_line}-{end_line} of {file_path}:\n{output}\n\n"
-                    f"[MORE CONTENT BELOW - use start_line={end_line + 1} to continue]"
-                )
-            return f"Lines {start_line}-{end_line} of {file_path}:\n{output}"
-
         return {
             "swe_grep": vf.Toolset(
-                tools=[grep_tool, list_files, read_file],
+                tools=[self.grep_tool, self.list_files, self.read_file],
                 sandbox=vf.SandboxConfig(
                     image="python:3.11-slim",
                     scope="rollout",
@@ -186,6 +91,85 @@ class SweGrepTaskset(vf.Taskset[SweGrepTasksetConfig]):
             )
         }
 
+    async def grep_tool(
+        self,
+        pattern: str,
+        sandbox,
+        *,
+        path: str = "",
+        file_pattern: str = "",
+        context_lines: int = 2,
+        case_insensitive: bool = False,
+    ) -> str:
+        """Search for a pattern in files using ripgrep."""
+        search_path = path or self.config.repo_path
+        max_lines = 50
+        flags = ["-n", "--max-filesize", "100K"]
+        if context_lines > 0:
+            flags.extend(["-C", str(min(context_lines, 5))])
+        if case_insensitive:
+            flags.append("-i")
+        if file_pattern:
+            if file_pattern.startswith(".") and not file_pattern.startswith("*"):
+                file_pattern = "*" + file_pattern
+            flags.extend(["-g", shlex.quote(file_pattern)])
+        command = (
+            f"rg {' '.join(flags)} {shlex.quote(pattern)} {shlex.quote(search_path)} "
+            f"2>&1 | head -{max_lines + 1}"
+        )
+        result = await sandbox.execute(command)
+        if result.exit_code:
+            error = (result.stderr or result.stdout or "")[:100]
+            return f"Error: {error}"
+        output = result.stdout or ""
+        if not output.strip():
+            return "No matches found"
+        lines = [line[:300] + "..." if len(line) > 300 else line for line in output.split("\n")]
+        if len(lines) > max_lines:
+            output = "\n".join(lines[:max_lines])
+            return (
+                f"{output}\n\n[TRUNCATED - results exceed {max_lines} lines. "
+                "Narrow your search with a more specific pattern or file_pattern]"
+            )
+        return output
+
+    async def list_files(self, path: str, sandbox) -> str:
+        """List files and directories at a path."""
+        result = await sandbox.execute(f"ls -la {shlex.quote(path)}")
+        if result.exit_code:
+            error = (result.stderr or result.stdout or "")[:100]
+            return f"Error: {error}"
+        output = result.stdout or ""
+        return output.strip() or "Empty directory"
+
+    async def read_file(
+        self,
+        file_path: str,
+        sandbox,
+        *,
+        start_line: int = 1,
+        num_lines: int = 100,
+    ) -> str:
+        """Read lines from a file."""
+        num_lines = min(num_lines, 50)
+        end_line = start_line + num_lines - 1
+        command = f"sed -n '{start_line},{end_line + 1}p' {shlex.quote(file_path)}"
+        result = await sandbox.execute(command)
+        if result.exit_code:
+            error = (result.stderr or result.stdout or "")[:100]
+            return f"Error: {error}"
+        output = result.stdout or ""
+        if not output.strip():
+            return f"No content at lines {start_line}-{end_line}"
+        lines = output.split("\n")
+        if len(lines) > num_lines:
+            output = "\n".join(lines[:num_lines])
+            return (
+                f"Lines {start_line}-{end_line} of {file_path}:\n{output}\n\n"
+                f"[MORE CONTENT BELOW - use start_line={end_line + 1} to continue]"
+            )
+        return f"Lines {start_line}-{end_line} of {file_path}:\n{output}"
+
     @vf.update
     async def score_with_judge(self, task: vf.Task, state: vf.State) -> None:
         endpoint = state.get_endpoint_config(api="chat")
@@ -201,7 +185,7 @@ class SweGrepTaskset(vf.Taskset[SweGrepTasksetConfig]):
                     "content": JUDGE_PROMPT.format(
                         question=task["question"],
                         answer=task["answer"],
-                        response=assistant_text(state),
+                        response=self.assistant_text(state),
                     ),
                 }
             ],
@@ -220,7 +204,7 @@ class SweGrepTaskset(vf.Taskset[SweGrepTasksetConfig]):
         file_2 = task.get("file_path_2")
         if not file_1:
             return 0.0
-        response = assistant_text(state)
+        response = self.assistant_text(state)
         found_1 = str(file_1) in response
         state["found_file_1"] = found_1
         if not file_2:
@@ -279,5 +263,5 @@ def load_taskset(config: SweGrepTasksetConfig) -> SweGrepTaskset:
 def load_environment(config: vf.EnvConfig) -> vf.Env:
     return vf.Env(
         taskset=vf.load_taskset(config=config.taskset),
-        harness=vf.Harness(config=config.harness),
+        harness=vf.load_harness(config=config.harness),
     )

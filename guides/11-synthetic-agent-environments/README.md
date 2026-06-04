@@ -25,7 +25,7 @@ prime eval run prime/calendar-scheduling \
   -n 5 \
   -r 2 \
   -t 2048 \
-  -a '{"taskset": {"difficulty": "medium"}}'
+  --harness.max-turns 16
 ```
 
 Or run with a config file:
@@ -39,8 +39,15 @@ save_results = true
 env_id = "prime/calendar-scheduling"
 num_examples = 5
 rollouts_per_example = 2
-sampling_args = { max_tokens = 2048 }
-taskset = { difficulty = "medium" }
+
+[eval.sampling]
+max_tokens = 2048
+
+[eval.taskset]
+difficulty = "medium"
+
+[eval.harness]
+max_turns = 16
 ```
 
 ```bash
@@ -91,18 +98,17 @@ The visualizer is the fastest way to confirm both properties. Generate a handful
 
 Keep the tool surface small and intention-revealing. For calendar-scheduling:
 
-- `list_attendees()` — names, time zones, importance weights, required vs. optional
-- `view_calendar(attendee_id)` — busy blocks for one attendee
-- `view_constraints(attendee_id)` — preferred hours, hard hours, day preferences
-- `check_window(start, end, room)` — score a proposed window without committing
-- `submit_window(start, end, room)` — submit the final answer
+- `check_attendee_calendar(attendee_id, day_index)` — busy blocks for one attendee on one day, or all days with `day_index=-1`
+- `view_attendee_constraints(attendee_id)` — preferred hours, hard hours, day preferences, and utility penalties
+- `check_proposal(day_index, start_time_utc, duration_minutes, room_id)` — score a proposed window without committing
+- `submit_window(day_index, start_time_utc, duration_minutes, room_id)` — submit the final answer
 
 Two design choices keep the environment honest:
 
-- **Budget the oracle.** `check_window` is the agent's view of the oracle. Bound the number of calls per rollout (the TUI shows the budget as `Score-check budget`) so the agent cannot brute-force the search space. The remaining budget should be visible in every tool result.
+- **Budget the oracle.** `check_proposal` is the agent's view of the oracle. Bound the number of calls per rollout (the TUI shows the budget as `Score-check budget`) so the agent cannot brute-force the search space. The remaining budget should be visible in every tool result.
 - **Surface remaining turns.** Tool results include the remaining turn count. The agent learns to plan instead of exploring exhaustively.
 
-This is the same Toolset pattern from [Tool Use and Search](../08-tool-use-and-search/README.md), with one extra requirement: the per-rollout state owns the generated world, not just a session handle into an external one. Wire tools that need per-rollout context through `state` rather than module globals; `vf.Toolset` runs each tool with `task` and `state` in scope.
+This is the same `vf.Toolset` pattern from [Tool Use and Search](../08-tool-use-and-search/README.md), with one extra requirement: the generated world belongs on the serializable `vf.Task`, not in a module global or rollout state. Put task metadata under `task["info"]`, initialize rollout-only progress with `@vf.setup`, and let tools declare hidden `task: vf.Task` and `state: vf.State` arguments; v1 injects both while keeping the model-visible schema clean.
 
 ## Designing the Reward
 
@@ -114,7 +120,7 @@ The reward should reflect achieved utility against what was achievable on this s
 
 Normalizing against the oracle is optional but useful: it gives `score / oracle_best`, which is bounded in `[0, 1]` regardless of how generous the underlying utilities are. Either form works as an RL reward; the unnormalized form is easier to compare to a random baseline.
 
-Avoid composite rewards with many small bonuses. They invite reward hacking and obscure what the agent learned. One clean reward, computed at submission, is usually enough — diagnostic signals (did the agent call `check_window`, did it submit before the turn limit, did it ever view constraints) belong as metrics, not as reward terms.
+Avoid composite rewards with many small bonuses. They invite reward hacking and obscure what the agent learned. One clean reward, computed at submission, is usually enough — diagnostic signals (did the agent call `check_proposal`, did it submit before the turn limit, did it ever view constraints) belong as metrics, not as reward terms.
 
 ## One-Shotting It with a Coding Agent
 
@@ -158,7 +164,7 @@ Use the `vf.Taskset` + `vf.Toolset` pattern with per-rollout state for the calen
 - Checking score of a proposed window
 - Submitting a window
 
-The environment should have a max_turns parameter, and tool results should show the remaining turns to the agent.
+Set `max_turns` on the harness config, and make tool results show the remaining turns to the agent.
 Default limit should be enough to allow reasonable exploration, but not so high that the agent can brute-force search all times.
 
 We should also have a nice standalone script in the environment which creates a TUI to visualize a "calendar problem" similar to typical meeting apps, including attendees, timeblocks, and constraints, but fully in the terminal, using Rich styling, similar design language to the `prime eval tui` viewer implemented within the `verifiers` library (inspect verifiers source for reference).
@@ -213,7 +219,14 @@ max_tokens = 768
 
 [[env]]
 id = "prime/calendar-scheduling"
-args = { difficulty = "medium", num_train = 512, num_eval = 128, max_turns = 18 }
+
+[env.taskset]
+difficulty = "medium"
+num_train = 512
+num_eval = 128
+
+[env.harness]
+max_turns = 18
 ```
 
 ```bash

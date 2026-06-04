@@ -96,7 +96,7 @@ The table below shows observed costs from small Hosted Training runs. Treat thes
 | `prime/reverse-text`    | `Qwen/Qwen3.5-0.8B`                | Same task on a similarly small Qwen model | $0.14         |
 | `prime/reverse-text`    | `meta-llama/Llama-3.2-3B-Instruct` | Same task on the next Llama size up       | $0.35         |
 | `prime/reverse-text`    | `Qwen/Qwen3.5-2B`                  | Same task on a small dense Qwen model     | $0.54         |
-| `primeintellect/wordle` | `meta-llama/Llama-3.2-1B-Instruct` | Same small model on a multi-turn game     | $0.73         |
+| `prime/wordle` | `meta-llama/Llama-3.2-1B-Instruct` | Same small model on a multi-turn game     | $0.73         |
 | `prime/reverse-text`    | `Qwen/Qwen3.5-4B`                  | Same task on a larger dense Qwen model    | $3.24         |
 
 

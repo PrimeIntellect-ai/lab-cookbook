@@ -6,7 +6,7 @@ If you've run or read about a benchmark like GSM8K, MMLU, or SWE-bench, you alre
 
 An environment packages the work you want a model or agent to do. It samples tasks, produces rollouts, and computes metrics from the results. The same environment can be used for benchmarking models and prompts, generating synthetic data, optimizing harnesses, and training with RL or other algorithms.
 
-Environments live in your workspace as well as on the [Environments Hub](https://app.primeintellect.ai/dashboard/environments). This guide uses the [gsm8k](https://app.primeintellect.ai/dashboard/environments/prime/gsm8k) and [wordle](https://app.primeintellect.ai/dashboard/environments/prime/wordle) environments, which are available on the Hub and are also provided locally in the `environments/` directory.
+Environments live in your workspace as well as on the [Environments Hub](https://app.primeintellect.ai/dashboard/environments). This guide uses the local `gsm8k` and `wordle` environments provided in the `environments/` directory.
 
 In GSM8K, tasks are math questions with expected integer answers, and the model must return the answer in a `\boxed{}` format in a single turn. In Wordle, the model is given up to 6 turns to guess a 5-letter word, and the environment provides feedback after each guess.
 
@@ -101,8 +101,12 @@ env_id = "prime/wordle"
 num_examples = 20
 rollouts_per_example = 1
 sampling_args = { max_tokens = 1024 }
-taskset = { num_eval_examples = 20 }
-harness = { max_turns = 6 }
+
+[eval.taskset]
+num_eval_examples = 20
+
+[eval.harness]
+max_turns = 6
 ```
 Run the suite:
 

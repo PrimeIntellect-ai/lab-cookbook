@@ -24,7 +24,7 @@ Does the response satisfy the criterion? Reply with exactly one word: yes or no.
 """
 
 
-TOY_TASKS: list[dict] = [
+TOY_TASKS: list[vf.JsonData] = [
     {
         "prompt": [{"role": "user", "content": "Write one cheerful sentence about mornings."}],
         "info": {"criterion": "The response sounds upbeat and enthusiastic."},
@@ -74,7 +74,7 @@ class SimpleJudgeTasksetConfig(vf.TasksetConfig):
     judge_model: str = "openai/gpt-4.1-mini"
     judge_base_url: str = "https://api.pinference.ai/api/v1"
     judge_api_key_var: str = "PRIME_API_KEY"
-    system_prompt: vf.PromptInput | vf.SystemPromptConfig | None = (
+    system_prompt: vf.SystemPrompt | vf.SystemPromptConfig | None = (
         "Follow the user instruction carefully. Keep answers short."
     )
 
@@ -82,21 +82,15 @@ class SimpleJudgeTasksetConfig(vf.TasksetConfig):
 class SimpleJudgeTaskset(vf.Taskset[SimpleJudgeTasksetConfig]):
     def load_tasks(self, split: vf.TaskSplit = "train") -> vf.Tasks:
         _ = split
-        for row in TOY_TASKS:
-            yield row
+        return TOY_TASKS
 
     @vf.reward(weight=1.0)
     async def judge_reward(self, task: vf.Task, state: vf.State) -> float:
-        response_text = ""
-        for message in reversed(state.get("completion") or []):
-            if isinstance(message, dict) and message.get("role") == "assistant":
-                response_text = str(message.get("content") or "")
-                break
-        user_message = ""
-        for message in task.get("prompt") or []:
-            if isinstance(message, dict) and message.get("role") == "user":
-                user_message = str(message.get("content") or "")
-                break
+        vf.ensure_keys([self.config.judge_api_key_var])
+        assistant_messages = vf.get_messages(state.get("completion") or [], role="assistant")
+        response_text = str(assistant_messages[-1].content or "") if assistant_messages else ""
+        user_messages = vf.get_messages(task.get("prompt") or [], role="user")
+        user_message = str(user_messages[-1].content or "") if user_messages else ""
         info = task.get("info") or {}
         criterion = str(info.get("criterion") or "")
         judge = AsyncOpenAI(
@@ -124,12 +118,11 @@ class SimpleJudgeTaskset(vf.Taskset[SimpleJudgeTasksetConfig]):
 
 
 def load_taskset(config: SimpleJudgeTasksetConfig) -> SimpleJudgeTaskset:
-    vf.ensure_keys([config.judge_api_key_var])
     return SimpleJudgeTaskset(config=config)
 
 
 def load_environment(config: vf.EnvConfig) -> vf.Env:
     return vf.Env(
         taskset=vf.load_taskset(config=config.taskset),
-        harness=vf.Harness(config=config.harness),
+        harness=vf.load_harness(config=config.harness),
     )

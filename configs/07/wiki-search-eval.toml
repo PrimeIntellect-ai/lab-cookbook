@@ -6,4 +6,10 @@ env_id = "prime/wiki-search"
 num_examples = 5
 rollouts_per_example = 2
 sampling_args = { max_tokens = 2048 }
-taskset = { max_examples = 250, max_turns = 8, chroma_db_dir = ".chroma_db/wiki-search-small" }
+
+[eval.taskset]
+max_examples = 250
+chroma_db_dir = ".chroma_db/wiki-search-small"
+
+[eval.harness]
+max_turns = 8

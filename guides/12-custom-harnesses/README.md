@@ -44,8 +44,8 @@ Inside the harness program, route third-party model calls through the rollout en
 ```python
 async def run_program(task: vf.Task, state: vf.State) -> vf.State:
     endpoint = state.get_endpoint_config(api="chat")
-    # Build the framework client from endpoint["model"],
-    # endpoint["api_base"], and endpoint["api_key"].
+    # Build the framework client from endpoint.model,
+    # endpoint.base_url, and endpoint.api_key_var.
     ...
     return state
 ```
@@ -61,7 +61,9 @@ agent gets; the nested program config decides how OpenCode itself is launched.
 ```toml
 [[eval]]
 env_id = "prime/opencode-harbor"
-taskset = { task_names = ["regex-log"] }
+
+[eval.taskset]
+task_names = ["regex-log"]
 
 [eval.harness]
 max_turns = 4
@@ -70,12 +72,8 @@ max_turns = 4
 disabled_tools = ["webfetch", "question"]
 ```
 
-The same shape works from the CLI:
-
 ```bash
-prime eval run prime/opencode-harbor \
-  -m openai/gpt-5.4-mini \
-  -a '{"taskset": {"task_names": ["regex-log"]}, "harness": {"max_turns": 4, "program": {"disabled_tools": ["webfetch", "question"]}}}'
+prime eval run configs/09/opencode-harbor.toml
 ```
 
 Use this split as the default rule:
@@ -88,16 +86,23 @@ Use this split as the default rule:
 
 ## Deep Agents
 
-[primeintellect/langchain-deep-agents-env](https://app.primeintellect.ai/dashboard/environments/primeintellect/langchain-deep-agents-env) is a Hub example. The Taskset loads GSM8K tasks and scores boxed answers. The Harness runs a LangChain Deep Agents program.
+[prime/langchain-deep-agents-wikispeedia](https://app.primeintellect.ai/dashboard/environments/prime/langchain-deep-agents-wikispeedia) is a Hub example. The Taskset owns the Wikispeedia graph, navigation tools, deterministic rewards, and metrics. The Harness adapts those tools into a LangChain Deep Agents program.
+
+This is an advanced adapter example, not the golden shape for a first
+environment. Most taskset logic should be attached directly to the Taskset or
+Harness. Wikispeedia has extra module-level graph loading, adapter functions,
+and metric factories because it bridges SNAP data and LangChain Deep Agents;
+copy that structure only when you have a similarly large external protocol
+boundary.
 
 Run a small eval:
 
 ```bash
-prime eval run primeintellect/langchain-deep-agents-env \
-  -m openai/gpt-5-nano \
+prime eval run prime/langchain-deep-agents-wikispeedia \
+  -m openai/gpt-5.4-nano \
   -n 5 \
   -r 1 \
-  -t 2048
+  -t 4096
 ```
 
 Or run with a config file:
@@ -108,49 +113,15 @@ model = "openai/gpt-5.4-nano"
 save_results = true
 
 [[eval]]
-env_id = "prime/langchain-deep-agents-env"
+env_id = "prime/langchain-deep-agents-wikispeedia"
 num_examples = 5
 rollouts_per_example = 1
-sampling_args = { max_tokens = 2048 }
+sampling_args = { max_tokens = 4096 }
 ```
 
 ```bash
 prime eval run configs/12/deep-agents-eval.toml
 ```
-
-## DSPy
-
-[primeintellect/dspy-rlm](https://app.primeintellect.ai/dashboard/environments/primeintellect/dspy-rlm) shows the same split with DSPy.
-
-Run a small eval:
-
-```bash
-prime eval run primeintellect/dspy-rlm \
-  -m openai/gpt-5-nano \
-  -n 5 \
-  -r 1 \
-  -t 2048
-```
-
-Or run with a config file:
-
-```toml
-# [configs/12/dspy-rlm-eval.toml](../../configs/12/dspy-rlm-eval.toml)
-model = "openai/gpt-5.4-nano"
-save_results = true
-
-[[eval]]
-env_id = "prime/dspy-rlm"
-num_examples = 5
-rollouts_per_example = 1
-sampling_args = { max_tokens = 2048 }
-```
-
-```bash
-prime eval run configs/12/dspy-rlm-eval.toml
-```
-
-For a domain-specific DSPy example, use `dspy-flights`.
 
 ## When to Use One
 
@@ -161,9 +132,9 @@ Use a custom harness when:
 - the environment needs to preserve framework-specific traces or artifacts
 - you want the same Taskset to run against multiple harnesses
 
-Do not add a custom harness just to expose a tool or change a system prompt. The default harness already handles those cases.
+For a new tool or system prompt, use the default harness. Custom harnesses are for rollouts owned by another runtime or program.
 
 ## Next
 
-- [Lab Configuration](../../reference/lab-configuration.md) — accounts, secrets, Hub workflows, hosted runs, inference deployments
+- [Lab Configuration](../../reference/lab-configuration.md) - thin pointer to managed and public platform docs
 - [Legacy Environments](../13-legacy-environments/README.md) — older Rubric and `source()` patterns you may see in unmigrated Hub packages

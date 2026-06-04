@@ -4,7 +4,7 @@ Build an environment where the model has to search before it answers.
 
 In the earlier guides, each task gives the model everything it needs in the prompt. Search environments add tools for exploring a corpus before answering. Final-answer scoring uses the judge wiring from [Judges and Instruction Following](../07-judges-and-instruction-following/README.md).
 
-This guide uses [primeintellect/wiki-search](https://app.primeintellect.ai/dashboard/environments/primeintellect/wiki-search), a Wikipedia search environment on the Environments Hub. The model gets a trivia question, searches a small Wikipedia corpus, reads relevant sections, and answers from the evidence it finds.
+This guide uses [prime/wiki-search](https://app.primeintellect.ai/dashboard/environments/prime/wiki-search), a Wikipedia search environment on the Environments Hub. The model gets a trivia question, searches a small Wikipedia corpus, reads relevant sections, and answers from the evidence it finds.
 
 ## Evaluate the Hub Environment
 
@@ -30,7 +30,13 @@ env_id = "prime/wiki-search"
 num_examples = 5
 rollouts_per_example = 2
 sampling_args = { max_tokens = 2048 }
-taskset = { max_examples = 250, max_turns = 8, chroma_db_dir = ".chroma_db/wiki-search-small" }
+
+[eval.taskset]
+max_examples = 250
+chroma_db_dir = ".chroma_db/wiki-search-small"
+
+[eval.harness]
+max_turns = 8
 ```
 
 ```bash
@@ -39,13 +45,18 @@ prime eval run configs/07/wiki-search-eval.toml
 
 The first run may spend extra time building or loading the search index before rollouts begin.
 
-Use taskset overrides to change the local corpus/cache and rollout budget
-without editing the environment package:
+Use taskset and harness overrides to change the local corpus and rollout budget in eval TOML:
 
-```bash
-prime eval run prime/wiki-search \
-  -m openai/gpt-5.4-nano \
-  -a '{"taskset": {"max_examples": 250, "max_turns": 8, "chroma_db_dir": ".chroma_db/wiki-search-small"}}'
+```toml
+[[eval]]
+env_id = "prime/wiki-search"
+
+[eval.taskset]
+max_examples = 250
+chroma_db_dir = ".chroma_db/wiki-search-small"
+
+[eval.harness]
+max_turns = 8
 ```
 
 ## The Search Pattern
@@ -63,7 +74,7 @@ In `wiki-search`:
 
 ## The Taskset Shape
 
-The [wiki-search](../../environments/wiki_search/wiki_search.py) implementation subclasses `vf.Taskset`. Tasks, tools, prompts, and rewards live on the class:
+The [wiki-search](../../environments/wiki_search/wiki_search.py) implementation subclasses `vf.Taskset`. The Taskset owns tasks, tools, prompts, and rewards, so taskset-specific tool methods live on the class and are returned from `load_toolsets(config)`:
 
 ```python
 class WikiSearchTaskset(vf.Taskset[WikiSearchTasksetConfig]):
@@ -76,9 +87,12 @@ class WikiSearchTaskset(vf.Taskset[WikiSearchTasksetConfig]):
         return "Use the provided Wikipedia search tools to help answer questions."
 
     def load_toolsets(self, config: WikiSearchTasksetConfig) -> vf.Toolsets:
-        wiki = load_wiki(self.config)
+        self.wiki = load_wiki(config)
         ...
-        return {"wiki": vf.Toolset(tools=[search_pages, view_sections, read_section])}
+        return {"wiki": vf.Toolset(tools=[self.search_pages, self.view_sections, self.read_section])}
+
+    async def search_pages(self, query: str) -> vf.JsonData:
+        ...
 
     @vf.reward(weight=1.0)
     async def judge_reward(self, task: vf.Task, state: vf.State) -> float:
@@ -88,11 +102,11 @@ class WikiSearchTaskset(vf.Taskset[WikiSearchTasksetConfig]):
 def load_environment(config: vf.EnvConfig) -> vf.Env:
     return vf.Env(
         taskset=vf.load_taskset(config=config.taskset),
-        harness=vf.Harness(config=config.harness),
+        harness=vf.load_harness(config=config.harness),
     )
 ```
 
-`load_tasks(split)` yields tasks with prompt, answer, example ID, and turn limit. `load_toolsets(config)` builds the Wikipedia index. `judge_reward` uses a dedicated judge client — see [Judges and Instruction Following](../07-judges-and-instruction-following/README.md).
+`load_tasks(split)` returns question and answer rows; the framework derives the user prompt from `question`. `load_toolsets(config)` builds the Wikipedia index and exposes the Taskset's tool methods. `judge_reward` uses a dedicated judge client — see [Judges and Instruction Following](../07-judges-and-instruction-following/README.md).
 
 ## Train on Search
 

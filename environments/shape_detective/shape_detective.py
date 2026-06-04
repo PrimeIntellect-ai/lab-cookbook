@@ -52,7 +52,7 @@ class ShapeDetectiveTasksetConfig(vf.TasksetConfig):
     num_rows: int = 12
     seed: int = 0
     user: ShapeDetectiveUserConfig | None = ShapeDetectiveUserConfig()
-    system_prompt: vf.PromptInput | vf.SystemPromptConfig | None = (
+    system_prompt: vf.SystemPrompt | vf.SystemPromptConfig | None = (
         "You are playing Shape Detective. You see a 4x4 grid of tiles numbered 0-15 "
         "(left-to-right, top-to-bottom). Each tile has a shape (circle, square, "
         "triangle, star), a color (red, blue, green, yellow), and a pattern (solid, "
@@ -234,10 +234,10 @@ class ShapeDetectiveTaskset(vf.Taskset[ShapeDetectiveTasksetConfig]):
     async def solved(self, task: vf.Task, state: vf.State) -> float:
         completion = state.get("completion")
         assert isinstance(completion, list)
-        last = completion[-1]
-        if not isinstance(last, vf.AssistantMessage):
+        assistant_messages = vf.get_messages(completion, role="assistant")
+        if not assistant_messages:
             return 0.0
-        content = last.content
+        content = assistant_messages[-1].content
         if isinstance(content, str):
             text = content
         elif isinstance(content, list):
@@ -255,5 +255,5 @@ def load_taskset(config: ShapeDetectiveTasksetConfig) -> ShapeDetectiveTaskset:
 def load_environment(config: vf.EnvConfig) -> vf.Env:
     return vf.Env(
         taskset=vf.load_taskset(config=config.taskset),
-        harness=vf.Harness(config=config.harness),
+        harness=vf.load_harness(config=config.harness),
     )

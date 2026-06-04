@@ -26,13 +26,13 @@ class WordleTasksetConfig(TextArenaTasksetConfig):
     game: str = "Wordle-v0"
     answer_state_key: str = "secret_word"
     user: WordleUserConfig | None = WordleUserConfig()
-    system_prompt: vf.PromptInput | vf.SystemPromptConfig | None = None
+    system_prompt: vf.SystemPrompt | vf.SystemPromptConfig | None = None
 
 
 class WordleTaskset(TextArenaTaskset[WordleTasksetConfig]):
     def load_system_prompt(
         self, config: WordleTasksetConfig
-    ) -> vf.PromptInput | vf.SystemPromptConfig | None:
+    ) -> vf.SystemPrompt | vf.SystemPromptConfig | None:
         if config.system_prompt is not None:
             return config.system_prompt
         return vf.SystemPromptConfig(path="prompts/system_prompt.txt")
@@ -47,8 +47,8 @@ up without changing the reward code or the harness.
 Run a small eval first:
 
 ```bash
-prime eval run wordle \
-  -m openai/gpt-5.5 \
+prime eval run prime/wordle \
+  -m openai/gpt-5.4-nano \
   -n 20 \
   -r 1 \
   -t 1024
@@ -58,16 +58,21 @@ Or run with a config file:
 
 ```toml
 # [configs/04/wordle-eval.toml](../../configs/04/wordle-eval.toml)
-model = "openai/gpt-5.5"
+model = "openai/gpt-5.4-nano"
 save_results = true
 
 [[eval]]
-env_id = "wordle"
+env_id = "prime/wordle"
 num_examples = 20
 rollouts_per_example = 1
 sampling_args = { max_tokens = 1024 }
-taskset = { num_train_examples = 100, num_eval_examples = 20 }
-harness = { max_turns = 6 }
+
+[eval.taskset]
+num_train_examples = 100
+num_eval_examples = 20
+
+[eval.harness]
+max_turns = 6
 ```
 
 ```bash
@@ -82,14 +87,19 @@ Run GEPA with a config file:
 
 ```toml
 # [configs/04/wordle-gepa.toml](../../configs/04/wordle-gepa.toml)
-model = "openai/gpt-5.5"
-reflection_model = "openai/gpt-5.5"
+model = "openai/gpt-5.4-nano"
+reflection_model = "openai/gpt-5.4-nano"
 save_to_environment = true
 
 [[env]]
-env_id = "wordle"
-taskset = { num_train_examples = 100, num_eval_examples = 50 }
-harness = { max_turns = 6 }
+env_id = "prime/wordle"
+
+[env.taskset]
+num_train_examples = 100
+num_eval_examples = 50
+
+[env.harness]
+max_turns = 6
 
 [gepa]
 max_calls = 500
@@ -131,8 +141,8 @@ becomes the environment default.
 Run the same eval shape with the optimized prompt:
 
 ```bash
-prime eval run wordle \
-  -m openai/gpt-5.5 \
+prime eval run prime/wordle \
+  -m openai/gpt-5.4-nano \
   -n 20 \
   -r 1 \
   -t 1024
@@ -142,16 +152,21 @@ Or run with a config file:
 
 ```toml
 # [configs/04/wordle-gepa-eval.toml](../../configs/04/wordle-gepa-eval.toml)
-model = "openai/gpt-5.5"
+model = "openai/gpt-5.4-nano"
 save_results = true
 
 [[eval]]
-env_id = "wordle"
+env_id = "prime/wordle"
 num_examples = 20
 rollouts_per_example = 1
 sampling_args = { max_tokens = 1024, temperature = 0.7 }
-taskset = { num_train_examples = 100, num_eval_examples = 20 }
-harness = { max_turns = 6 }
+
+[eval.taskset]
+num_train_examples = 100
+num_eval_examples = 20
+
+[eval.harness]
+max_turns = 6
 ```
 
 ```bash

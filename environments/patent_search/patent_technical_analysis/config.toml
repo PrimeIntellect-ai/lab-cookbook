@@ -7,4 +7,4 @@ rollouts_per_example = 8
 max_tokens = 2048
 
 [[env]]
-id = "primeintellect/patent-technical-analysis"
+id = "prime/patent-technical-analysis"

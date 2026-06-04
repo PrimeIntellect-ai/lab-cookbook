@@ -1,9 +1,11 @@
-model = "Qwen/Qwen3.5-2B"
+model = "qwen/qwen3-vl-8b-instruct"
 save_results = true
 
 [[eval]]
-env_id = "shape-detective"
+env_id = "prime/shape-detective"
 num_examples = 5
 rollouts_per_example = 3
-sampling_args = { max_tokens = 1024 }
-taskset = { mode = "multi" }
+sampling_args = { max_tokens = 2048 }
+
+[eval.taskset]
+mode = "multi"
