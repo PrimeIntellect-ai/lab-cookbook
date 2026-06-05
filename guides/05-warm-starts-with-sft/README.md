@@ -81,10 +81,10 @@ rollouts_per_example = 1
 id = "prime/sft-replay"
 
 [env.args.taskset]
-dataset = "PrimeIntellect/Reverse-Text-SFT"
+dataset = "HuggingFaceH4/no_robots"
 ```
 
-This path does not call a teacher during rollout collection. `sft-replay` turns stored assistant messages into replayed trajectories, and Hosted Training tokenizes those messages before sending them to the trainer.
+This path does not call a teacher during rollout collection. `sft-replay` turns stored assistant messages into replayed trajectories, and the training stack tokenizes those messages before sending them to the trainer.
 
 ## Launch Training
 

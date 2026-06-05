@@ -8,4 +8,4 @@ rollouts_per_example = 1
 id = "prime/sft-replay"
 
 [env.args.taskset]
-dataset = "PrimeIntellect/Reverse-Text-SFT"
+dataset = "HuggingFaceH4/no_robots"
