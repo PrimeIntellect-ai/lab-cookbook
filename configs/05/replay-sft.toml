@@ -4,7 +4,6 @@ max_steps = 100
 batch_size = 128
 rollouts_per_example = 1
 
-# Advanced/self-managed path: Hosted Training currently requires a teacher for loss = "sft".
 [[env]]
 id = "prime/sft-replay"
 
