@@ -65,6 +65,27 @@ The fields specific to SFT are:
 
 Everything else mirrors an RL config: `[[env]]`, `[env.taskset]`, `[env.harness]`, and `[eval]` work the same way.
 
+## Replay an Existing Dataset
+
+If you already have demonstrations, use the replay environment instead of a teacher. The dataset should be a Hugging Face train split with a `messages` column: each row is a chat transcript and must contain at least one assistant message.
+
+```toml
+# [configs/05/replay-sft.toml](../../configs/05/replay-sft.toml)
+model = "openai/gpt-oss-20b"
+loss = "sft"
+max_steps = 100
+batch_size = 128
+rollouts_per_example = 1
+
+[[env]]
+id = "prime/sft-replay"
+
+[env.taskset]
+dataset = "HuggingFaceH4/no_robots"
+```
+
+This path does not call a teacher during rollout collection. `sft-replay` turns stored assistant messages into replayed trajectories, and the training stack tokenizes those messages before sending them to the trainer.
+
 ## Launch Training
 
 Start the run:

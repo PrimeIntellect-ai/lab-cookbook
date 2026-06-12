@@ -1,0 +1,11 @@
+model = "openai/gpt-oss-20b"
+loss = "sft"
+max_steps = 100
+batch_size = 128
+rollouts_per_example = 1
+
+[[env]]
+id = "prime/sft-replay"
+
+[env.taskset]
+dataset = "HuggingFaceH4/no_robots"
