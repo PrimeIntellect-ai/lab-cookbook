@@ -80,7 +80,7 @@ rollouts_per_example = 1
 [[env]]
 id = "prime/sft-replay"
 
-[env.args.taskset]
+[env.taskset]
 dataset = "HuggingFaceH4/no_robots"
 ```
 
