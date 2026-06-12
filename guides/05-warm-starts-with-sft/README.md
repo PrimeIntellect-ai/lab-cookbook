@@ -69,6 +69,8 @@ Everything else mirrors an RL config: `[[env]]`, `[env.taskset]`, `[env.harness]
 
 If you already have demonstrations, use the replay environment instead of a teacher. The dataset should be a Hugging Face train split with a `messages` column: each row is a chat transcript and must contain at least one assistant message.
 
+Replay-backed SFT is available in the Verifiers/PrimeRL stack, but Hosted Training still requires a teacher for `loss = "sft"`. Treat this as an advanced/self-managed config until hosted teacherless SFT is released.
+
 ```toml
 # [configs/05/replay-sft.toml](../../configs/05/replay-sft.toml)
 model = "openai/gpt-oss-20b"
