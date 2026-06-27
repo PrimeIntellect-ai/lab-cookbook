@@ -5,7 +5,7 @@ tags = ["tool-use", "math", "sandbox", "train", "prime-sandboxes", "python", "co
 version = "0.1.11"
 requires-python = ">=3.11,<3.14"
 dependencies = [
-    "verifiers>=0.1.15.dev17",
+    "verifiers>=0.1.15.dev403",
     "math-verify>=0.8.0",
     "prime-sandboxes>=0.2.7",
 ]
@@ -16,7 +16,3 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build]
 include = ["math_python.py", "pyproject.toml"]
-
-[tool.verifiers.eval]
-num_examples = 5
-rollouts_per_example = 3

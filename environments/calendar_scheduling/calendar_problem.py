@@ -6,7 +6,7 @@ from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from typing import Iterable, cast
 
-import verifiers as vf
+import verifiers.v1 as vf
 
 BASE_DATE = date(2026, 1, 5)
 SLOTS_PER_HOUR = 2
@@ -14,7 +14,8 @@ MINUTES_PER_SLOT = 60 // SLOTS_PER_HOUR
 DAY_SLOTS = 24 * SLOTS_PER_HOUR
 EPSILON = 1e-9
 
-JsonObject = vf.JsonData
+JsonValue = str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
+JsonObject = dict[str, JsonValue]
 
 
 def _object(payload: object, label: str) -> JsonObject:
@@ -228,8 +229,11 @@ class CalendarTask:
         )
 
     @classmethod
-    def from_task(cls, task: vf.Task) -> "CalendarTask":
-        info = _object(task.get("info"), "task.info")
+    def from_task(cls, task: object) -> "CalendarTask":
+        direct = getattr(task, "calendar_task", None)
+        if direct is not None:
+            return cls.from_dict(direct)
+        info = _object(getattr(task, "info", None), "task.info")
         if "calendar_task" not in info:
             raise ValueError("Task info is missing expected 'calendar_task' payload")
         return cls.from_dict(info["calendar_task"])
@@ -335,7 +339,7 @@ class GenerationConfig:
     max_generation_attempts: int
 
 
-class GenerationOverrides(vf.Config):
+class GenerationOverrides(vf.BaseConfig):
     attendee_count_range: tuple[int, int] | None = None
     window_days_range: tuple[int, int] | None = None
     search_start_hour_range: tuple[int, int] | None = None
@@ -1116,8 +1120,7 @@ def build_example(
     task: CalendarTask,
     summary: SolverSummary,
     config: GenerationConfig,
-) -> vf.Task:
-    prompt = [{"role": "user", "content": render_task_brief(task)}]
+) -> JsonObject:
     answer_payload = {
         "optimal_score": summary.best_score,
         "optimal_windows": [proposal.to_dict(task) for proposal in summary.best_proposals[:5]],
@@ -1129,13 +1132,11 @@ def build_example(
         "oracle": summary.to_dict(task, top_k=5),
         "difficulty": config.difficulty,
     }
-    return vf.Task(
-        {
-            "prompt": prompt,
-            "answer": json.dumps(answer_payload, sort_keys=True),
-            "info": info,
-        }
-    )
+    return {
+        "prompt": render_task_brief(task),
+        "answer": json.dumps(answer_payload, sort_keys=True),
+        "info": info,
+    }
 
 
 def format_blocks_for_day(

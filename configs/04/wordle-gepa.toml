@@ -1,16 +1,14 @@
+# GEPA currently uses the legacy v0 environment loader. Keep this file for v0
+# prompt-optimization runs; use v1 eval configs to measure v1 tasksets.
 model = "openai/gpt-5.4-nano"
 reflection_model = "openai/gpt-5.4-nano"
-save_to_environment = true
+save_results = true
 
 [[env]]
-env_id = "prime/wordle"
+env_id = "primeintellect/wordle"
 
-[env.taskset]
-num_train_examples = 100
-num_eval_examples = 50
-
-[env.harness]
-max_turns = 6
+env_args = { num_train_examples = 100, num_eval_examples = 50 }
+extra_env_kwargs = { max_turns = 6 }
 
 [gepa]
 max_calls = 500

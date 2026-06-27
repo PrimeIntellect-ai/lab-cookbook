@@ -1,19 +1,14 @@
 model = "openai/gpt-oss-20b"
-
 max_steps = 100
 batch_size = 256
 rollouts_per_example = 8
 
 [sampling]
 max_tokens = 2048
-reasoning_effort = "low"
+reasoning_effort = "medium"
 
-[[env]]
-id = "prime/wiki-search"
-
-[env.taskset]
-max_examples = 512
-chroma_db_dir = ".chroma_db/wiki-search-rl"
-
-[env.harness]
+[[orchestrator.train.env]]
+name = "wiki-search"
 max_turns = 8
+taskset = { id = "wiki-search", max_examples = 512, tools = { shared = true } }
+harness = { id = "default" }

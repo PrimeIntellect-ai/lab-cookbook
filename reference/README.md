@@ -1,21 +1,8 @@
 # Reference
 
-Reference pages in this cookbook are intentionally thin. Canonical Lab and
-Verifiers guidance is managed by Prime Lab sync and the bundled workspace
-skills:
+Local reference pages for the cookbook.
 
-- [Workspace guidance](../AGENTS.md)
-- [Environment guidance](../environments/AGENTS.md)
-- [Managed skills](../.prime/skills/)
-- [Managed config templates](../.prime/lab/templates/configs/)
-
-Use the [guides](../guides/README.md) for worked examples. Use public Prime and
-Verifiers docs for product and API reference.
-
-## Pages
-
-- [Lab Configuration](lab-configuration.md) - pointers for platform setup docs.
-- [Glossary](glossary.md) - deprecated; guide-local definitions are preferred.
-- [Repository Structure](repo-structure.md) - local workspace map.
-- [Environment Best Practices](best-practices.md) - deprecated in favor of
-  managed guidance and skills.
+- [Golden Path](GOLDEN_PATH.md): the v1 authoring contract used by all new cookbook environments.
+- [v1 Authoring Gaps](v1-authoring-gaps.md): remaining ecosystem work outside the cookbook envs.
+- [Repository Structure](repo-structure.md): workspace layout.
+- [Writing Style](WRITING_STYLE.md): local docs style.

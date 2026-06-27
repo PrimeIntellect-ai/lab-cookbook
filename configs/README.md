@@ -1,82 +1,60 @@
 # configs
 
-Starter TOMLs for the Lab CLIs (`prime eval run`, `prime gepa run`, `prime train`), plus a shared `endpoints.toml` for evaluating against hosted inference endpoints. Each TOML is a working example: pick the one whose model family you want and edit in place.
+Starter TOMLs for v1 eval, legacy GEPA, and hosted training examples.
 
 ## Layout
 
-| Path | Used by | Purpose |
-|---|---|---|
-| `eval/` | `prime eval run <file>` | Evaluate a model on one or more environments. |
-| `gepa/` | `prime gepa run <file>` | Optimize environment prompts with GEPA. |
-| `rl/` | `prime train <file>` | RL training on one or more environments. |
-| `endpoints.toml` | `prime eval run -m <endpoint_id>` | Named hosted endpoints using an endpoint alias (Prime Inference, Anthropic, OpenAI, etc.) for evals against non-trainable models. |
+| Path | Used by | Shape |
+| --- | --- | --- |
+| Numbered directories | Guide-specific commands | v1 eval or training configs used in each guide. |
+| `eval/` | `uv run eval @ <file>` | One v1 taskset per file, tuned for a model family. |
+| `rl/` | Hosted training / prime-rl configs | Training configs embedding v1 env definitions under `[[orchestrator.train.env]]`. |
+| `gepa/` | `prime gepa run <file>` | Legacy v0 GEPA configs. |
+| `endpoints.toml` | Prime CLI helpers | Endpoint aliases for commands that still read the shared registry. |
 
-Each subdirectory ships one TOML per supported model family. They differ only along three axes: the **`model`** identifier (and reflection_model for GEPA), the **`max_tokens`** sampling budget, and the **default environment** preselected in the `[[env]]`/`[[eval]]` block. Everything else (eval volume, GEPA loop sizes, RL batch shape) is held constant so the files diff cleanly.
+## v1 Eval Configs
 
-## Environment overrides
-
-Environment-specific knobs belong to either the Taskset or Harness config.
-Eval and GEPA configs use sibling block tables:
+A v1 eval config selects one taskset and, optionally, one harness:
 
 ```toml
-[[eval]]
-env_id = "prime/wordle"
-
-[eval.taskset]
-num_eval_examples = 20
-
-[eval.harness]
+model = "openai/gpt-5.4-nano"
+num_tasks = 20
+num_rollouts = 1
 max_turns = 6
+
+[sampling]
+max_tokens = 1024
+
+[taskset]
+id = "wordle"
+num_tasks = 100
+
+[harness]
+id = "default"
 ```
 
-Training configs use nested tables under the relevant `[[env]]` block:
-
-```toml
-[[env]]
-id = "prime/opencode-harbor"
-
-[env.taskset]
-task_names = ["regex-log"]
-
-[env.harness]
-max_turns = 4
-
-[env.harness.program]
-disabled_tools = ["webfetch", "question"]
-```
-
-Eval and GEPA configs validate `taskset` and `harness` sections against the
-environment's typed `TasksetConfig` and `HarnessConfig` subclasses before
-`load_environment` runs.
-
-For one-off CLI overrides, pass v1 child config through the root `config`
-argument:
+Run it with:
 
 ```bash
-prime eval run prime/wordle \
-  -a '{"config":{"taskset":{"num_eval_examples":20},"harness":{"max_turns":6}}}'
+uv run eval @ configs/04/wordle-eval.toml
 ```
 
-## The model TOMLs
+Taskset-owned fields go under `[taskset]`. Harness-owned fields go under `[harness]`. Tool and user configs nest under the taskset field that owns them, for example `[taskset.tools]`.
 
-| File | Family | Variants (uncomment one) | Default `max_tokens` | RL `batch_size` | Default env |
-|---|---|---|---|---|---|
-| `qwen-3-5.toml` | Qwen3.5 dense | `0.8B`, `2B`, `4B` *(active)*, `9B` | 1024 | 128 | `reverse-text` |
-| `qwen-3-5-moe.toml` | Qwen3.5 MoE | `35B-A3B` *(active)*, `122B-A10B`, `397B-A17B` | 2048 | 256 | `wiki-search` |
-| `llama-3.toml` | Llama 3.2 Instruct | `1B` *(active)*, `3B` | 1024 | 128 | `reverse-text` |
-| `nemotron-3.toml` | NVIDIA Nemotron 3 | `Nano-30B-A3B` *(active)*, `Super-120B-A12B` | 2048 | 256 | `wiki-search` |
-| `gpt-oss.toml` | OpenAI gpt-oss | `20b` *(active)*, `120b` | 1024 | 128 | `reverse-text` |
+## Training Configs
 
-Notes that vary by family beyond the table:
+Training configs embed the same v1 env definition:
 
-- **`gpt-oss` GEPA and RL** set `reasoning_effort = "low"` under `[sampling]`. Raise it for harder tool/reasoning tasks at the cost of tokens.
-- **`gepa/*`** files duplicate the model into `reflection_model` so the reflection LLM matches by default. Keep them in sync when switching sizes, or point `reflection_model` at a stronger model for better mutation quality.
+```toml
+[[orchestrator.train.env]]
+name = "wiki-search"
+max_turns = 8
+taskset = { id = "wiki-search", max_examples = 512, tools = { shared = true } }
+harness = { id = "default" }
+```
 
-## How to pick one
+Add another `[[orchestrator.train.env]]` block only when you deliberately train on multiple environments.
 
-1. **Pick the family by scale and task shape.** Small dense (`qwen-3-5`, `llama-3`) and `gpt-oss-20b` are the right default for quick iteration, format-following tasks, and the smallest training runs, so `reverse-text` is preselected. MoE / larger reasoning models (`qwen-3-5-moe`, `nemotron-3`) are preselected on `wiki-search` because they handle multi-turn tool use and longer contexts better; 2048 `max_tokens` reflects that.
-2. **Pick the size within the family by uncommenting one `model` line.** For `gepa/*`, update both `model` and `reflection_model` together.
-3. **Pick the environment by uncommenting one `[[env]]` / `[[eval]]` block.** The preselected env matches what the family runs well; swap it if you have a specific target.
-4. **Tune the loop knobs only after a smoke run works.** `max_tokens` controls per-rollout budget; RL `batch_size` and `rollouts_per_example` control sample throughput; GEPA max_calls / num_train / num_val / minibatch_size control optimizer cost. Use max_concurrent to cap parallel GEPA calls.
+## GEPA Configs
 
-For RL-specific extensions — eval/val schedules, online difficulty filtering, oversampling, multi-env ratios — see the `train-with-environments` skill and the Hosted Training docs at <https://docs.primeintellect.ai/hosted-training>.
+The GEPA CLI in this checkout still loads v0 environments. Files under `configs/gepa/` are kept for that legacy workflow and should not be used as v1 taskset config examples.

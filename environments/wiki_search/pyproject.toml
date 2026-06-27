@@ -5,7 +5,7 @@ tags = ["train", "eval", "v1", "taskset", "harness", "wikipedia", "rag", "embedd
 version = "0.1.1"
 requires-python = ">=3.10,<3.14"
 dependencies = [
-    "verifiers>=0.1.15.dev17",
+    "verifiers>=0.1.15.dev403",
     "chromadb",
     "datasets>=2.18.0",
     "openai>=1.40.0",
@@ -17,7 +17,3 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build]
 include = ["wiki_search.py", "pyproject.toml"]
-
-[tool.verifiers.eval]
-num_examples = 5
-rollouts_per_example = 3

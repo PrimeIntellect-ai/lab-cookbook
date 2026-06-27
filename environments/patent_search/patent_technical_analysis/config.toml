@@ -6,5 +6,8 @@ rollouts_per_example = 8
 [sampling]
 max_tokens = 2048
 
-[[env]]
-id = "prime/patent-technical-analysis"
+[[orchestrator.train.env]]
+name = "patent-technical-analysis"
+max_turns = 10
+taskset = { id = "patent-technical-analysis", tools = { shared = true } }
+harness = { id = "default" }

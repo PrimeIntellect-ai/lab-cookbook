@@ -1,3 +1,4 @@
+# GEPA currently uses the legacy v0 environment loader. Use this for v0 prompt optimization.
 # gpt-oss models. Update both fields when switching sizes.
 model = "openai/gpt-oss-20b"
 reflection_model = "openai/gpt-oss-20b"
@@ -6,18 +7,6 @@ reflection_model = "openai/gpt-oss-20b"
 
 [[env]]
 env_id = "primeintellect/reverse-text"
-
-# [[env]]
-# env_id = "primeintellect/wordle"
-
-# [[env]]
-# env_id = "primeintellect/wiki-search"
-
-# [[env]]
-# env_id = "primeintellect/dspy-flights"
-
-# [[env]]
-# env_id = "primeintellect/opencode-harbor"
 
 [gepa]
 max_calls = 500
@@ -29,5 +18,3 @@ max_concurrent = 32
 [sampling]
 max_tokens = 1024
 reasoning_effort = "low"
-
-# Hosted Training docs: https://docs.primeintellect.ai/hosted-training

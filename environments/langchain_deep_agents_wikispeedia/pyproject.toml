@@ -1,15 +1,11 @@
 [project]
 name = "langchain-deep-agents-wikispeedia"
-description = "V1 Taskset/Harness environment training LangChain deep-agents on Wikispeedia navigation"
-tags = ["v1", "taskset", "harness", "multi-turn", "tool-use", "langchain", "deep-agents", "wikispeedia", "navigation", "train", "eval"]
+description = "V1 Wikispeedia taskset with native navigation tools"
+tags = ["v1", "taskset", "multi-turn", "tool-use", "wikispeedia", "navigation", "train", "eval"]
 version = "0.2.9"
 requires-python = ">=3.11,<3.14"
 dependencies = [
-    "verifiers>=0.1.15.dev17",
-    "datasets",
-    "deepagents>=0.5.5",
-    "langgraph",
-    "langchain-openai>=1.2.1",
+    "verifiers>=0.1.15.dev403",
 ]
 
 [build-system]
@@ -18,7 +14,3 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build]
 include = ["langchain_deep_agents_wikispeedia.py", "wiki_graph.py", "pyproject.toml"]
-
-[tool.verifiers.eval]
-num_examples = 5
-rollouts_per_example = 3

@@ -5,7 +5,7 @@ tags = ["patents", "multi-turn", "agentic-search", "rag", "train", "eval", "llm-
 requires-python = ">=3.11,<3.14"
 version = "0.1.4"
 dependencies = [
-    "verifiers>=0.1.15.dev17",
+    "verifiers>=0.1.15.dev403",
     "chromadb",
     "datasets",
     "openai",
@@ -18,7 +18,3 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build]
 include = ["patent_technical_analysis.py", "pyproject.toml"]
-
-[tool.verifiers.eval]
-num_examples = 5
-rollouts_per_example = 3

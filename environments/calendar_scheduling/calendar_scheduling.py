@@ -1,6 +1,7 @@
 import json
+from typing import cast
 
-import verifiers as vf
+import verifiers.v1 as vf
 from calendar_problem import (
     CalendarTask,
     GenerationOverrides,
@@ -14,172 +15,71 @@ from calendar_problem import (
 )
 from pydantic import Field
 
-SYSTEM_PROMPT = """You are scheduling a meeting in a constrained calendar environment.
+SYSTEM = """You are scheduling a meeting in a constrained calendar environment.
 
 Use tools deliberately:
 - inspect attendee calendars and attendee constraints,
 - check a small number of candidate windows,
 - submit exactly one final window with submit_window.
 
-Important:
-- hard constraints must be satisfied or final score is 0.0,
-- soft constraints lower attendee utilities,
-- score-check calls are budgeted, so avoid brute-force probing,
-- tool responses include remaining_turns.
-- if you do not call submit_window before turns end, final reward is 0.0.
-- when remaining_turns <= 2, immediately submit your best candidate.
-
-Call signature reminder:
-- check_proposal(day_index=<int>, start_time_utc=<HH:MM>, duration_minutes=<int>, room_id=<str>)
-- submit_window(day_index=<int>, start_time_utc=<HH:MM>, duration_minutes=<int>, room_id=<str>)
+Hard constraints must be satisfied or final score is 0.0. Score-check calls are budgeted, so avoid brute-force probing. If you do not call submit_window before turns end, final reward is 0.0.
 """
 
 
-class CalendarSchedulingTasksetConfig(vf.TasksetConfig):
+class CalendarSchedulingTask(vf.Task):
+    answer: str
+    calendar_task: JsonObject
+
+
+class CalendarState(vf.State):
+    score_checks_remaining: int = -1
+    score_checks_used: int = 0
+    proposal_checks: list[JsonObject] = Field(default_factory=list)
+    submitted: bool = False
+    submitted_valid: bool = False
+    submitted_score: float = 0.0
+    submitted_payload: JsonObject | None = None
+
+
+class CalendarToolConfig(vf.ToolsetConfig):
+    pass
+
+
+class CalendarSchedulingConfig(vf.TasksetConfig):
     difficulty: str = "medium"
     seed: int = 7
-    num_train: int = 512
-    num_eval: int = 128
+    num_tasks: int = 512
     generator_overrides: GenerationOverrides = Field(default_factory=GenerationOverrides)
-    system_prompt: vf.SystemPrompt = SYSTEM_PROMPT
+    tools: CalendarToolConfig = CalendarToolConfig()
 
 
-class CalendarSchedulingTaskset(vf.Taskset[CalendarSchedulingTasksetConfig]):
-    @vf.setup
-    async def setup_calendar(self, task: vf.Task, state: vf.State) -> None:
-        calendar_task = CalendarTask.from_task(task)
-        state["score_checks_remaining"] = int(calendar_task.score_check_budget)
-        state["score_checks_used"] = 0
-        state["proposal_checks"] = []
-        state["submitted"] = False
-        state["submitted_valid"] = False
-        state["submitted_score"] = 0.0
-        state["submitted_payload"] = None
+def optimal_score(answer: str) -> float:
+    try:
+        payload = json.loads(answer)
+    except json.JSONDecodeError:
+        return 0.0
+    score = payload.get("optimal_score")
+    return float(score) if isinstance(score, int | float) else 0.0
 
-    def load_tasks(self, split: vf.TaskSplit = "train") -> vf.Tasks:
-        if split == "train":
-            num_examples = self.config.num_train
-            seed = self.config.seed
-        else:
-            num_examples = self.config.num_eval
-            seed = self.config.seed + 1_000_003
-        if num_examples <= 0:
-            raise ValueError("num_examples must be positive")
-        tasks: list[vf.Task] = []
-        for index in range(num_examples):
-            task_seed = seed + (index * 1009)
-            task, summary, config = generate_validated_task(
-                seed=task_seed,
-                difficulty=self.config.difficulty,
-                overrides=self.config.generator_overrides,
-            )
-            tasks.append(build_example(task, summary, config))
-        return tasks
 
-    def load_toolsets(self, config: CalendarSchedulingTasksetConfig) -> vf.Toolsets:
-        _ = config
-        return {
-            "calendar": vf.Toolset(
-                tools=[
-                    self.check_attendee_calendar,
-                    self.view_attendee_constraints,
-                    self.check_proposal,
-                    self.submit_window,
-                ]
-            )
-        }
+class CalendarToolset(vf.Toolset[CalendarToolConfig, CalendarState]):
+    TOOL_PREFIX = "calendar"
 
-    @vf.stop(priority=50)
-    async def has_submission(self, state: vf.State) -> bool:
-        return bool(state.get("submitted", False))
+    async def setup_task(self, task: CalendarSchedulingTask) -> None:
+        self.calendar_task = CalendarTask.from_task(task)
 
-    @vf.reward(weight=1.0)
-    async def final_score_from_submission(self, state: vf.State) -> float:
-        if not bool(state.get("submitted_valid", False)):
-            return 0.0
-        return float(state.get("submitted_score", 0.0))
+    def _task(self) -> CalendarTask:
+        return self.calendar_task
 
-    @vf.metric
-    async def submission_made(self, state: vf.State) -> float:
-        return 1.0 if bool(state.get("submitted", False)) else 0.0
+    def _ensure_state(self) -> None:
+        if self.state.score_checks_remaining < 0:
+            self.state.score_checks_remaining = int(self._task().score_check_budget)
 
-    @vf.metric
-    async def submission_valid(self, state: vf.State) -> float:
-        return 1.0 if bool(state.get("submitted_valid", False)) else 0.0
-
-    @vf.metric
-    async def oracle_optimal_score(self, answer: object) -> float:
-        if isinstance(answer, str):
-            try:
-                answer = json.loads(answer)
-            except json.JSONDecodeError:
-                return 0.0
-        if not isinstance(answer, dict):
-            return 0.0
-        score = {str(key): value for key, value in answer.items()}.get("optimal_score")
-        if not isinstance(score, (int, float)):
-            return 0.0
-        return float(score)
-
-    @vf.metric
-    async def submitted_to_optimal_ratio(self, state: vf.State, answer: object) -> float:
-        if isinstance(answer, str):
-            try:
-                answer = json.loads(answer)
-            except json.JSONDecodeError:
-                return 0.0
-        if not isinstance(answer, dict):
-            return 0.0
-        score = {str(key): value for key, value in answer.items()}.get("optimal_score")
-        if not isinstance(score, (int, float)):
-            return 0.0
-        optimal = float(score)
-        if optimal <= 0:
-            return 0.0
-        submitted_score = float(state.get("submitted_score", 0.0))
-        return min(1.0, max(0.0, submitted_score / optimal))
-
-    @vf.metric
-    async def optimality_gap(self, state: vf.State, answer: object) -> float:
-        if isinstance(answer, str):
-            try:
-                answer = json.loads(answer)
-            except json.JSONDecodeError:
-                return 0.0
-        if not isinstance(answer, dict):
-            return 0.0
-        score = {str(key): value for key, value in answer.items()}.get("optimal_score")
-        if not isinstance(score, (int, float)):
-            return 0.0
-        submitted_score = float(state.get("submitted_score", 0.0))
-        return max(0.0, float(score) - submitted_score)
-
-    @vf.metric
-    async def score_checks_used(self, state: vf.State) -> float:
-        return float(state.get("score_checks_used", 0))
-
-    @vf.metric
-    async def score_checks_remaining(self, state: vf.State) -> float:
-        return float(state.get("score_checks_remaining", 0))
-
-    @staticmethod
-    async def check_attendee_calendar(
-        attendee_id: str,
-        day_index: int,
-        task: vf.Task,
-        state: vf.State,
-    ) -> str:
-        """Inspect one attendee's busy calendar blocks.
-
-        Args:
-            attendee_id: Attendee identifier (for example attendee_1).
-            day_index: Day index to inspect. Use -1 to return all days.
-
-        Returns:
-            JSON with busy intervals and turn/check budgets.
-        """
-
-        calendar_task = CalendarTask.from_task(task)
+    @vf.tool
+    async def check_attendee_calendar(self, attendee_id: str, day_index: int) -> str:
+        """Inspect one attendee's busy calendar blocks. Use day_index=-1 for all days."""
+        self._ensure_state()
+        calendar_task = self._task()
         attendee = next(
             (
                 attendee
@@ -188,33 +88,19 @@ class CalendarSchedulingTaskset(vf.Taskset[CalendarSchedulingTasksetConfig]):
             ),
             None,
         )
-        trajectory = state.get("trajectory", [])
-        if not isinstance(trajectory, list):
-            raise ValueError("Rollout state trajectory must be a list")
-        remaining_turns = max(0, state.get_max_turns(10) - len(trajectory))
         payload: JsonObject = {
-            "remaining_turns": remaining_turns,
-            "score_checks_remaining": int(state.get("score_checks_remaining", 0)),
+            "score_checks_remaining": self.state.score_checks_remaining,
             "tool": "check_attendee_calendar",
             "attendee_id": attendee_id,
         }
-        if not bool(state.get("submitted", False)) and remaining_turns <= 2:
-            payload["warning"] = (
-                "Submit now with submit_window. No submission before turns end gives score 0.0"
-            )
-
         if attendee is None:
             payload["error"] = "Unknown attendee_id"
-            payload["known_attendees"] = [
-                attendee.attendee_id for attendee in calendar_task.attendees
-            ]
+            payload["known_attendees"] = [a.attendee_id for a in calendar_task.attendees]
             return json.dumps(payload, indent=2, sort_keys=True)
-
         payload["attendee"] = {
             "display_name": attendee.display_name,
             "timezone_offset_hours": attendee.timezone_offset_hours,
         }
-
         if day_index == -1:
             payload["days"] = {
                 str(index): {
@@ -228,11 +114,9 @@ class CalendarSchedulingTaskset(vf.Taskset[CalendarSchedulingTasksetConfig]):
                 for index in range(calendar_task.num_days)
             }
             return json.dumps(payload, indent=2, sort_keys=True)
-
         if day_index < 0 or day_index >= calendar_task.num_days:
             payload["error"] = f"day_index must be in [0, {calendar_task.num_days - 1}] or -1"
             return json.dumps(payload, indent=2, sort_keys=True)
-
         payload["day"] = {
             "day_index": day_index,
             "label": day_label(day_index),
@@ -244,22 +128,11 @@ class CalendarSchedulingTaskset(vf.Taskset[CalendarSchedulingTasksetConfig]):
         }
         return json.dumps(payload, indent=2, sort_keys=True)
 
-    @staticmethod
-    async def view_attendee_constraints(
-        attendee_id: str,
-        task: vf.Task,
-        state: vf.State,
-    ) -> str:
-        """View hard and soft constraints for one attendee.
-
-        Args:
-            attendee_id: Attendee identifier (for example attendee_3).
-
-        Returns:
-            JSON with weighted importance and preference penalties.
-        """
-
-        calendar_task = CalendarTask.from_task(task)
+    @vf.tool
+    async def view_attendee_constraints(self, attendee_id: str) -> str:
+        """View hard and soft constraints for one attendee."""
+        self._ensure_state()
+        calendar_task = self._task()
         attendee = next(
             (
                 attendee
@@ -268,28 +141,15 @@ class CalendarSchedulingTaskset(vf.Taskset[CalendarSchedulingTasksetConfig]):
             ),
             None,
         )
-        trajectory = state.get("trajectory", [])
-        if not isinstance(trajectory, list):
-            raise ValueError("Rollout state trajectory must be a list")
-        remaining_turns = max(0, state.get_max_turns(10) - len(trajectory))
         payload: JsonObject = {
-            "remaining_turns": remaining_turns,
-            "score_checks_remaining": int(state.get("score_checks_remaining", 0)),
+            "score_checks_remaining": self.state.score_checks_remaining,
             "tool": "view_attendee_constraints",
             "attendee_id": attendee_id,
         }
-        if not bool(state.get("submitted", False)) and remaining_turns <= 2:
-            payload["warning"] = (
-                "Submit now with submit_window. No submission before turns end gives score 0.0"
-            )
-
         if attendee is None:
             payload["error"] = "Unknown attendee_id"
-            payload["known_attendees"] = [
-                attendee.attendee_id for attendee in calendar_task.attendees
-            ]
+            payload["known_attendees"] = [a.attendee_id for a in calendar_task.attendees]
             return json.dumps(payload, indent=2, sort_keys=True)
-
         payload["attendee"] = {
             "display_name": attendee.display_name,
             "required": attendee.required,
@@ -321,35 +181,19 @@ class CalendarSchedulingTaskset(vf.Taskset[CalendarSchedulingTasksetConfig]):
         }
         return json.dumps(payload, indent=2, sort_keys=True)
 
-    @staticmethod
+    @vf.tool
     async def check_proposal(
+        self,
         day_index: int,
         start_time_utc: str,
         duration_minutes: int,
         room_id: str,
-        task: vf.Task,
-        state: vf.State,
     ) -> str:
-        """Check score and hard-constraint status for a candidate window.
-
-        Args:
-            day_index: Day index in the planning window.
-            start_time_utc: UTC start time in HH:MM format.
-            duration_minutes: Proposed duration in minutes.
-            room_id: Room identifier.
-
-        Returns:
-            JSON with validity, score, attendee utility details, and budgets.
-        """
-
-        calendar_task = CalendarTask.from_task(task)
-        trajectory = state.get("trajectory", [])
-        if not isinstance(trajectory, list):
-            raise ValueError("Rollout state trajectory must be a list")
-        remaining_turns = max(0, state.get_max_turns(10) - len(trajectory))
+        """Check score and hard-constraint status for a candidate window."""
+        self._ensure_state()
+        calendar_task = self._task()
         payload: JsonObject = {
-            "remaining_turns": remaining_turns,
-            "score_checks_remaining": int(state.get("score_checks_remaining", 0)),
+            "score_checks_remaining": self.state.score_checks_remaining,
             "tool": "check_proposal",
             "proposal_input": {
                 "day_index": day_index,
@@ -358,27 +202,11 @@ class CalendarSchedulingTaskset(vf.Taskset[CalendarSchedulingTasksetConfig]):
                 "room_id": room_id,
             },
         }
-        if not bool(state.get("submitted", False)) and remaining_turns <= 2:
-            payload["warning"] = (
-                "Submit now with submit_window. No submission before turns end gives score 0.0"
-            )
-
-        if start_time_utc.strip() == "":
-            payload["error"] = "start_time_utc is required (HH:MM)"
+        if not start_time_utc.strip() or duration_minutes <= 0 or not room_id.strip():
+            payload["error"] = "start_time_utc, positive duration_minutes, and room_id are required"
             payload["valid"] = False
             payload["score"] = 0.0
             return json.dumps(payload, indent=2, sort_keys=True)
-        if duration_minutes <= 0:
-            payload["error"] = "duration_minutes must be positive"
-            payload["valid"] = False
-            payload["score"] = 0.0
-            return json.dumps(payload, indent=2, sort_keys=True)
-        if room_id.strip() == "":
-            payload["error"] = "room_id is required"
-            payload["valid"] = False
-            payload["score"] = 0.0
-            return json.dumps(payload, indent=2, sort_keys=True)
-
         proposal, error = make_proposal(
             task=calendar_task,
             day_index=day_index,
@@ -391,63 +219,41 @@ class CalendarSchedulingTaskset(vf.Taskset[CalendarSchedulingTasksetConfig]):
             payload["valid"] = False
             payload["score"] = 0.0
             return json.dumps(payload, indent=2, sort_keys=True)
-
-        remaining_checks = int(state.get("score_checks_remaining", 0))
-        if remaining_checks <= 0:
+        if self.state.score_checks_remaining <= 0:
             payload["error"] = "score-check budget exhausted"
             payload["valid"] = False
             payload["score"] = 0.0
             return json.dumps(payload, indent=2, sort_keys=True)
-
         evaluation = evaluate_proposal(calendar_task, proposal)
-        state["score_checks_remaining"] = remaining_checks - 1
-        state["score_checks_used"] = int(state.get("score_checks_used", 0)) + 1
-        checks = state.get("proposal_checks")
-        if isinstance(checks, list):
-            checks.append(
-                {
-                    "day_index": day_index,
-                    "start_time_utc": start_time_utc,
-                    "duration_minutes": duration_minutes,
-                    "room_id": room_id,
-                    "score": evaluation.score,
-                    "valid": evaluation.valid,
-                }
-            )
-
-        payload["score_checks_remaining"] = int(state["score_checks_remaining"])
+        self.state.score_checks_remaining -= 1
+        self.state.score_checks_used += 1
+        self.state.proposal_checks.append(
+            {
+                "day_index": day_index,
+                "start_time_utc": start_time_utc,
+                "duration_minutes": duration_minutes,
+                "room_id": room_id,
+                "score": evaluation.score,
+                "valid": evaluation.valid,
+            }
+        )
+        payload["score_checks_remaining"] = self.state.score_checks_remaining
         payload.update(evaluation.to_dict(calendar_task))
         return json.dumps(payload, indent=2, sort_keys=True)
 
-    @staticmethod
+    @vf.tool
     async def submit_window(
+        self,
         day_index: int,
         start_time_utc: str,
         duration_minutes: int,
         room_id: str,
-        task: vf.Task,
-        state: vf.State,
     ) -> str:
-        """Submit the final meeting window for scoring.
-
-        Args:
-            day_index: Day index in the planning window.
-            start_time_utc: UTC start time in HH:MM format.
-            duration_minutes: Proposed duration in minutes.
-            room_id: Room identifier.
-
-        Returns:
-            JSON with the final accepted/invalid result and score.
-        """
-
-        calendar_task = CalendarTask.from_task(task)
-        trajectory = state.get("trajectory", [])
-        if not isinstance(trajectory, list):
-            raise ValueError("Rollout state trajectory must be a list")
-        remaining_turns = max(0, state.get_max_turns(10) - len(trajectory))
+        """Submit the final meeting window for scoring."""
+        self._ensure_state()
+        calendar_task = self._task()
         payload: JsonObject = {
-            "remaining_turns": remaining_turns,
-            "score_checks_remaining": int(state.get("score_checks_remaining", 0)),
+            "score_checks_remaining": self.state.score_checks_remaining,
             "tool": "submit_window",
             "proposal_input": {
                 "day_index": day_index,
@@ -456,58 +262,128 @@ class CalendarSchedulingTaskset(vf.Taskset[CalendarSchedulingTasksetConfig]):
                 "room_id": room_id,
             },
         }
-
-        error = ""
-        proposal = None
-        if start_time_utc.strip() == "":
-            error = "start_time_utc is required (HH:MM)"
-        elif duration_minutes <= 0:
-            error = "duration_minutes must be positive"
-        elif room_id.strip() == "":
-            error = "room_id is required"
-        else:
-            proposal, error = make_proposal(
-                task=calendar_task,
-                day_index=day_index,
-                start_time_utc=start_time_utc,
-                duration_minutes=duration_minutes,
-                room_id=room_id,
-            )
-
-        state["submitted"] = True
-        state.stop("submitted")
-
+        proposal, error = make_proposal(
+            task=calendar_task,
+            day_index=day_index,
+            start_time_utc=start_time_utc,
+            duration_minutes=duration_minutes,
+            room_id=room_id,
+        )
+        self.state.submitted = True
         if proposal is None:
-            error = error or "Invalid proposal"
-            state["submitted_valid"] = False
-            state["submitted_score"] = 0.0
-            state["submitted_payload"] = {
+            self.state.submitted_valid = False
+            self.state.submitted_score = 0.0
+            self.state.submitted_payload = {
                 "valid": False,
                 "score": 0.0,
-                "hard_violations": [error],
+                "hard_violations": [error or "Invalid proposal"],
             }
-            payload["submitted"] = True
-            payload["valid"] = False
-            payload["score"] = 0.0
-            payload["hard_violations"] = [error]
+            payload.update(self.state.submitted_payload)
             return json.dumps(payload, indent=2, sort_keys=True)
-
         evaluation = evaluate_proposal(calendar_task, proposal)
-        state["submitted_valid"] = evaluation.valid
-        state["submitted_score"] = evaluation.score if evaluation.valid else 0.0
-        state["submitted_payload"] = evaluation.to_dict(calendar_task, rounded=False)
-
+        self.state.submitted_valid = evaluation.valid
+        self.state.submitted_score = evaluation.score if evaluation.valid else 0.0
+        self.state.submitted_payload = evaluation.to_dict(calendar_task, rounded=False)
         payload["submitted"] = True
         payload.update(evaluation.to_dict(calendar_task))
         return json.dumps(payload, indent=2, sort_keys=True)
 
 
-def load_taskset(config: CalendarSchedulingTasksetConfig) -> CalendarSchedulingTaskset:
-    return CalendarSchedulingTaskset(config=config)
+class CalendarSchedulingTaskset(
+    vf.Taskset[CalendarSchedulingTask, CalendarSchedulingConfig, CalendarState]
+):
+    def load_tasks(self) -> list[CalendarSchedulingTask]:
+        tasks: list[CalendarSchedulingTask] = []
+        if self.config.num_tasks <= 0:
+            raise ValueError("num_tasks must be positive")
+        for index in range(self.config.num_tasks):
+            task_seed = self.config.seed + (index * 1009)
+            task, summary, config = generate_validated_task(
+                seed=task_seed,
+                difficulty=self.config.difficulty,
+                overrides=self.config.generator_overrides,
+            )
+            raw = build_example(task, summary, config)
+            info = raw["info"]
+            if not isinstance(info, dict):
+                raise TypeError("calendar task info must be a dict")
+            tasks.append(
+                CalendarSchedulingTask(
+                    idx=index,
+                    prompt=str(raw["prompt"]),
+                    system_prompt=SYSTEM,
+                    answer=str(raw["answer"]),
+                    calendar_task=info["calendar_task"],
+                )
+            )
+        return tasks
+
+    def tools(self, task: CalendarSchedulingTask) -> list[vf.Toolset]:
+        _ = task
+        return [cast(vf.Toolset, CalendarToolset(self.config.tools))]
+
+    @vf.stop(priority=50)
+    async def has_submission(self, trace: vf.Trace[CalendarSchedulingTask, CalendarState]) -> bool:
+        return trace.state.submitted
+
+    @vf.reward(weight=1.0)
+    async def final_score_from_submission(
+        self, trace: vf.Trace[CalendarSchedulingTask, CalendarState]
+    ) -> float:
+        if not trace.state.submitted_valid:
+            return 0.0
+        return trace.state.submitted_score
+
+    @vf.metric
+    async def submission_made(
+        self, trace: vf.Trace[CalendarSchedulingTask, CalendarState]
+    ) -> float:
+        return float(trace.state.submitted)
+
+    @vf.metric
+    async def submission_valid(
+        self, trace: vf.Trace[CalendarSchedulingTask, CalendarState]
+    ) -> float:
+        return float(trace.state.submitted_valid)
+
+    @vf.metric
+    async def oracle_optimal_score(self, task: CalendarSchedulingTask) -> float:
+        return optimal_score(task.answer)
+
+    @vf.metric
+    async def submitted_to_optimal_ratio(
+        self,
+        task: CalendarSchedulingTask,
+        trace: vf.Trace[CalendarSchedulingTask, CalendarState],
+    ) -> float:
+        optimal = optimal_score(task.answer)
+        if optimal <= 0:
+            return 0.0
+        return min(1.0, max(0.0, trace.state.submitted_score / optimal))
+
+    @vf.metric
+    async def optimality_gap(
+        self,
+        task: CalendarSchedulingTask,
+        trace: vf.Trace[CalendarSchedulingTask, CalendarState],
+    ) -> float:
+        return max(0.0, optimal_score(task.answer) - trace.state.submitted_score)
+
+    @vf.metric
+    async def score_checks_used(
+        self, trace: vf.Trace[CalendarSchedulingTask, CalendarState]
+    ) -> float:
+        return float(trace.state.score_checks_used)
+
+    @vf.metric
+    async def score_checks_remaining(
+        self, trace: vf.Trace[CalendarSchedulingTask, CalendarState]
+    ) -> float:
+        return float(max(trace.state.score_checks_remaining, 0))
 
 
-def load_environment(config: vf.EnvConfig) -> vf.Env:
-    return vf.Env(
-        taskset=vf.load_taskset(config=config.taskset),
-        harness=vf.load_harness(config=config.harness),
-    )
+if __name__ == "__main__":
+    CalendarToolset.run()
+
+
+__all__ = ["CalendarSchedulingTaskset"]

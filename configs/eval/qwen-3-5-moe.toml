@@ -3,23 +3,20 @@ model = "Qwen/Qwen3.5-35B-A3B"
 # model = "Qwen/Qwen3.5-122B-A10B"
 # model = "Qwen/Qwen3.5-397B-A17B"
 
-num_examples = 20
-rollouts_per_example = 1
+num_tasks = 20
+num_rollouts = 1
+max_turns = 8
+
+[sampling]
 max_tokens = 2048
+enable_thinking = false
 
-[[eval]]
-env_id = "primeintellect/wiki-search"
+[taskset]
+id = "wiki-search"
+max_examples = 250
 
-# [[eval]]
-# env_id = "primeintellect/reverse-text"
+[taskset.tools]
+shared = true
 
-# [[eval]]
-# env_id = "primeintellect/wordle"
-
-# [[eval]]
-# env_id = "primeintellect/dspy-flights"
-
-# [[eval]]
-# env_id = "primeintellect/opencode-harbor"
-
-# Hosted Training docs: https://docs.primeintellect.ai/hosted-training
+[harness]
+id = "default"

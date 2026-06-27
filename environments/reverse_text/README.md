@@ -1,40 +1,26 @@
 # reverse-text
 
-Single-turn environment that asks the model to reverse a string character by
-character. Partial credit comes from a longest-common-subsequence ratio against
-the true reversal.
+A minimal v1 taskset for single-turn string reversal.
 
-### Overview
-- **Environment ID**: `reverse-text`
-- **Short description**: Reverse input text character-by-character with tagged output.
-- **Tags**: single-turn, text, train, eval
+- Taskset: `ReverseTextTaskset`
+- Task: prompt text plus the ground-truth reversed answer
+- Reward: LCS ratio over the text inside `<reversed_text>` tags
+- Stop: one model turn
 
-### Datasets
-- **Primary dataset(s)**: [PrimeIntellect/Reverse-Text-RL](https://huggingface.co/datasets/PrimeIntellect/Reverse-Text-RL) train split
-- **Split sizes**: full train split for tasks
-- **Task identity**: assigned by Verifiers when task records are normalized
-
-### Task
-- **Type**: single-turn
-- **Output format expectations**: answer inside `<reversed_text>...</reversed_text>` tags
-- **Scoring**: LCS ratio between parsed answer and reversed input
-
-### Quickstart
+Run:
 
 ```bash
-prime eval run prime/reverse-text
+uv run eval @ configs/02/reverse-text-eval.toml
+uv run eval reverse-text -n 3 -r 2
 ```
 
-Configure model and sampling:
+Package contract:
 
-```bash
-prime eval run prime/reverse-text \
-  -m openai/gpt-4.1-mini \
-  -n 20 -r 3 -t 1024 -T 0.7
+```python
+import verifiers.v1 as vf
+
+class ReverseTextTaskset(vf.Taskset[ReverseTextTask, ReverseTextConfig]):
+    ...
+
+__all__ = ["ReverseTextTaskset"]
 ```
-
-### Metrics
-
-| Metric | Meaning |
-| ------ | ------- |
-| `lcs_reward` | LCS ratio between parsed `<reversed_text>` answer and target reversal |
