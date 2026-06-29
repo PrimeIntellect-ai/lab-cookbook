@@ -1,6 +1,5 @@
 model = "Qwen/Qwen3-4B-Instruct-2507"
 max_steps = 100
-
 batch_size = 256
 rollouts_per_example = 16
 learning_rate = 0.00001
@@ -9,8 +8,8 @@ oversampling_factor = 2
 [sampling]
 max_tokens = 1024
 
-[[env]]
-id = "prime/swe-grep"
-
-[env.harness]
-max_turns = 2
+[[orchestrator.train.env]]
+name = "swe-grep"
+max_turns = 4
+taskset = { id = "swe-grep", tools = { shared = true } }
+harness = { id = "default" }

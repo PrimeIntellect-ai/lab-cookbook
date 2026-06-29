@@ -5,7 +5,7 @@ tags = ["single-turn", "text", "train", "eval"]
 version = "0.1.2"
 requires-python = ">=3.11,<3.14"
 dependencies = [
-    "verifiers>=0.1.15.dev17",
+    "verifiers>=0.1.15.dev403",
     "datasets",
 ]
 
@@ -15,7 +15,3 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build]
 include = ["reverse_text.py", "pyproject.toml"]
-
-[tool.verifiers.eval]
-num_examples = 5
-rollouts_per_example = 3

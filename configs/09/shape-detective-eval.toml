@@ -1,11 +1,16 @@
-model = "Qwen/Qwen3.5-4B"
-save_results = true
+model = "openai/gpt-5.4-nano"
+num_tasks = 6
+num_rollouts = 2
+max_turns = 6
 
-[[eval]]
-env_id = "prime/shape-detective"
-num_examples = 5
-rollouts_per_example = 3
-sampling_args = { max_tokens = 2048 }
+[sampling]
+max_tokens = 1024
 
-[eval.taskset]
+[taskset]
+id = "shape-detective"
 mode = "multi"
+num_tasks = 12
+seed = 0
+
+[harness]
+id = "default"

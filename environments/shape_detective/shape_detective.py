@@ -2,11 +2,11 @@ import base64
 import io
 import math
 import random
-from typing import Literal
+import re
+from typing import Literal, cast
 
-import verifiers as vf
+import verifiers.v1 as vf
 from PIL import Image, ImageDraw
-from verifiers.utils.data_utils import extract_boxed_answer
 
 SHAPES = ("circle", "square", "triangle", "star")
 COLORS: dict[str, tuple[int, int, int]] = {
@@ -33,6 +33,12 @@ DOT_RADIUS = 3
 BG_COLOR = (245, 245, 245)
 GRID_COLOR = (180, 180, 180)
 TEXT_COLOR = (20, 20, 20)
+SYSTEM = (
+    "You are playing Shape Detective. You see a 4x4 grid of tiles numbered 0-15 "
+    "(left-to-right, top-to-bottom). Each tile has a shape, a color, and a pattern. "
+    "Use the clues to identify the target tile. When asked to commit, reply with "
+    "the tile index in \\boxed{N}."
+)
 
 Mode = Literal["single", "multi"]
 Tile = dict[str, str]
@@ -40,72 +46,133 @@ Tile = dict[str, str]
 
 def clue_line(target: Tile, prop: str, clue_index: int) -> str:
     article = "a " if prop == "shape" else ""
-    return f"Clue {clue_index + 1} — {prop}: the target is {article}**{target[prop]}**."
+    return f"Clue {clue_index + 1} - {prop}: the target is {article}**{target[prop]}**."
 
 
-class ShapeDetectiveUserConfig(vf.UserConfig):
-    pass
+def extract_boxed(text: str) -> str:
+    matches = re.findall(r"\\boxed\{([^{}]+)\}", text)
+    return matches[-1].strip() if matches else ""
 
 
-class ShapeDetectiveTasksetConfig(vf.TasksetConfig):
+def tile_image_data_url(tiles: list[Tile]) -> str:
+    img = Image.new("RGB", (IMAGE_PX, IMAGE_PX), BG_COLOR)
+    label_draw = ImageDraw.Draw(img)
+    for idx, tile in enumerate(tiles):
+        trow, tcol = divmod(idx, GRID_SIZE)
+        x0, y0 = tcol * TILE_PX, trow * TILE_PX
+        canvas = Image.new("RGB", (TILE_PX, TILE_PX), BG_COLOR)
+        draw = ImageDraw.Draw(canvas)
+        color = COLORS[tile["color"]]
+        box = (TILE_PAD, TILE_PAD, TILE_PX - TILE_PAD, TILE_PX - TILE_PAD)
+        if tile["shape"] == "circle":
+            draw.ellipse(box, fill=color)
+        elif tile["shape"] == "square":
+            draw.rectangle(box, fill=color)
+        elif tile["shape"] == "triangle":
+            draw.polygon(
+                [
+                    (TILE_PX // 2, TILE_PAD),
+                    (TILE_PAD, TILE_PX - TILE_PAD),
+                    (TILE_PX - TILE_PAD, TILE_PX - TILE_PAD),
+                ],
+                fill=color,
+            )
+        else:
+            cx = cy = TILE_PX // 2
+            outer = (TILE_PX - 2 * TILE_PAD) // 2
+            inner = outer // 2
+            points: list[tuple[float, float]] = []
+            for i in range(10):
+                angle = -math.pi / 2 + i * math.pi / 5
+                r = outer if i % 2 == 0 else inner
+                points.append((cx + r * math.cos(angle), cy + r * math.sin(angle)))
+            draw.polygon(points, fill=color)
+
+        if tile["pattern"] == "striped":
+            for y in range(0, TILE_PX, STRIPE_SPACING):
+                draw.rectangle((0, y, TILE_PX, y + STRIPE_WIDTH), fill=BG_COLOR)
+        elif tile["pattern"] == "dotted":
+            for cy in range(DOT_SPACING - 4, TILE_PX, DOT_SPACING):
+                for cx in range(DOT_SPACING - 4, TILE_PX, DOT_SPACING):
+                    draw.ellipse(
+                        (
+                            cx - DOT_RADIUS,
+                            cy - DOT_RADIUS,
+                            cx + DOT_RADIUS,
+                            cy + DOT_RADIUS,
+                        ),
+                        fill=BG_COLOR,
+                    )
+
+        img.paste(canvas, (x0, y0))
+        label_draw.text((x0 + 6, y0 + 4), str(idx), fill=TEXT_COLOR)
+    for i in range(1, GRID_SIZE):
+        label_draw.line([(i * TILE_PX, 0), (i * TILE_PX, IMAGE_PX)], fill=GRID_COLOR, width=2)
+        label_draw.line([(0, i * TILE_PX), (IMAGE_PX, i * TILE_PX)], fill=GRID_COLOR, width=2)
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+class ShapeDetectiveState(vf.State):
+    clue_index: int = 1
+
+
+class ShapeDetectiveTask(vf.Task):
+    answer: str
+    mode: Mode
+    target_tile: Tile
+
+
+class ShapeDetectiveConfig(vf.TasksetConfig):
     mode: Mode = "multi"
-    num_rows: int = 12
+    num_tasks: int = 12
     seed: int = 0
-    user: ShapeDetectiveUserConfig | None = ShapeDetectiveUserConfig()
-    system_prompt: vf.SystemPrompt = (
-        "You are playing Shape Detective. You see a 4x4 grid of tiles numbered 0-15 "
-        "(left-to-right, top-to-bottom). Each tile has a shape (circle, square, "
-        "triangle, star), a color (red, blue, green, yellow), and a pattern (solid, "
-        "striped, dotted). You are told clues that narrow down a single target tile. "
-        "When asked to commit your final answer, reply with the tile index in \\boxed{N}."
-    )
+    user: vf.UserConfig = vf.UserConfig()
 
 
-class ShapeDetectiveUser(vf.User[ShapeDetectiveUserConfig]):
-    async def get_response(
-        self, task: vf.Task, state: vf.State, messages: list[vf.Message]
-    ) -> list[vf.UserMessage]:
-        _ = state
-        info = task["info"]
-        assert isinstance(info, dict)
-        if info["mode"] != "multi":
+class ShapeDetectiveUser(vf.User[vf.UserConfig, ShapeDetectiveState]):
+    async def setup_task(self, task: ShapeDetectiveTask) -> None:
+        self.target_tile = task.target_tile
+        self.mode = task.mode
+
+    async def respond(self, message: str) -> vf.Messages:
+        _ = message
+        if self.mode != "multi":
             return []
-        target_tile = info["target_tile"]
-        assert isinstance(target_tile, dict)
-        assistant_turns = len(vf.get_messages(messages, role="assistant"))
-
-        if assistant_turns == 1:
+        if self.state.clue_index == 1:
+            self.state.clue_index = 2
             return [
                 vf.UserMessage(
                     content=(
-                        f"{clue_line(target_tile, 'color', 1)}\n\n"
-                        "Narrow the candidates again. Still do NOT submit your answer."
-                    )
+                        f"{clue_line(self.target_tile, 'color', 1)}\n\n"
+                        "Narrow the candidates again. Still do not submit your answer."
+                    ),
                 )
             ]
-        if assistant_turns == 2:
+        if self.state.clue_index == 2:
+            self.state.clue_index = 3
             return [
                 vf.UserMessage(
                     content=(
-                        f"{clue_line(target_tile, 'shape', 2)}\n\n"
+                        f"{clue_line(self.target_tile, 'shape', 2)}\n\n"
                         "Commit your answer now as \\boxed{N}."
-                    )
+                    ),
                 )
             ]
         return []
 
 
-class ShapeDetectiveTaskset(vf.Taskset[ShapeDetectiveTasksetConfig]):
-    def load_tasks(self, split: vf.TaskSplit = "train") -> vf.Tasks:
-        _ = split
-        mode = self.config.mode
-        num_rows = self.config.num_rows
-        seed = self.config.seed
-        rng = random.Random(seed)
-        tasks: list[vf.JsonData] = []
-        for _ in range(num_rows):
+class ShapeDetectiveTaskset(
+    vf.Taskset[ShapeDetectiveTask, ShapeDetectiveConfig, ShapeDetectiveState]
+):
+    def load_tasks(self) -> list[ShapeDetectiveTask]:
+        rng = random.Random(self.config.seed)
+        tasks: list[ShapeDetectiveTask] = []
+        for idx in range(self.config.num_tasks):
             while True:
-                tiles: list[Tile] = [
+                tiles = [
                     {
                         "shape": rng.choice(SHAPES),
                         "color": rng.choice(list(COLORS)),
@@ -114,146 +181,63 @@ class ShapeDetectiveTaskset(vf.Taskset[ShapeDetectiveTasksetConfig]):
                     for _ in range(GRID_SIZE * GRID_SIZE)
                 ]
                 target = rng.randrange(len(tiles))
-                key = (
-                    tiles[target]["shape"],
-                    tiles[target]["color"],
-                    tiles[target]["pattern"],
-                )
+                key = (tiles[target]["shape"], tiles[target]["color"], tiles[target]["pattern"])
                 if sum(1 for t in tiles if (t["shape"], t["color"], t["pattern"]) == key) == 1:
                     break
             target_tile = tiles[target]
-
-            img = Image.new("RGB", (IMAGE_PX, IMAGE_PX), BG_COLOR)
-            label_draw = ImageDraw.Draw(img)
-            for idx, tile in enumerate(tiles):
-                trow, tcol = divmod(idx, GRID_SIZE)
-                x0, y0 = tcol * TILE_PX, trow * TILE_PX
-                canvas = Image.new("RGB", (TILE_PX, TILE_PX), BG_COLOR)
-                draw = ImageDraw.Draw(canvas)
-                color = COLORS[tile["color"]]
-                box = (TILE_PAD, TILE_PAD, TILE_PX - TILE_PAD, TILE_PX - TILE_PAD)
-                if tile["shape"] == "circle":
-                    draw.ellipse(box, fill=color)
-                elif tile["shape"] == "square":
-                    draw.rectangle(box, fill=color)
-                elif tile["shape"] == "triangle":
-                    draw.polygon(
-                        [
-                            (TILE_PX // 2, TILE_PAD),
-                            (TILE_PAD, TILE_PX - TILE_PAD),
-                            (TILE_PX - TILE_PAD, TILE_PX - TILE_PAD),
-                        ],
-                        fill=color,
-                    )
-                elif tile["shape"] == "star":
-                    cx = cy = TILE_PX // 2
-                    outer = (TILE_PX - 2 * TILE_PAD) // 2
-                    inner = outer // 2
-                    points: list[tuple[float, float]] = []
-                    for i in range(10):
-                        angle = -math.pi / 2 + i * math.pi / 5
-                        r = outer if i % 2 == 0 else inner
-                        points.append((cx + r * math.cos(angle), cy + r * math.sin(angle)))
-                    draw.polygon(points, fill=color)
-
-                if tile["pattern"] == "striped":
-                    for y in range(0, TILE_PX, STRIPE_SPACING):
-                        draw.rectangle((0, y, TILE_PX, y + STRIPE_WIDTH), fill=BG_COLOR)
-                elif tile["pattern"] == "dotted":
-                    for cy in range(DOT_SPACING - 4, TILE_PX, DOT_SPACING):
-                        for cx in range(DOT_SPACING - 4, TILE_PX, DOT_SPACING):
-                            draw.ellipse(
-                                (
-                                    cx - DOT_RADIUS,
-                                    cy - DOT_RADIUS,
-                                    cx + DOT_RADIUS,
-                                    cy + DOT_RADIUS,
-                                ),
-                                fill=BG_COLOR,
-                            )
-
-                img.paste(canvas, (x0, y0))
-                label_draw.text((x0 + 6, y0 + 4), str(idx), fill=TEXT_COLOR)
-            for i in range(1, GRID_SIZE):
-                label_draw.line(
-                    [(i * TILE_PX, 0), (i * TILE_PX, IMAGE_PX)], fill=GRID_COLOR, width=2
-                )
-                label_draw.line(
-                    [(0, i * TILE_PX), (IMAGE_PX, i * TILE_PX)], fill=GRID_COLOR, width=2
-                )
-
-            buf = io.BytesIO()
-            img.save(buf, format="PNG")
-            image_url = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
-
-            if mode == "single":
+            if self.config.mode == "single":
                 clue_block = "\n".join(f"- {prop}: {target_tile[prop]}" for prop in CLUE_ORDER)
                 intro = (
-                    "Find the tile that matches **all three** of these clues:\n"
+                    "Find the tile that matches all three clues:\n"
                     f"{clue_block}\n\n"
                     "Reply with the tile index in \\boxed{N}."
                 )
-                info: vf.JsonData = {"mode": "single", "target": target}
-                max_turns = 1
             else:
                 intro = (
-                    "Find the hidden target tile. You will receive three clues "
-                    "across three turns (pattern, then color, then shape). After "
-                    "each clue, list the tile indices that could still be the "
-                    "target — do NOT submit a final answer until asked. When you "
-                    "see 'Commit your answer', reply with the index in "
-                    "\\boxed{N}.\n\n"
+                    "Find the hidden target tile. You will receive three clues across three turns "
+                    "(pattern, then color, then shape). After each clue, list the tile indices "
+                    "that could still be the target. Do not submit a final answer until asked.\n\n"
                     f"{clue_line(target_tile, 'pattern', 0)}"
                 )
-                info = {
-                    "mode": "multi",
-                    "target": target,
-                    "target_tile": target_tile,
-                }
-                max_turns = 3
-
+            prompt: vf.Messages = [
+                vf.UserMessage(
+                    content=[
+                        vf.TextContentPart(text=intro),
+                        vf.ImageUrlContentPart(
+                            image_url=vf.ImageUrlSource(url=tile_image_data_url(tiles))
+                        ),
+                    ]
+                )
+            ]
             tasks.append(
-                {
-                    "prompt": [
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": intro},
-                                {"type": "image_url", "image_url": {"url": image_url}},
-                            ],
-                        }
-                    ],
-                    "answer": str(target),
-                    "info": info,
-                    "max_turns": max_turns,
-                }
+                ShapeDetectiveTask(
+                    idx=idx,
+                    prompt=prompt,
+                    system_prompt=SYSTEM,
+                    answer=str(target),
+                    mode=self.config.mode,
+                    target_tile=target_tile,
+                )
             )
         return tasks
 
+    def user(self, task: ShapeDetectiveTask) -> vf.User | None:
+        if task.mode == "single":
+            return None
+        return cast(vf.User, ShapeDetectiveUser(self.config.user))
+
+    @vf.stop
+    async def single_mode_done(self, trace: vf.Trace) -> bool:
+        return trace.task.mode == "single" and trace.num_turns >= 1
+
     @vf.reward(weight=1.0)
-    async def solved(self, task: vf.Task, state: vf.State) -> float:
-        completion = state.get("completion")
-        assert isinstance(completion, list)
-        assistant_messages = vf.get_messages(completion, role="assistant")
-        if not assistant_messages:
-            return 0.0
-        content = assistant_messages[-1].content
-        if isinstance(content, str):
-            text = content
-        elif isinstance(content, list):
-            text = " ".join(part.text for part in content if isinstance(part, vf.TextContentPart))
-        else:
-            text = ""
-        answer = extract_boxed_answer(text, strict=True).strip()
-        return 1.0 if answer == str(task["answer"]) else 0.0
+    async def solved(self, task: ShapeDetectiveTask, trace: vf.Trace) -> float:
+        last = trace.assistant_messages[-1].content if trace.assistant_messages else ""
+        return float(extract_boxed(last or "") == task.answer)
 
 
-def load_taskset(config: ShapeDetectiveTasksetConfig) -> ShapeDetectiveTaskset:
-    return ShapeDetectiveTaskset(config=config)
+if __name__ == "__main__":
+    ShapeDetectiveUser.run()
 
 
-def load_environment(config: vf.EnvConfig) -> vf.Env:
-    return vf.Env(
-        taskset=vf.load_taskset(config=config.taskset),
-        harness=vf.load_harness(config=config.harness),
-    )
+__all__ = ["ShapeDetectiveTaskset"]

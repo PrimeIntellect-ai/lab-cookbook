@@ -1,19 +1,14 @@
-model = "Qwen/Qwen3-30B-A3B-Instruct-2507"
-
+model = "openai/gpt-oss-20b"
 max_steps = 100
 batch_size = 128
 rollouts_per_example = 8
 
 [sampling]
-max_tokens = 768
+max_tokens = 2048
+reasoning_effort = "medium"
 
-[[env]]
-id = "prime/calendar-scheduling"
-
-[env.taskset]
-difficulty = "medium"
-num_train = 512
-num_eval = 128
-
-[env.harness]
-max_turns = 18
+[[orchestrator.train.env]]
+name = "calendar-scheduling"
+max_turns = 8
+taskset = { id = "calendar-scheduling", difficulty = "medium", seed = 7, num_tasks = 512 }
+harness = { id = "default" }

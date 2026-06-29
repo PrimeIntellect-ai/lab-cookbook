@@ -1,10 +1,17 @@
 model = "openai/gpt-5.4-nano"
-save_results = true
+num_tasks = 5
+num_rollouts = 2
+max_turns = 4
 
-[[eval]]
-env_id = "prime/math-python"
-num_examples = 5
-rollouts_per_example = 2
-
-[eval.sampling]
+[sampling]
 max_tokens = 1024
+
+[taskset]
+id = "math-python"
+num_tasks = 50
+
+[taskset.tools]
+timeout_seconds = 60
+
+[harness]
+id = "default"

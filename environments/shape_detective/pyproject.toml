@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Visual deduction game: identify a hidden tile in a 4x4 grid from shape/color/pattern clues."
 requires-python = ">=3.11,<3.14"
 dependencies = [
-    "verifiers>=0.1.15.dev17",
+    "verifiers>=0.1.15.dev403",
     "Pillow>=10.0.0",
 ]
 
@@ -14,10 +14,3 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build]
 include = ["shape_detective.py", "pyproject.toml"]
-
-[project.entry-points."verifiers.environments"]
-shape-detective = "shape_detective:load_environment"
-
-[tool.verifiers.eval]
-num_examples = 5
-rollouts_per_example = 3

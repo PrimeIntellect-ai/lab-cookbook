@@ -10,9 +10,7 @@ readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11,<3.14"
 dependencies = [
-    "verifiers>=0.1.15.dev17",
-    "harnesses>=0.1.1",
-    "tasksets>=0.1.4",
+    "verifiers>=0.1.15.dev404",
     "datasets>=2.0",
     "openai>=1.0",
     "scikit-learn>=1.3",
@@ -23,6 +21,7 @@ dependencies = [
     "shape-detective",
     "math-python",
     "calendar-scheduling",
+    "langchain-deep-agents",
     "langchain-deep-agents-wikispeedia",
     "ethics-debate",
     "swe-grep",
@@ -42,6 +41,7 @@ members = [
     "environments/shape_detective",
     "environments/math_python",
     "environments/calendar_scheduling",
+    "environments/langchain_deep_agents",
     "environments/langchain_deep_agents_wikispeedia",
     "environments/ethics_debate",
     "environments/swe_grep",
@@ -60,6 +60,7 @@ wiki-search = { workspace = true }
 shape-detective = { workspace = true }
 math-python = { workspace = true }
 calendar-scheduling = { workspace = true }
+langchain-deep-agents = { workspace = true }
 langchain-deep-agents-wikispeedia = { workspace = true }
 ethics-debate = { workspace = true }
 swe-grep = { workspace = true }
@@ -80,14 +81,11 @@ dev = [
 
 [tool.uv]
 default-groups = ["dev"]
-upgrade-package = ["verifiers", "tasksets", "harnesses"]
+prerelease = "allow"
+upgrade-package = ["verifiers"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["lab_cookbook"]
-
-[tool.verifiers.eval]
-num_examples = 5
-rollouts_per_example = 3
 
 [tool.ruff]
 line-length = 100

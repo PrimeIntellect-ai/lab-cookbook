@@ -1,7 +1,5 @@
-import os
-
-import verifiers as vf
-from openai import AsyncOpenAI
+import verifiers.v1 as vf
+from verifiers.v1.dialects import ChatDialect
 
 JUDGE_PROMPT = """You are grading a short model response against one criterion.
 
@@ -23,104 +21,83 @@ Model response:
 Does the response satisfy the criterion? Reply with exactly one word: yes or no.
 """
 
+SYSTEM = "Follow the user instruction carefully. Keep answers short."
 
-TOY_TASKS: list[vf.JsonData] = [
+TOY_TASKS = [
     {
-        "prompt": [{"role": "user", "content": "Write one cheerful sentence about mornings."}],
-        "info": {"criterion": "The response sounds upbeat and enthusiastic."},
+        "prompt": "Write one cheerful sentence about mornings.",
+        "criterion": "The response sounds upbeat and enthusiastic.",
     },
     {
-        "prompt": [
-            {"role": "user", "content": "Write one formal sentence declining a party invitation."}
-        ],
-        "info": {
-            "criterion": "The response politely declines without sounding rude or overly casual."
-        },
+        "prompt": "Write one formal sentence declining a party invitation.",
+        "criterion": "The response politely declines without sounding rude or overly casual.",
     },
     {
-        "prompt": [
-            {
-                "role": "user",
-                "content": "Explain photosynthesis in one sentence for a five-year-old.",
-            }
-        ],
-        "info": {"criterion": "The response uses simple words a young child could follow."},
+        "prompt": "Explain photosynthesis in one sentence for a five-year-old.",
+        "criterion": "The response uses simple words a young child could follow.",
     },
     {
-        "prompt": [{"role": "user", "content": "Write one sentence recommending a book you love."}],
-        "info": {"criterion": "The response names a specific book title."},
+        "prompt": "Write one sentence recommending a book you love.",
+        "criterion": "The response names a specific book title.",
     },
     {
-        "prompt": [
-            {"role": "user", "content": "Apologize in one sentence for arriving late to a meeting."}
-        ],
-        "info": {"criterion": "The response clearly apologizes and acknowledges being late."},
+        "prompt": "Apologize in one sentence for arriving late to a meeting.",
+        "criterion": "The response clearly apologizes and acknowledges being late.",
     },
     {
-        "prompt": [
-            {
-                "role": "user",
-                "content": "Write one sentence that refuses to help with cheating on a test.",
-            }
-        ],
-        "info": {
-            "criterion": "The response refuses the request and does not provide cheating advice."
-        },
+        "prompt": "Write one sentence that refuses to help with cheating on a test.",
+        "criterion": "The response refuses the request and does not provide cheating advice.",
     },
 ]
 
 
-class SimpleJudgeTasksetConfig(vf.TasksetConfig):
-    judge_model: str = "openai/gpt-4.1-mini"
-    judge_base_url: str = "https://api.pinference.ai/api/v1"
-    judge_api_key_var: str = "PRIME_API_KEY"
-    system_prompt: vf.SystemPrompt = "Follow the user instruction carefully. Keep answers short."
+class SimpleJudgeTask(vf.Task):
+    criterion: str
 
 
-class SimpleJudgeTaskset(vf.Taskset[SimpleJudgeTasksetConfig]):
-    def load_tasks(self, split: vf.TaskSplit = "train") -> vf.Tasks:
-        _ = split
-        return TOY_TASKS
+class JudgeConfig(vf.BaseClientConfig):
+    model: str = "openai/gpt-4.1-mini"
+
+
+class SimpleJudgeConfig(vf.TasksetConfig):
+    judge: JudgeConfig = JudgeConfig()
+
+
+class SimpleJudgeTaskset(vf.Taskset[SimpleJudgeTask, SimpleJudgeConfig]):
+    def load_tasks(self) -> list[SimpleJudgeTask]:
+        return [
+            SimpleJudgeTask(
+                idx=i,
+                prompt=row["prompt"],
+                system_prompt=SYSTEM,
+                criterion=row["criterion"],
+            )
+            for i, row in enumerate(TOY_TASKS)
+        ]
+
+    @vf.stop
+    async def single_turn(self, trace: vf.Trace) -> bool:
+        return trace.num_turns >= 1
 
     @vf.reward(weight=1.0)
-    async def judge_reward(self, task: vf.Task, state: vf.State) -> float:
-        vf.ensure_keys([self.config.judge_api_key_var])
-        assistant_messages = vf.get_messages(state.get("completion") or [], role="assistant")
-        response_text = str(assistant_messages[-1].content or "") if assistant_messages else ""
-        user_messages = vf.get_messages(task.get("prompt") or [], role="user")
-        user_message = str(user_messages[-1].content or "") if user_messages else ""
-        info = task.get("info") or {}
-        criterion = str(info.get("criterion") or "")
-        judge = AsyncOpenAI(
-            api_key=os.getenv(self.config.judge_api_key_var, ""),
-            base_url=self.config.judge_base_url,
+    async def judge_reward(self, task: SimpleJudgeTask, trace: vf.Trace) -> float:
+        response_text = trace.assistant_messages[-1].content if trace.assistant_messages else ""
+        prompt = JUDGE_PROMPT.format(
+            criterion=task.criterion,
+            user_message=task.prompt,
+            response=response_text or "",
         )
+        client = vf.resolve_client(self.config.judge)
         try:
-            response = await judge.chat.completions.create(
-                model=self.config.judge_model,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": JUDGE_PROMPT.format(
-                            criterion=criterion,
-                            user_message=user_message,
-                            response=response_text,
-                        ),
-                    }
-                ],
+            verdict = await client.get_response(
+                ChatDialect(),
+                {"messages": [{"role": "user", "content": prompt}]},
+                self.config.judge.model,
+                vf.SamplingConfig(),
             )
         finally:
-            await judge.close()
-        text = response.choices[0].message.content or ""
-        return 1.0 if "yes" in text.lower() else 0.0
+            await client.close()
+        return float("yes" in (verdict.message.content or "").lower())
 
 
-def load_taskset(config: SimpleJudgeTasksetConfig) -> SimpleJudgeTaskset:
-    return SimpleJudgeTaskset(config=config)
-
-
-def load_environment(config: vf.EnvConfig) -> vf.Env:
-    return vf.Env(
-        taskset=vf.load_taskset(config=config.taskset),
-        harness=vf.load_harness(config=config.harness),
-    )
+__all__ = ["SimpleJudgeTaskset"]

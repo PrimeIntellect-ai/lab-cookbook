@@ -2,23 +2,20 @@
 model = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16"
 # model = "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16"
 
-num_examples = 20
-rollouts_per_example = 1
+num_tasks = 20
+num_rollouts = 1
+max_turns = 8
+
+[sampling]
 max_tokens = 2048
+enable_thinking = false
 
-[[eval]]
-env_id = "primeintellect/wiki-search"
+[taskset]
+id = "wiki-search"
+max_examples = 250
 
-# [[eval]]
-# env_id = "primeintellect/reverse-text"
+[taskset.tools]
+shared = true
 
-# [[eval]]
-# env_id = "primeintellect/wordle"
-
-# [[eval]]
-# env_id = "primeintellect/dspy-flights"
-
-# [[eval]]
-# env_id = "primeintellect/opencode-harbor"
-
-# Hosted Training docs: https://docs.primeintellect.ai/hosted-training
+[harness]
+id = "default"

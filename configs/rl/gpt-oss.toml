@@ -10,31 +10,7 @@ rollouts_per_example = 8
 max_tokens = 1024
 reasoning_effort = "low"
 
-# Start with one environment. Uncomment more [[env]] blocks for multi-env training.
-[[env]]
-id = "primeintellect/reverse-text"
-
-# [[env]]
-# id = "primeintellect/wordle"
-
-# [[env]]
-# id = "primeintellect/wiki-search"
-
-# [[env]]
-# id = "primeintellect/dspy-flights"
-
-# [[env]]
-# id = "primeintellect/opencode-harbor"
-
-# Online evaluations during training. Uncomment to add [[eval.env]] blocks.
-
-# [eval]
-# interval = 20
-# num_examples = 64
-# rollouts_per_example = 1
-# eval_base_model = true
-
-# [[eval.env]]
-# id = "primeintellect/reverse-text"
-
-# Hosted Training docs: https://docs.primeintellect.ai/hosted-training
+[[orchestrator.train.env]]
+name = "reverse-text"
+taskset = { id = "reverse-text" }
+harness = { id = "default" }

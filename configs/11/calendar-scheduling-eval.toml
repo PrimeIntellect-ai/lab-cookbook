@@ -1,16 +1,16 @@
 model = "openai/gpt-5.4-nano"
-save_results = true
+num_tasks = 5
+num_rollouts = 2
+max_turns = 8
 
-[[eval]]
-env_id = "prime/calendar-scheduling"
-num_examples = 5
-rollouts_per_example = 2
-
-[eval.sampling]
+[sampling]
 max_tokens = 2048
 
-[eval.taskset]
+[taskset]
+id = "calendar-scheduling"
 difficulty = "medium"
+seed = 7
+num_tasks = 32
 
-[eval.harness]
-max_turns = 16
+[harness]
+id = "default"

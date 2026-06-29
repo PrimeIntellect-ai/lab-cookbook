@@ -1,3 +1,4 @@
+# GEPA currently uses the legacy v0 environment loader. Use this for v0 prompt optimization.
 # Qwen3.5 MoE models. Update both fields when switching sizes.
 model = "Qwen/Qwen3.5-35B-A3B"
 reflection_model = "Qwen/Qwen3.5-35B-A3B"
@@ -9,18 +10,6 @@ reflection_model = "Qwen/Qwen3.5-35B-A3B"
 [[env]]
 env_id = "primeintellect/wiki-search"
 
-# [[env]]
-# env_id = "primeintellect/reverse-text"
-
-# [[env]]
-# env_id = "primeintellect/wordle"
-
-# [[env]]
-# env_id = "primeintellect/dspy-flights"
-
-# [[env]]
-# env_id = "primeintellect/opencode-harbor"
-
 [gepa]
 max_calls = 500
 num_train = 100
@@ -30,5 +19,3 @@ max_concurrent = 32
 
 [sampling]
 max_tokens = 2048
-
-# Hosted Training docs: https://docs.primeintellect.ai/hosted-training
