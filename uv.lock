@@ -2534,16 +2534,16 @@ wheels = [
 
 [[package]]
 name = "pydantic-settings"
-version = "2.14.1"
+version = "2.14.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "typing-inspection" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/07/60/1d1e59c9c90d54591469ada7d268251f71c24bdb765f1a8a832cee8c6653/pydantic_settings-2.14.1.tar.gz", hash = "sha256:e874d3bec7e787b0c9958277956ed9b4dd5de6a80e162188fdaff7c5e26fd5fa", size = 235551, upload-time = "2026-05-08T13:40:06.542Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5c/b5/8f48e906c3e0205276e8bd8cb7512217a87b2685304d64be27cad5b3019f/pydantic_settings-2.14.2.tar.gz", hash = "sha256:c19dd64b19097f1de80184f0cc7b0272a13ae6e170cbf240a3e27e381ed14a5f", size = 237700, upload-time = "2026-06-19T13:44:56.324Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ae/8d/f1af3832f5e6eb13ba94ee809e72b8ecb5eef226d27ee0bef7d963d943c7/pydantic_settings-2.14.1-py3-none-any.whl", hash = "sha256:6e3c7edfd8277687cdc598f56e5cff0e9bfff0910a3749deaa8d4401c3a2b9de", size = 60964, upload-time = "2026-05-08T13:40:04.958Z" },
+    { url = "https://files.pythonhosted.org/packages/77/c1/6e422f34e569cf8e18df68d1939c81c099d2b61e4f7d9621c8a77560799c/pydantic_settings-2.14.2-py3-none-any.whl", hash = "sha256:a20c97b37910b6550d5ea50fbcc2d4187defe58cd57070b73863d069419c9440", size = 61715, upload-time = "2026-06-19T13:44:55.02Z" },
 ]
 
 [[package]]
@@ -3647,7 +3647,7 @@ wheels = [
 
 [[package]]
 name = "verifiers"
-version = "0.1.15.dev404"
+version = "0.1.15.dev405"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -3677,9 +3677,9 @@ dependencies = [
     { name = "typing-extensions", marker = "python_full_version < '3.12'" },
     { name = "uvloop", marker = "platform_python_implementation != 'PyPy' and sys_platform != 'cygwin' and sys_platform != 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/bf/f0/57dc65df0d27faff169bf5594fd073d1e4c39781c8e6bfe0e4f5cca7bf33/verifiers-0.1.15.dev404.tar.gz", hash = "sha256:e10b29487798ad8cd5a96c9f4f662c4127b77a1e11c80a721183ba08bb4ab18a", size = 790732, upload-time = "2026-06-28T18:40:14.441Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5b/eb/fc1d4a5423979d55e211b18959a50e2564d699aa9fd47eff7a9504147a63/verifiers-0.1.15.dev405.tar.gz", hash = "sha256:3b7a9f8600483531ac4ba2c35d712d1400cf27b1ac2e5fc37b895d8080507f6a", size = 790559, upload-time = "2026-06-29T21:01:41.131Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5f/a3/8cf8d537d0f7293daee71492d14efbb24573b73b73239f75b0fa552b2a96/verifiers-0.1.15.dev404-py3-none-any.whl", hash = "sha256:0de0d0d8d6ba14a61e5fb34b51f2672c95abdc23f6ac0161ff2222f9e0fdb265", size = 823447, upload-time = "2026-06-28T18:40:12.504Z" },
+    { url = "https://files.pythonhosted.org/packages/42/e0/8c614edb8797b7d3f6f2223e3da45c3f50444eb9afb592cc2fe1be3738e5/verifiers-0.1.15.dev405-py3-none-any.whl", hash = "sha256:ea6ede9b8da8ffbb115a70fb25e6748fa8683828dc0e49b9f6311464e92e8e44", size = 823261, upload-time = "2026-06-29T21:01:39.485Z" },
 ]
 
 [[package]]
