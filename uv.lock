@@ -3647,7 +3647,7 @@ wheels = [
 
 [[package]]
 name = "verifiers"
-version = "0.1.15.dev404"
+version = "0.1.15.dev431"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -3677,9 +3677,9 @@ dependencies = [
     { name = "typing-extensions", marker = "python_full_version < '3.12'" },
     { name = "uvloop", marker = "platform_python_implementation != 'PyPy' and sys_platform != 'cygwin' and sys_platform != 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/bf/f0/57dc65df0d27faff169bf5594fd073d1e4c39781c8e6bfe0e4f5cca7bf33/verifiers-0.1.15.dev404.tar.gz", hash = "sha256:e10b29487798ad8cd5a96c9f4f662c4127b77a1e11c80a721183ba08bb4ab18a", size = 790732, upload-time = "2026-06-28T18:40:14.441Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/94/df/d4494649a66330ed9448d350908380313e9d75ac07970ddd288478898378/verifiers-0.1.15.dev431.tar.gz", hash = "sha256:db0127e69103966aa1fcb821c74dc4cd512bdd78a269f912429d19698348bcaf", size = 824810, upload-time = "2026-07-08T11:16:53.576Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5f/a3/8cf8d537d0f7293daee71492d14efbb24573b73b73239f75b0fa552b2a96/verifiers-0.1.15.dev404-py3-none-any.whl", hash = "sha256:0de0d0d8d6ba14a61e5fb34b51f2672c95abdc23f6ac0161ff2222f9e0fdb265", size = 823447, upload-time = "2026-06-28T18:40:12.504Z" },
+    { url = "https://files.pythonhosted.org/packages/ee/6f/a3e5dc700e70b3b20ba3a96861b4037f72b9b389fa1b020045789a035a8e/verifiers-0.1.15.dev431-py3-none-any.whl", hash = "sha256:7fba55bc235a136368eaec625041bb9a9bb3383d55ebf9662ea4cbc73a3bc06d", size = 854932, upload-time = "2026-07-08T11:16:51.496Z" },
 ]
 
 [[package]]
