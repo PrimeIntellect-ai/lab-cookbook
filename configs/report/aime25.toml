@@ -1,0 +1,10 @@
+model = "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B"
+num_rollouts = 4        # pass@k needs k attempts — see below
+
+[sampling]
+temperature = 1.0
+top_p = 0.95
+max_tokens = 8192
+
+[taskset]
+id = "aime25_v1"        # local env bundled with the cookbook (environments/aime25_v1)

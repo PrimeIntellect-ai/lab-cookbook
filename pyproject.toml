@@ -30,6 +30,8 @@ dependencies = [
     "advanced-patent-q-and-a",
     "patent-technical-analysis",
     "simple-judge",
+    "terminal-bench-2-v1",
+    "aime25-v1",
 ]
 
 [tool.uv.workspace]
@@ -50,6 +52,8 @@ members = [
     "environments/patent_search/advanced_patent_q_and_a",
     "environments/patent_search/patent_technical_analysis",
     "environments/simple_judge",
+    "environments/terminal_bench_2_v1",
+    "environments/aime25_v1",
 ]
 
 [tool.uv.sources]
@@ -69,6 +73,8 @@ basic-patent-q-and-a = { workspace = true }
 advanced-patent-q-and-a = { workspace = true }
 patent-technical-analysis = { workspace = true }
 simple-judge = { workspace = true }
+terminal-bench-2-v1 = { workspace = true }
+aime25-v1 = { workspace = true }
 
 [dependency-groups]
 dev = [

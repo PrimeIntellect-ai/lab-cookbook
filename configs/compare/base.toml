@@ -1,0 +1,14 @@
+model = "openai/gpt-5.4-mini"
+num_tasks = 10          # start small; scale once the sweep works
+num_rollouts = 2        # agentic runs are high-variance — 1 rollout lies to you
+max_turns = 40
+
+[sampling]
+max_tokens = 4096
+
+[taskset]
+id = "terminal-bench-2-v1"        # local env from the research-environments clone
+use_prime_registry = true         # pull task images from the Prime registry (avoids Docker Hub rate limits)
+
+[harness]
+runtime = { type = "docker" }
