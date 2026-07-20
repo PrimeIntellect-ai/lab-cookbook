@@ -7,12 +7,7 @@ max_turns = 8
 max_tokens = 2048
 
 [taskset]
-id = "wiki-search"
-max_examples = 250
-
-[taskset.tools]
-shared = true
-chroma_db_dir = ".chroma_db/wiki-search-small"
+id = "wiki_search_v1"
 
 [harness]
 id = "default"

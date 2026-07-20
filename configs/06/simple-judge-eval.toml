@@ -8,5 +8,5 @@ max_tokens = 512
 [taskset]
 id = "simple-judge"
 
-[taskset.judge]
+[taskset.task.judge]
 model = "openai/gpt-4.1-mini"

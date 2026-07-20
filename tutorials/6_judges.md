@@ -1,37 +1,45 @@
 # Judges
 
-Every reward so far was computable: string similarity, exact match, a solved game. However, we cannot use regex for softer criteria, such as "does this response sound upbeat?". In this tutorial you will score semantic criteria with an **LLM judge**, using the `simple-judge` environment — six instruction-following tasks, each graded against one natural-language criterion.
+Every reward so far was computable -- a boxed integer either matches the gold answer or it doesn't. But suppose the thing you care about is the **tone** of a response, like 
 
-One rule before the mechanics: **prefer deterministic verification whenever the task's artifact allows it.** A judge adds cost, latency, and a second model's failure modes to every rollout. Reach for one only when semantic judgment is unavoidable, such as for tone, style, adherence to soft instructions, and more.
+- Whether an apology actually sound apologetic?
+- Is the explanation accessible enough for a five-year-old?
+- Does the cheerful sentence *sound* cheerful? 
+- No regex can check that, yet these are exactly the qualities that make an assistant worth talking to. In this tutorial you'll grade tone with an **LLM judge**, using the cookbook's v1 `simple-judge` taskset: six short writing tasks — sound upbeat, decline politely, apologize sincerely — each scored against a natural-language criterion.
+
+We cannot verify this with regex, but they constitute real signals that we might want to use for evaluation or training. In this tutorial you'll grade tone with an **LLM judge**, in a taskset where six short writing tasks each come with a natural-language criterion that they should be verified against.
 
 **You need:** tutorials [1](1_setup.md)–[2](2_first_eval.md) and [Build Your First Environment](5_build_first_environment.md).
 
 ## The task shape
 
-A judged task carries its rubric as ordinary task data (`environments/simple_judge/simple_judge.py`):
+A judged task carries its rubric as immutable `TaskData` — the criterion states, in plain language, what the right tone is:
 
 ```python
-class SimpleJudgeTask(vf.Task):
+class SimpleJudgeTaskData(vf.TaskData):
     criterion: str
+```
 
-TOY_TASKS = [
-    {
-        "prompt": "Write one cheerful sentence about mornings.",
-        "criterion": "The response sounds upbeat and enthusiastic.",
-    },
-    ...
+The tasks themselves live in a plain JSON file next to the module (`simple_judge/tasks.json`). Both the prompts and criteria are *data*, so they belong in a data file you can extend without touching code. In this toy example, they are saved locally, but typically you would save these data files as HuggingFace datasets.
+
+```json
+[
+  {
+    "prompt": "Write one cheerful sentence about mornings.",
+    "criterion": "The response sounds upbeat and enthusiastic."
+  },
+  ...
 ]
 ```
 
-Same boundary as always: the criterion is per-row ground truth, so it lives on the task.
+The criterion is per-row ground truth, so it lives on `TaskData`; behavior belongs on `Task`.
 
 ## The judge
 
-`vf.Judge` packages the pattern — a prompt template, a call to the judge model, and a parser for its verdict:
+`vf.Judge` packages a prompt template, a call to the judge model, and a parser for its verdict:
 
 ```python
 import verifiers.v1 as vf
-from functools import cached_property
 
 class CorrectnessJudge(vf.Judge[bool]):
     prompt = """Criterion: {criterion}
@@ -43,38 +51,43 @@ class CorrectnessJudge(vf.Judge[bool]):
         return "yes" in response.text.lower()
 
 
-class Config(vf.TasksetConfig):
-    # inherits base_url and API keys from the prime config by default
+class SimpleJudgeTaskConfig(vf.TaskConfig):
     judge: vf.JudgeConfig = vf.JudgeConfig(model="openai/gpt-4.1-mini")
 
 
-class JudgedTaskset(vf.Taskset[SimpleJudgeTask, Config]):
-    @cached_property
-    def judge(self) -> CorrectnessJudge:
-        return CorrectnessJudge(self.config.judge)
+class SimpleJudgeConfig(vf.TasksetConfig):
+    task: SimpleJudgeTaskConfig = SimpleJudgeTaskConfig()
 
+
+class SimpleJudgeTask(vf.Task[SimpleJudgeTaskData, vf.State, SimpleJudgeTaskConfig]):
     @vf.reward(weight=1.0)
-    async def judged(self, task: SimpleJudgeTask, trace: vf.Trace) -> float:
-        result = await self.judge.evaluate(
+    async def judged(self, trace: vf.Trace) -> float:
+        result = await CorrectnessJudge(self.config.judge).evaluate(
             trace=trace,
-            criterion=task.criterion,
-            question=task.prompt,
-            response=trace.last_reply,   # the last assistant message
+            criterion=self.data.criterion,
+            question=self.data.prompt_text,
+            response=trace.last_reply,
         )
-        return 1.0 if result.parsed else 0.0
+        return float(result.parsed)
+
+
+class SimpleJudgeTaskset(vf.Taskset[SimpleJudgeTask, SimpleJudgeConfig]):
+    def load(self) -> list[SimpleJudgeTask]:
+        rows = json.loads(TASKS_FILE.read_text())
+        return [
+            SimpleJudgeTask(
+                SimpleJudgeTaskData(idx=i, prompt=row["prompt"], criterion=row["criterion"]),
+                self.config.task,
+            )
+            for i, row in enumerate(rows)
+        ]
 ```
 
-Read it as three responsibilities:
-
-1. **The rubric** (`prompt`) is a template; `evaluate(...)` keyword arguments fill its placeholders. Keep it narrow — one question with explicit allowed answers ("yes or no").
-2. **The parser** (`parse`) turns free text into a typed verdict. In this example, we parse defensively, so a judge that answers "Yes, because..." will still count.
-3. **The reward** stays a normal `@vf.reward` — it feeds the judge the typed task and the finished trace, then maps the verdict to a float. The `cached_property` builds the judge lazily from config; no `__init__` override needed.
-
-The cookbook's `simple_judge.py` implements this same reward one level lower, with `vf.resolve_client` and a hand-rolled prompt — read it to see exactly what `vf.Judge` does for you.
+The implementation lives in `environments/simple_judge/simple_judge/taskset.py`. Passing `trace=` to `evaluate(...)` records the judge response, tokens, and cost instead of making grading an invisible side call.
 
 ## Configuring the judge
 
-Because the judge config is a normal nested taskset config, everything is overridable without code changes (`configs/07/simple-judge-eval.toml`):
+Because the judge belongs to `TaskConfig`, its v1 config nests under `taskset.task`:
 
 ```toml
 model = "openai/gpt-5.4-nano"   # the model being evaluated
@@ -87,17 +100,17 @@ max_tokens = 512
 [taskset]
 id = "simple-judge"
 
-[taskset.judge]
+[taskset.task.judge]
 model = "openai/gpt-4.1-mini"   # the model doing the grading
 ```
 
-Note there are two models in play: `model` at the top is the *subject*, `taskset.judge.model` is the *grader*. Judge sampling knobs nest one level deeper, e.g. `taskset.judge.sampling.max_tokens`. Run it:
+There are two models: `model` is the subject; `taskset.task.judge.model` is the grader. Judge sampling knobs nest one level deeper, for example `taskset.task.judge.sampling.max_tokens`.
 
 ```bash
-prime eval run @ configs/07/simple-judge-eval.toml
+uv run eval @ configs/06/simple-judge-eval.toml
 ```
 
-Then audit the judge like you would any reward ([tutorial 2](2_first_eval.md)): pick a few traces, read the response, and ask whether *you* agree with the verdict. A judge is part of your environment — an unaudited judge is an unaudited reward.
+Audit the resulting `traces.jsonl`. An unaudited judge is an unaudited reward.
 
 ## Design rules for judge rewards
 
@@ -107,11 +120,16 @@ Then audit the judge like you would any reward ([tutorial 2](2_first_eval.md)): 
 - **Keep the judge cheap.** It runs once per rollout per judged reward; a frontier model as grader can cost more than the rollout itself.
 - For training ([tutorial 3](3_first_rl.md)), remember the judge is called inside the reward path — its latency and failure rate directly gate rollout throughput.
 
+
+
 ## Try it
 
-- Flip a criterion to its negation ("The response sounds gloomy...") and confirm the reward flips too — the fastest sanity check that the judge reads the rubric at all.
-- Add a `@vf.metric` that records the judge's raw text verdict into the trace, so disagreements are auditable later.
-- Swap the judge model via `--taskset.judge.model` and measure verdict agreement across the two graders.
+- Add a seventh row to `tasks.json` — a tone you care about (sarcastic, reassuring, businesslike) — and re-run. No code changes needed: that's why the tasks are a data file.
+- Flip a tone criterion to its negation ("The response sounds gloomy and defeated...") and confirm the reward flips too — the fastest sanity check that the judge reads the rubric at all.
+- Inspect the judge response in `trace.info["judge"]` and compare it with your own verdict.
+- Swap the judge model via `--taskset.task.judge.model` and measure verdict agreement across the two graders.
+
+
 
 ## Next
 

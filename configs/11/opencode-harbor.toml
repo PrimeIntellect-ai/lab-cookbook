@@ -8,8 +8,7 @@ max_tokens = 4096
 
 [taskset]
 id = "opencode-harbor"
-tasks = ["regex-log"]
-ignore_dockerfile = true
+tasks = ["hello-world"]
 
 [harness]
 id = "opencode-harbor"

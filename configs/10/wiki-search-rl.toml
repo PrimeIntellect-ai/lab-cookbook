@@ -8,7 +8,7 @@ max_tokens = 2048
 reasoning_effort = "medium"
 
 [[orchestrator.train.env]]
-name = "wiki-search"
+name = "wiki_search_v1"
 max_turns = 8
-taskset = { id = "wiki-search", max_examples = 512, tools = { shared = true } }
+taskset = { id = "wiki_search_v1" }
 harness = { id = "default" }

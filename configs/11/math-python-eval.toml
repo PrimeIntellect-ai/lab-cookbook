@@ -10,8 +10,9 @@ max_tokens = 1024
 id = "math-python"
 num_tasks = 50
 
-[taskset.tools]
+[taskset.task.tools]
 timeout_seconds = 60
+runtime = { type = "docker", image = "python:3.11-slim", workdir = "/tmp" }
 
 [harness]
 id = "default"

@@ -1,10 +1,10 @@
 # Coding Agent Environments
 
-Code-executing environments raise the stakes: the model's output *runs*. In this tutorial you will see the two main shapes — a math taskset with a persistent Python interpreter tool, and a **Harbor** task suite driven by a real coding-agent harness in Docker — and learn how runtimes decide where all of this executes.
+Code-executing environments raise the stakes: the model's output *runs*. This tutorial uses two v1 cookbook packages: a math taskset with a persistent Python interpreter tool, and a **Harbor** suite driven by a coding-agent harness in Docker.
 
 The taskset/harness split carries the load here: verification and scoring stay on the taskset; the harness and its runtime decide how and where the agent acts.
 
-**You need:** [Build Your First Environment](5_build_first_environment.md) and [Tool Use and Search](9_tools.md); Docker running locally for the Harbor half.
+**You need:** [Build Your First Environment](5_build_first_environment.md) and [Tool Use and Search](10_tools.md); Docker running locally for the Harbor half.
 
 ## Where code runs: runtimes
 
@@ -18,9 +18,13 @@ The same environment moves between them by config alone — develop against `sub
 
 ## Tool-backed execution: `math-python`
 
-`math-python` (from `environments/math_python/math_python.py`) poses competition math problems and exposes one tool: a **persistent** Python interpreter, so variables survive across calls within a rollout.
+`math-python` poses competition math problems and exposes one **persistent** Python interpreter, so variables survive across calls within a rollout. A clean v1 port separates row data, behavior, and the tool server:
 
 ```python
+class MathPythonData(vf.TaskData):
+    answer: str
+
+
 class PythonState(vf.State):
     executions: int = 0
     restarts: int = 0
@@ -28,24 +32,44 @@ class PythonState(vf.State):
     history: list[str] = Field(default_factory=list)
 
 
+class PythonToolConfig(vf.ToolsetConfig):
+    timeout_seconds: float = 60
+    runtime: vf.RuntimeConfig = vf.DockerConfig(
+        image="python:3.11-slim",
+        workdir="/tmp",
+    )
+
+
 class PythonToolset(vf.Toolset[PythonToolConfig, PythonState]):
     TOOL_PREFIX = "python"
 
-    async def setup_task(self, task: MathPythonTask) -> None:
+    async def setup_task(self, task: MathPythonData) -> None:
         await self._start_worker()          # one live interpreter per rollout
 
     @vf.tool
     async def execute(self, code: str) -> str:
         """Execute Python code in the rollout's persistent interpreter."""
         ...
+
+
+class MathPythonTaskConfig(vf.TaskConfig):
+    tools: PythonToolConfig = PythonToolConfig()
+
+
+class MathPythonTask(vf.Task[MathPythonData, PythonState, MathPythonTaskConfig]):
+    tools = (PythonToolset,)
+
+    @vf.reward(weight=1.0)
+    async def correct(self, trace: vf.Trace) -> float:
+        return vf.verify_boxed_math_answer(trace.last_reply, self.data.answer)
 ```
 
 Two details are the lesson:
 
-- **The state split from [Tool Use and Search](9_tools.md) in action.** The live interpreter process is unserializable, so it lives on `self` and is created in `setup_task` — per rollout. The *serializable* facts about it (`executions`, `restarts`, `history`, `last_error`) live in `self.state` and surface on `trace.state`, where rewards and your debugging can read them.
+- **The state split from [Tool Use and Search](10_tools.md) in action.** `setup_task` receives `MathPythonData`. The live interpreter process is unserializable, so it lives on the tool server's `self`; serializable facts live in `self.state` and surface on `trace.state`.
 - **Tools must fail politely.** On timeout or a dead worker, `execute` restarts the interpreter and returns an error *string* to the model — the rollout continues and the model can retry. Raising would instead abort the rollout as an infrastructure error. Return errors the model can act on; raise only when the environment itself is broken ([Designing Rewards](7_rewards.md) draws the same line for scoring code).
 
-Scoring is deterministic — `math_verify` compares the model's `\boxed{}` answer to ground truth. Tools change the *how*, never the *what counts*. The config allows the tool-then-answer loop some room (`configs/10/math-python-eval.toml`):
+`Taskset.load()` should build `MathPythonData` and wrap each row in `MathPythonTask(..., self.config.task)`. Scoring then reads ground truth through `self.data` and the completion through `trace.last_reply`. The expected v1 config shape is:
 
 ```toml
 num_tasks = 5
@@ -56,65 +80,58 @@ max_turns = 4                   # call the tool, read output, answer
 id = "math-python"
 num_tasks = 50
 
-[taskset.tools]
+[taskset.task.tools]
 timeout_seconds = 60
+runtime = { type = "docker", image = "python:3.11-slim", workdir = "/tmp" }
 ```
+
+Run the shipped config:
 
 ```bash
-prime eval run @ configs/10/math-python-eval.toml
+uv run eval @ configs/11/math-python-eval.toml
 ```
 
-In the traces, `tool_messages` shows the computations; `trace.state.executions` tells you at a glance whether the model actually used the interpreter or answered from memory.
+Typed `vf.ToolMessage` records show computations; `trace.state.executions` tells you whether the model used the interpreter.
 
 ## Harbor tasks: `opencode-harbor`
 
-[Harbor](https://www.harborframework.com) tasks are **data plus tests**: a task directory with instructions, an optional container image, and a verifier script. verifiers ships built-in support, so a Harbor-based taskset is a few lines:
+[Harbor](https://www.harborframework.com) tasks are **data plus tests**: a task directory with instructions, a container image, and a verifier script. `verifiers` ships the parser and reward implementation. The cookbook's local taskset loads its bundled task directories:
 
 ```python
 import verifiers.v1 as vf
-from verifiers.v1.tasksets.harbor import HarborConfig, HarborTask, HarborTaskset
+from verifiers.v1.tasksets.harbor.taskset import HarborConfig, HarborTask, parse_task
+
 
 class OpenCodeHarborConfig(HarborConfig):
-    dataset: str = "hello-world"
-    ignore_dockerfile: bool = True      # skip per-task image builds
+    dataset: str = "bundled"
+    require_image: bool = True
 
-class OpenCodeHarborTaskset(HarborTaskset, vf.Taskset[HarborTask, OpenCodeHarborConfig]):
-    pass
+
+class OpenCodeHarborTaskset(vf.Taskset[HarborTask, OpenCodeHarborConfig]):
+    def load(self):
+        task_dirs = sorted(bundled_tasks_dir().glob("*/task.toml"))
+        for idx, task_toml in enumerate(task_dirs):
+            yield HarborTask(
+                parse_task(task_toml.parent, idx, self.config),
+                self.config.task,
+            )
 ```
 
-No `load_tasks`, no `@vf.reward`: `HarborTaskset` loads the task directories and inherits scoring from each task's own verifier — the taskset stages the tests and scores *inside the rollout runtime*, where the agent's edits actually happened. Your subclass only pins the dataset and adjusts knobs. Two useful ones for tasks with tight limits: `timeout_multiplier` (scales agent and verifier timeouts) and `resource_multiplier` (scales CPU/memory/disk).
+No custom row model or reward is needed: `parse_task` produces Harbor data, and `HarborTask.solved` stages and runs each task's verifier inside the rollout runtime.
 
-The interesting half is the harness. The `opencode_harbor` package bundles a custom `vf.Harness` that installs the OpenCode coding agent into the task container, points it at the interception endpoint (never directly at a provider — that would bypass trace capture), and runs it against the task prompt. Custom harness authoring is its own topic ([Guide 12](../guides/12-custom-harnesses/README.md)); here you only select it:
-
-```toml
-model = "openai/gpt-5.4-mini"
-num_tasks = 1
-num_rollouts = 1
-
-[sampling]
-max_tokens = 4096
-
-[taskset]
-id = "opencode-harbor"
-tasks = ["regex-log"]           # one task from environments/opencode_harbor/tasks/
-ignore_dockerfile = true
-
-[harness]
-id = "opencode-harbor"
-runtime = { type = "docker" }   # needs Docker running locally
-```
+The matching `OpenCodeHarness` installs the coding agent into the task runtime, points it at the interception endpoint, and runs it against `trace.task.data.prompt`. Run one prebuilt task with:
 
 ```bash
-prime eval run @ configs/10/opencode-harbor.toml
+uv run eval @ configs/11/opencode-harbor.toml
 ```
 
-Watch the division of labor in the trace: the harness produced an agent transcript (shell commands, file edits), and the taskset's inherited verifier produced the reward. Neither reached into the other.
+The trace keeps the boundary visible: the harness owns the agent transcript and `HarborTask.solved` owns the reward. Neither reaches into the other.
 
-When a Harbor task lacks a usable image, build and publish one with `prime images push` ([docs](https://docs.primeintellect.ai/sandboxes/images)) and set it as the task's `image` — the build happens in the cloud, no local Docker needed.
+When a Harbor task lacks a usable image, build and publish one before evaluation. [Harbor Tasksets](20_harbor.md) covers `task.toml`, `prime images push`, bulk prebuilds, image overrides, and multimodal prompt handling.
 
 ## Try it
 
-- Run `math-python` with `--taskset.tools.timeout_seconds 5` and find a trace where the interpreter restarted (`trace.state.restarts > 0`) — then read how the model handled the error message.
+- Set `--taskset.task.tools.timeout-seconds 5` on `math-python` and inspect how the model handles a restart.
 - Browse `environments/opencode_harbor/tasks/regex-log/` to see what a Harbor task directory contains, then point `tasks = [...]` at a different bundled task.
 - Re-run the Harbor eval with `--harness.disabled_tools '["bash"]'`-style restrictions (harness-dependent) and observe how the agent adapts — or fails.
 
