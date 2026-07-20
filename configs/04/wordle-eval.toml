@@ -7,8 +7,7 @@ max_turns = 6
 max_tokens = 1024
 
 [taskset]
-id = "wordle"
-num_tasks = 100
+id = "wordle_v1"
 
 [harness]
 id = "default"

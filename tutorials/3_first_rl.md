@@ -1,10 +1,10 @@
 # Your First RL Run
 
-In the previous tutorial you measured models. Now you'll improve one, by taking a small open model that is bad at a task initially, training it with reinforcement learning on hosted GPUs, and watching its ability climb almost in real time. You don't need a GPU, and you don't need any RL background.
+In the previous tutorial you measured models. Now you'll improve one, by taking a small open model that is bad at a task initially, training it with reinforcement learning on hosted GPUs, and watching its ability climb in real time. You don't need a GPU, and you don't need any RL background.
 
 You need the setup from [Tutorial 1](1_setup.md) and training credits on your account.
 
-RL works as follows: the model attempts a task (a rollout, exactly like in an eval), the environment scores it (the reward), and the trainer nudges the model's weights so that whatever produced *high* reward becomes more likely and whatever produced *low* reward becomes less likely. This process is repeated many times across tasks so that the model maximizes the reward. The kind of RL training that is most commonly done with LLMs training is in the [GRPO](https://huggingface.co/learn/llm-course/en/chapter12/3b) lineage, which samples a group of attempts for the same task (let's say 8), and then reinforces ones that scored above the group's average score. This has a practical consequence you can reason about: if all 8 attempts score identically (perfectly or horribly), that task teaches nothing this round. The task has to be solvable sometimes for learning to happen.
+RL works as follows: the model attempts a task (a rollout, exactly like in an eval), the environment scores it (the reward), and the trainer nudges the model's weights so that whatever produced *high* reward becomes more likely and whatever produced *low* reward becomes less likely. This process is repeated many times across tasks so that the model maximizes the reward. The kind of RL training that is most commonly done with LLMs training is in the [GRPO](https://huggingface.co/learn/llm-course/en/chapter12/3b) lineage, which samples a group of attempts for the same task (let's say 8), and then reinforces ones that scored above the group's average score. If all 8 attempts score identically (perfectly each time, or catastrophically each time), that task teaches nothing this round. The task has to be solvable sometimes for learning to happen, so tasksets that are ideal for models will be ones where initial reward is nonzero.
 
 We'll train on the cookbook's local `reverse_text_v1`. The goal is: given a string, write it backwards. It's a deliberately humble task with three useful properties: it's trivially verifiable because the correct answer is computable, small models are bad at it so there's plenty of room to learn, and the reward allows for partial credit, so there is incremental learning signal available for the model.
 
@@ -18,9 +18,9 @@ The hosted-training CLI writes a starter config (named `reverse-text.toml`):
 prime train init reverse-text.toml
 ```
 
-Open it and you can modify fields to set up the eval you want.
+Open it and you can specify the exact parameters you are interested in. To see all the possible config options, run `prime train configs`  in your terminal. 
 
-For this tutorial, we have provided a config in `configs/03/reverse-text-rl.toml`, running which costs below 20 cents:
+For this tutorial, we have provided a config in `configs/03/reverse-text-rl.toml`, running which costs less than 20 cents:
 
 ```toml
 model = "meta-llama/Llama-3.2-1B-Instruct"
@@ -52,8 +52,6 @@ num_examples = 10
 rollouts_per_example = 3
 ```
 
-To see all the possible config options, run `prime train configs`  in your terminal. 
-
 ## Step 2: launch training
 
 Once you are set with your config, running the training is just a command away:
@@ -79,27 +77,27 @@ prime train distributions <run-id>  # reward spread by step
 
 A healthy run will generally look like:
 
-- Reward trending upward, but noisily. RL curves wobble, so judge the trend over tens of steps.
-- The eval score should increase from step 0 to later evals.
+- Reward trending upward, but noisily. RL curves tend to wobble, so judge the trend over tens of steps.
+- The eval score should ideally increase from step 0 to later evals, meaning the model gets better on held-out tasks.
 - Reward distribution shifting right, since early on most rollouts score low with a few lucky ones, later the probability mass moves toward high scores.
 
 If you're curious what the model actually says at step 40, `prime train rollouts <run-id>` shows you.
 
 ## Step 4: the result
 
-When the run finishes, the platform saves the trained model weights — checkpoints along the way (see the `[checkpoints]` options in the generated config) and the final adapter at the end, listed by:
+When the run finishes, the platform saves the trained model weights — checkpoints along the way and the final adapter at the end, which you can list by running:
 
 ```bash
 prime train checkpoints <run-id>
 ```
 
-You've closed the loop the whole Lab stack is built for: **evaluate → train → evaluate**. You could deploy a checkpoint for inference as well, but we will cover that in a later tutorial.
+You're now able to close the loop the whole Lab stack is built for: **evaluate → train → deploy**. We will cover deployment in a later tutorial.
 
-To stop a run, use `prime train stop <run-id>`. `prime train delete <run-id>` removes a finished one.
+To stop a run prematurely, use `prime train stop <run-id>`, while `prime train delete <run-id>` removes a finished one.
 
 ## Recap
 
-You learned the try → score → nudge loop, why groups of rollouts and sometimes-solvable tasks matter, launched a hosted training run from one TOML file, and read its progress with the same trace-level skepticism you learned for evals.
+You learned configured and launched a hosted training run from one TOML file, and read its progress using both the CLI and the online platform.
 
 Apart from RL, there's one more way to make a model better that doesn't touch weights at all, which we will cover in the next tutorial.
 
