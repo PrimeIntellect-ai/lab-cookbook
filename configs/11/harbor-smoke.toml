@@ -10,5 +10,5 @@ id = "opencode-harbor"
 tasks = ["hello-world"]
 
 [harness]
-id = "opencode-harbor"
+id = "pi"
 runtime = { type = "docker" }

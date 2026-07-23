@@ -1,6 +1,6 @@
 # Coding Agent Environments
 
-Code-executing environments raise the stakes: the model's output *runs*. This tutorial uses two v1 cookbook packages: a math taskset with a persistent Python interpreter tool, and a **[Harbor](https://www.harborframework.com/docs)** suite driven by a coding-agent harness in Docker — ending with everything you need to package and run Harbor tasksets of your own.
+Code-executing environments raise the stakes: the model's output *runs*. This tutorial uses two v1 cookbook packages: a math taskset with a persistent Python interpreter tool, and a **[Harbor](https://www.harborframework.com/docs)** suite driven by the built-in `pi` coding-agent harness in Docker — ending with everything you need to package and run Harbor tasksets of your own.
 
 The taskset/harness split carries the load here: verification and scoring stay on the taskset; the harness and its runtime decide how and where the agent acts.
 
@@ -129,10 +129,10 @@ class OpenCodeHarborTaskset(vf.Taskset[HarborTask, OpenCodeHarborConfig]):
 
 No custom row model or reward is needed: `parse_task` produces Harbor data, and `HarborTask.solved` stages and runs each task's verifier inside the rollout runtime.
 
-The matching `OpenCodeHarness` installs the coding agent into the task runtime, points it at the interception endpoint, and runs it against `trace.task.data.prompt`. Run one prebuilt task with:
+The agent side needs no custom code: the built-in `pi` harness (`[harness] id = "pi"`) installs the [Pi](https://github.com/earendil-works/pi) coding-agent CLI into the task runtime (x64 and arm64 builds), reaches the interception endpoint through a custom OpenAI-compatible provider, and runs against the task prompt. Run one prebuilt task with:
 
 ```bash
-uv run eval @ configs/11/opencode-harbor.toml
+uv run eval @ configs/11/harbor-smoke.toml
 ```
 
 The trace keeps the boundary visible: the harness owns the agent transcript and `HarborTask.solved` owns the reward. Neither reaches into the other.
@@ -199,7 +199,7 @@ id = "opencode-harbor"
 tasks = ["hello-world"]
 
 [harness]
-id = "opencode-harbor"
+id = "pi"
 runtime = { type = "docker" }
 ```
 
@@ -314,7 +314,7 @@ Replace `<registry-ref>` with the prefix printed by `prime images push`. The cop
 
 ## Prompt compatibility
 
-Harbor's loader reads `instruction.md` as a plain Python `str`, which works with CLI-agent harnesses such as this cookbook's OpenCode harness. Images cannot be piped through a command-line prompt. Attach them to the task as typed `vf.Messages` while loading:
+Harbor's loader reads `instruction.md` as a plain Python `str`, which every CLI-agent harness accepts. Images cannot be piped through a command-line prompt as plain text. Attach them to the task as typed `vf.Messages` while loading:
 
 ```python
 class ImageHarborTaskset(HarborTaskset, vf.Taskset[HarborTask, MyHarborConfig]):
@@ -341,7 +341,7 @@ class ImageHarborTaskset(HarborTaskset, vf.Taskset[HarborTask, MyHarborConfig]):
         ]
 ```
 
-The harness must then declare `SUPPORTS_MESSAGE_PROMPT = True`; the built-in `default` and `codex` harnesses do. The local OpenCode harness deliberately requires a string prompt, so message-list prompts fail fast rather than being flattened silently.
+The harness must then declare `SUPPORTS_MESSAGE_PROMPT = True`; the built-in `pi`, `default`, and `codex` harnesses do. A harness that can't render rich prompts should instead require a string prompt, so message-list prompts fail fast rather than being flattened silently.
 
 ## Current parity gaps
 

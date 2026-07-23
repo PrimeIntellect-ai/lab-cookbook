@@ -126,6 +126,7 @@ Your harness runs; the next question is whether it's any *good*. verifiers ships
 | Harness id       | What it is                                                                          |
 | ---------------- | ----------------------------------------------------------------------------------- |
 | `codex`          | OpenAI's Codex CLI agent.                                                           |
+| `pi`             | The Pi CLI agent — supports MCP toolsets and message prompts; x64 and arm64 builds. |
 | `mini_swe_agent` | mini-SWE-agent — a deliberately minimal bash-loop agent, ~100 lines of scaffolding. |
 | `mini-loop`      | Yours, from this recipe.                                                            |
 
@@ -153,11 +154,12 @@ use_prime_registry = true   # pull task images from the Prime registry (avoids D
 runtime = { type = "docker" }
 ```
 
-Then the sweep is three one-liners — the config file carries the constants, the flag carries the variable:
+Then the sweep is four one-liners — the config file carries the constants, the flag carries the variable:
 
 ```bash
 uv run eval @ configs/compare/base.toml --harness.id mini-loop
 uv run eval @ configs/compare/base.toml --harness.id mini_swe_agent
+uv run eval @ configs/compare/base.toml --harness.id pi
 uv run eval @ configs/compare/base.toml --harness.id codex
 ```
 
