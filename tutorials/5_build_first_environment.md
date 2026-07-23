@@ -14,7 +14,7 @@ For your own environments, you can use the CLI to initialize an environment with
 prime env init my-env
 ```
 
-This creates a single-file package under `./environments` with a taskset stub and `pyproject.toml`. Pass `--multi-file` when the environment needs separate tool or user server modules.
+This creates a single-file package under `./environments` with a stub module and `pyproject.toml`. (The generated stub currently uses the legacy `load_environment` shape — we'll replace its contents with the v1 taskset we build below.) Pass `--multi-file` when the environment needs separate tool or user server modules.
 
 Let's go over the components we need. First of all, our environment wraps the real 2026 problem set for AIME, and that will be our immutable `TaskData`. 
 

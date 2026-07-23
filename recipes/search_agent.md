@@ -96,7 +96,7 @@ Diagnose which species dominates before changing anything — they have differen
 Which brings us to the payoff. Search is a *behavior*, not a fact — exactly what RL trains. This environment is training-ready:
 
 ```bash
-prime rl init wiki_search_v1
+prime train init wiki-search.toml   # generates a template config; point its [[env]] at wiki_search_v1
 ```
 
 The essentials of the training config (`configs/10/wiki-search-rl.toml` shows a complete open-source-trainer variant):
@@ -117,14 +117,14 @@ taskset = { id = "wiki_search_v1" }
 harness = { id = "default" }
 ```
 
-Everything from [tutorial 3](../tutorials/3_first_rl.md) applies — groups, sometimes-solvable tasks, watching reward climb. What's new is *what improvement looks like*: check `prime rl rollouts` early and late in the run. Early: skipped searches, one-shot queries, answers ungrounded in what was read. Later: consistent search-first behavior, query reformulation after a miss, answers quoting the retrieved section. The reward only said "right answer or not" — the *strategy* is what the model discovered under it.
+Everything from [tutorial 3](../tutorials/3_first_rl.md) applies — groups, sometimes-solvable tasks, watching reward climb. What's new is *what improvement looks like*: check `prime train rollouts` early and late in the run. Early: skipped searches, one-shot queries, answers ungrounded in what was read. Later: consistent search-first behavior, query reformulation after a miss, answers quoting the retrieved section. The reward only said "right answer or not" — the *strategy* is what the model discovered under it.
 
 ## Things to try
 
 - Compare two models on the same 50 tasks and count tool calls per rollout from the traces: stronger models often search *less but better* — fewer, sharper queries.
 - Tighten `max_turns` from 8 to 4 and watch the reward drop: how much of the score was persistence? (For training, that same cap is pressure toward *efficient* search.)
-- Break it on purpose: run with the judge swapped to a weaker model (`--taskset.judge.model ...`) and audit 10 verdicts by hand — a search agent's eval is only as good as its judge ([Judges](../tutorials/6_judges.md)).
-- Swap the corpus: the tool config takes a different `corpus_dataset` — your internal docs instead of rare wiki pages, and the same environment evaluates *your* retrieval task.
+- Break it on purpose: swap the judge to a weaker model — add a `[[taskset.task.judges]]` block to the eval config (`id = "reference"`, `question_field = "question"`, and a weaker `model`) — and audit 10 verdicts by hand: a search agent's eval is only as good as its judge ([Judges](../tutorials/6_judges.md)).
+- Swap the corpus: the page corpus is pinned as the `DATASET` constant in `wiki_search_v1/servers/wiki.py` — point your own copy at your internal docs instead of rare wiki pages, and the same environment evaluates *your* retrieval task.
 
 
 

@@ -51,7 +51,7 @@ prime whoami
 prime config view
 ```
 
-> **For scripts and CI:** the CLI (and everything built on it) also reads the `PRIME_API_KEY` environment variable, so `export PRIME_API_KEY="..."` works anywhere an interactive login doesn't. If you belong to multiple teams, `prime teams list` and `prime teams switch` control which one you bill to.
+> **For scripts and CI:** the CLI (and everything built on it) also reads the `PRIME_API_KEY` environment variable, so `export PRIME_API_KEY="..."` works anywhere an interactive login doesn't. If you belong to multiple teams, `prime teams list` and `prime switch` control which one you bill to.
 
 This single authentication is all you need to access anything on the platform. So for example, you do not need any external API keys for running evaluations, since they run through through **Prime Inference**, the unified gateway we mentioned in Tutorial 0.
 
@@ -67,7 +67,7 @@ uv sync
 
 `uv sync` installs the verifiers framework plus the small example environments that live under `environments/` that we will use throughout the cookbook. This is a one-time step.
 
-> **Current status:** the released `prime` CLI does not support verifiers v1 environments yet. Until it does, every `prime eval run ...` command in these tutorials can be run from the cookbook workspace as `uv run eval ...` instead. The tutorials use the `prime` spelling because that is the target interface.
+> **Current status:** the released `prime` CLI does not support verifiers v1 environments yet, so these tutorials run evals with `uv run eval ...` from the cookbook workspace (it comes with `uv sync`, via the verifiers framework). Once the CLI gains v1 support, the same configs will run through `prime eval run` as well.
 
 
 

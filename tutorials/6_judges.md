@@ -41,34 +41,41 @@ The criterion is per-row ground truth, so it lives on `TaskData`; behavior belon
 ```python
 import verifiers.v1 as vf
 
-class CorrectnessJudge(vf.Judge[bool]):
+SYSTEM = "Follow the user instruction carefully. Keep answers short."
+
+
+class SimpleJudge(vf.Judge[bool]):
     prompt = """Criterion: {criterion}
-    User message: {question}
-    Response: {response}
-    Does the response satisfy the criterion? Reply with exactly one word: yes or no."""
+User message: {question}
+Response: {response}
+Does the response satisfy the criterion? Reply with exactly one word: yes or no."""
 
     def parse(self, response: vf.JudgeResponse[bool]) -> bool:
-        return "yes" in response.text.lower()
+        return response.text.strip().lower().startswith("yes")
 
 
 class SimpleJudgeTaskConfig(vf.TaskConfig):
     judge: vf.JudgeConfig = vf.JudgeConfig(model="openai/gpt-4.1-mini")
 
 
-class SimpleJudgeConfig(vf.TasksetConfig):
-    task: SimpleJudgeTaskConfig = SimpleJudgeTaskConfig()
-
-
 class SimpleJudgeTask(vf.Task[SimpleJudgeTaskData, vf.State, SimpleJudgeTaskConfig]):
+    @vf.stop
+    async def single_turn(self, trace: vf.Trace) -> bool:
+        return trace.num_turns >= 1
+
     @vf.reward(weight=1.0)
-    async def judged(self, trace: vf.Trace) -> float:
-        result = await CorrectnessJudge(self.config.judge).evaluate(
+    async def judge_reward(self, trace: vf.Trace) -> float:
+        result = await SimpleJudge(self.config.judge).evaluate(
             trace=trace,
             criterion=self.data.criterion,
             question=self.data.prompt_text,
             response=trace.last_reply,
         )
-        return float(result.parsed)
+        return float(result.parsed is True)
+
+
+class SimpleJudgeConfig(vf.TasksetConfig):
+    task: SimpleJudgeTaskConfig = SimpleJudgeTaskConfig()
 
 
 class SimpleJudgeTaskset(vf.Taskset[SimpleJudgeTask, SimpleJudgeConfig]):
@@ -76,14 +83,19 @@ class SimpleJudgeTaskset(vf.Taskset[SimpleJudgeTask, SimpleJudgeConfig]):
         rows = json.loads(TASKS_FILE.read_text())
         return [
             SimpleJudgeTask(
-                SimpleJudgeTaskData(idx=i, prompt=row["prompt"], criterion=row["criterion"]),
+                SimpleJudgeTaskData(
+                    idx=i,
+                    prompt=row["prompt"],
+                    system_prompt=SYSTEM,
+                    criterion=row["criterion"],
+                ),
                 self.config.task,
             )
             for i, row in enumerate(rows)
         ]
 ```
 
-The implementation lives in `environments/simple_judge/simple_judge/taskset.py`. Passing `trace=` to `evaluate(...)` records the judge response, tokens, and cost instead of making grading an invisible side call.
+The implementation lives in `environments/simple_judge/simple_judge/taskset.py` (the judge prompt is abbreviated here). Passing `trace=` to `evaluate(...)` records the judge response, tokens, and cost instead of making grading an invisible side call.
 
 ## Configuring the judge
 

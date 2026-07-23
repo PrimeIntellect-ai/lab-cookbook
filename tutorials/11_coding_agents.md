@@ -27,6 +27,10 @@ The same environment moves between them by config alone — develop against `sub
 `math-python` poses competition math problems and exposes one **persistent** Python interpreter, so variables survive across calls within a rollout. A clean v1 port separates row data, behavior, and the tool server:
 
 ```python
+import verifiers.v1 as vf
+from pydantic import Field
+
+
 class MathPythonData(vf.TaskData):
     answer: str
 
@@ -66,7 +70,7 @@ class MathPythonTask(vf.Task[MathPythonData, PythonState, MathPythonTaskConfig])
     tools = (PythonToolset,)
 
     @vf.reward(weight=1.0)
-    async def correct(self, trace: vf.Trace) -> float:
+    async def correct_answer(self, trace: vf.Trace) -> float:
         return vf.verify_boxed_math_answer(trace.last_reply, self.data.answer)
 ```
 
@@ -257,24 +261,18 @@ prime images push opencode-harbor.x86.regex-log:latest \
   --platform linux/amd64
 ```
 
-Or discover and build every Dockerfile-only Harbor task in a directory:
+Or discover and build every Dockerfile-only Harbor task in a directory of your own tasks:
 
 ```bash
 prime images push-bulk \
-  --harbor environments/opencode_harbor/tasks \
-  --name-template "opencode-harbor.x86.{dir}" \
+  --harbor path/to/your/tasks \
+  --name-template "my-tasks.x86.{dir}" \
   --tag latest \
   --platform linux/amd64 \
-  --dry-run
-
-prime images push-bulk \
-  --harbor environments/opencode_harbor/tasks \
-  --name-template "opencode-harbor.x86.{dir}" \
-  --tag latest \
-  --platform linux/amd64
+  --dry-run      # lists what would build; drop the flag to build for real
 ```
 
-`push-bulk --harbor` skips tasks that already declare `docker_image`. Both image commands build remotely; the rollout only pulls the resulting image.
+`push-bulk --harbor` skips tasks that already declare `docker_image` — every bundled task under `environments/opencode_harbor/tasks` does, so pointing it there reports nothing to build. Both image commands build remotely; the rollout only pulls the resulting image.
 
 If you cannot change upstream `task.toml` files, override the frozen `TaskData.image` while loading:
 
@@ -353,7 +351,7 @@ The harness must then declare `SUPPORTS_MESSAGE_PROMPT = True`; the built-in `de
 
 - Set `--taskset.task.tools.timeout-seconds 5` on `math-python` and inspect how the model handles a restart.
 - Browse `environments/opencode_harbor/tasks/regex-log/` to see what a Harbor task directory contains, then point `tasks = [...]` at a different bundled task.
-- Re-run the Harbor eval with `--harness.disabled_tools '["bash"]'`-style restrictions (harness-dependent) and observe how the agent adapts — or fails.
+- Re-run the Harbor eval with `--harness.disabled-tools bash`-style restrictions (space-separated tool names; which names exist is harness-dependent) and observe how the agent adapts — or fails.
 
 ## Next
 

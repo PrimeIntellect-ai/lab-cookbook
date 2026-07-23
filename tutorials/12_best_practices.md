@@ -24,7 +24,7 @@ A reward of 0.0 must mean "the model failed," never "my scoring code broke" — 
 
 ## Tools and Users
 
-Tools and user simulators are servers. Put expensive task-agnostic resources in `setup`, per-task inputs in `setup_task`, and serializable mutable rollout state in `self.state`. Put expensive read-only setup behind `shared = true`; use colocated servers when the server must share the harness runtime workspace.
+Tools and user simulators are servers. Put expensive task-agnostic resources in `setup`, per-task inputs in `setup_task`, and serializable mutable rollout state in `self.state`. Share expensive read-only servers by declaring the toolset on `Taskset.tools` with a `vf.SharedToolsetConfig`; use colocated servers when the server must share the harness runtime workspace.
 
 ## Harnesses
 
@@ -32,7 +32,7 @@ Most tasksets should run with built-in harnesses. Write a custom `vf.Harness` on
 
 ## Runtime Placement
 
-Choose runtime at the harness or tool/user config boundary. Use task `image`, `resources`, and `timeout` when requirements vary per row. Use `Taskset.NEEDS_CONTAINER = True` when subprocess execution is nonsensical for the entire taskset.
+Choose runtime at the harness or tool/user config boundary. Use task `image`, `resources`, and `timeout` when requirements vary per row. Set `NEEDS_CONTAINER = True` on your `Task` subclass when subprocess execution is nonsensical for those tasks.
 
 ## Failure Mode Checklist
 
@@ -42,7 +42,7 @@ Choose runtime at the harness or tool/user config boundary. Use task `image`, `r
 - Config sets fields that are not on the typed config class.
 - A shared tool server stores mutable rollout data on `self` instead of `self.state`.
 - A tool config carries per-task data that should come from `setup_task`.
-- A coding task scores in the harness instead of taskset `finalize` or reward.
+- A coding task scores in the harness instead of the task's `finalize` or reward.
 
 ## Next
 

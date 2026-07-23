@@ -41,11 +41,11 @@ harness = { id = "default", runtime = { type = "subprocess" } }
 Notice the two layers of knobs:
 
 - **Trainer knobs** at the top: the model, how long to train, and how many rollouts feed each step. `prime train models` lists the models currently available on hosted training.
-- **The environment**, embedded under `[[env]]`works the same a the taskset/harness pair used for evals. Nothing about the task or scoring changes between evaluation and training.
+- **The environment**, embedded under `[[env]]`, works the same as the taskset/harness pair used for evals. Nothing about the task or scoring changes between evaluation and training.
 
 You could add a periodic eval block as well by appending the following to the config:
 
-```bash
+```toml
 [eval]
 interval = 10
 num_examples = 10
@@ -97,7 +97,7 @@ To stop a run prematurely, use `prime train stop <run-id>`, while `prime train d
 
 ## Recap
 
-You learned configured and launched a hosted training run from one TOML file, and read its progress using both the CLI and the online platform.
+You configured and launched a hosted training run from one TOML file, and read its progress using both the CLI and the online platform.
 
 Apart from RL, there's one more way to make a model better that doesn't touch weights at all, which we will cover in the next tutorial.
 

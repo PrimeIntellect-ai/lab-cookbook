@@ -17,7 +17,6 @@ The contract is three methods and a few capability flags:
 | --------------------------------------------------------- | ---------------------------------------------------------------------- |
 | `setup(runtime)`                                          | Install the agent into the runtime, once per rollout.                  |
 | `launch(ctx, trace, runtime, endpoint, secret, mcp_urls)` | Run the agent program to completion; return its `ProgramResult`.       |
-| `cleanup(trace, runtime)`                                 | Remove per-rollout state (optional).                                   |
 | `SUPPORTS_MCP`, `APPENDS_SYSTEM_PROMPT`, ...              | Advertise what the harness can do, so incompatible tasksets fail fast. |
 
 
@@ -101,6 +100,13 @@ uv run eval @ configs/recipes/mini-loop-smoke.toml
 ```
 
 ```toml
+model = "openai/gpt-5.4-mini"
+num_tasks = 1
+num_rollouts = 1
+
+[sampling]
+max_tokens = 4096
+
 [taskset]
 id = "opencode-harbor"
 tasks = ["hello-world"]
@@ -124,7 +130,7 @@ Your harness runs; the next question is whether it's any *good*. verifiers ships
 | `mini-loop`      | Yours, from this recipe.                                                            |
 
 
-(Also available: `claude_code`, `terminus_2`, `kimi_code`, `rlm`, and `default`.)
+(Also available: `terminus_2`, `kimi_code`, `rlm`, and `default`.)
 
 The taskset is `terminal-bench-2-v1`, a Harbor taskset bundled with this cookbook (`environments/terminal_bench_2_v1`): real terminal/SWE tasks, each a container the agent works in plus tests that score the outcome.
 
@@ -180,10 +186,10 @@ Then read a few transcripts for the same task across harnesses — this is where
 - **Tool ablations:** most built-in harnesses accept a `disabled_tools` list (`[harness] disabled_tools = ["websearch"]` — names are harness-specific). Re-run the winner with a tool removed and see how much of its edge that tool was carrying.
 - **Model × harness grid:** repeat the sweep with a second model. Harness rankings are *not* stable across models — small models often do better in minimal scaffolds that don't demand sophisticated tool orchestration. Two models × three harnesses is six runs and one genuinely publishable chart.
 - **Your own repo:** the same sweep works on a taskset of *your* tasks — package your repo's issues as a Harbor taskset ([Coding Agent Environments](../tutorials/11_coding_agents.md)) and rank scaffolds where it actually matters to you.
-- **Scale honestly:** once the pipeline works at `-n 10`, run the full taskset `--hosted` and quote *those* numbers.
+- **Scale honestly:** once the pipeline works at `-n 10`, drop the `-n` cap, run the full taskset, and quote *those* numbers.
 
 
 
 ## Recap
 
-A harness is a package with three methods and honest capability flags: install in `setup`, run against the interception endpoint in `launch`, never touch scoring. A uv script with inline dependencies makes the agent program portable to any runtime. And once your scaffold resolves by id, the comparison discipline is the same as any experiment: one variable, pinned versions, reward read alongside cost and crash rate, transcripts read before conclusions are drawn.
+A harness is a package with two methods and honest capability flags: install in `setup`, run against the interception endpoint in `launch`, never touch scoring. A uv script with inline dependencies makes the agent program portable to any runtime. And once your scaffold resolves by id, the comparison discipline is the same as any experiment: one variable, pinned versions, reward read alongside cost and crash rate, transcripts read before conclusions are drawn.

@@ -1,6 +1,6 @@
 # Your First GEPA Run
 
-Tutorial 3 improved a model by training its weights. That required an open-weights model and GPU resources. But wif the model is closed, such as models in the GPT, Claude, Gemini, Grok series, or you just want improvement without touching the weights of a model, then you optimize the other thing the score depends on: **the prompt**. In this tutorial you'll run [GEPA](https://arxiv.org/abs/2507.19457), an algorithm that evolves a better prompt automatically.
+Tutorial 3 improved a model by training its weights. That required an open-weights model and GPU resources. But if the model is closed, such as models in the GPT, Claude, Gemini, Grok series, or you just want improvement without touching the weights of a model, then you optimize the other thing the score depends on: **the prompt**. In this tutorial you'll run [GEPA](https://arxiv.org/abs/2507.19457), an algorithm that evolves a better prompt automatically.
 
 You need the setup from [Tutorial 1](1_setup.md). Everything runs on inference credits, so no GPUs are needed here.
 
@@ -8,7 +8,7 @@ You need the setup from [Tutorial 1](1_setup.md). Everything runs on inference c
 
 You've probably experienced prompt engineering by hand, where you've tweaked a system prompt, eyeballed a few responses, and repeated the procedure. This is a slow and unsystematic procedure, as it takes time to manually update parts of a long prompt, see the differential effects on performance, and know when to stop tuning.
 
-`verifiers` enfironments already comes with the ability to score rollouts, so that means that the effectiveness of different prompts can be compared. Prompt optimization is just a search over prompts, with your environment as the judge. The only missing ingredient is something to *propose* better prompts than we could do manually. This is what GEPA (Genetic-Pareto prompt evolution) does -- it automates the loop you'd do by hand. GEPA works as follows:
+`verifiers` environments already come with the ability to score rollouts, so that means that the effectiveness of different prompts can be compared. Prompt optimization is just a search over prompts, with your environment as the judge. The only missing ingredient is something to *propose* better prompts than we could do manually. This is what GEPA (Genetic-Pareto prompt evolution) does -- it automates the loop you'd do by hand. GEPA works as follows:
 
 1. **Evaluate** the current prompt on a small batch of tasks.
 2. **Reflect**, where a second LLM (the *reflection model*) reads the actual failed attempts and writes a diagnosis, such as *"the model keeps repeating letters it already ruled out; the instructions never tell it to track them."*.
@@ -42,14 +42,14 @@ What each choice means:
 | `wordle_v1` | The local environment whose reward we're optimizing against. |
 | `--model` | The model that *plays* — the one your optimized prompt is for. Optimize for the model you'll actually use: prompts don't transfer perfectly between models. |
 | `--reflection-model` | The model that *diagnoses failures and writes new prompts*. This is the thinking-heavy job, so a stronger model here is money well spent — it runs far less often than the player. |
-| `--num-train 100` / `--num-val 50` | 100 tasks to optimize against, 50 held out for honest validation. The split matters: a prompt can overfit to its training tasks just like a model can, and the validation set is what catches it. |
-| `--max-total-rollouts 500` | **Your budget.** This caps all optimization rollouts at 500. More budget means more evolution steps, usually with diminishing returns. |
+| `--num-train 50` / `--num-val 50` | 50 tasks to optimize against, 50 held out for honest validation. The split matters: a prompt can overfit to its training tasks just like a model can, and the validation set is what catches it. |
+| `--max-total-rollouts 200` | **Your budget.** This caps all optimization rollouts at 200. More budget means more evolution steps, usually with diminishing returns. |
 | `--max-concurrent 32` | Keep at most 32 rollouts in flight. |
 | `--sampling.max-tokens 1024` | Cap each player-model response at 1024 tokens. |
 
 The current GEPA CLI uses the same v1 taskset and harness loader as eval, so local tasksets work directly and their knobs use the same `--taskset.*` flags. A config-file form also exists — see `configs/04/wordle-gepa.toml`.
 
-While it runs, you'll see generations of candidate prompts being evaluated, each with its score. This takes a while — you budgeted 500 rollouts, after all.
+While it runs, you'll see generations of candidate prompts being evaluated, each with its score. This takes a while — you budgeted 200 rollouts, after all.
 
 ## Read the result
 

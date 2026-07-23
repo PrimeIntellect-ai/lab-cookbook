@@ -31,6 +31,13 @@ A task is **sound** when it passes both: high with oracle, low without. Notice w
 The audit should run through the exact pipeline the real eval uses — same taskset, same judge, same reward — with only the information varied. So the mode is taskset *config*, not a separate script:
 
 ```python
+import json
+from typing import Literal
+
+import verifiers.v1 as vf
+
+from synth_search.servers.search import SearchToolset  # your search tools — see Search Agent
+
 Mode = Literal["search", "oracle", "closed_book"]
 
 ORACLE_TEMPLATE = """Answer the question using the reference content below.
@@ -40,45 +47,62 @@ Reference:
 
 Question: {question}"""
 
+JUDGE_PROMPT = """Question: {question}
+Ground truth answer: {answer}
+Response: {response}
 
-class SynthSearchTask(vf.Task):
+Is the response correct? Reply "yes" or "no" only."""
+
+
+class SynthSearchData(vf.TaskData):
+    # `question` and `answer` feed the reference judge's template values.
     question: str
     answer: str
     oracle_content: str          # the section this QA pair was generated from
 
 
+class SynthSearchTaskConfig(vf.TaskConfig):
+    # One judge, declared once — every mode grades through it. That's the point.
+    judges: vf.Judges = [
+        vf.ReferenceJudgeConfig(prompt=JUDGE_PROMPT, question_field="question")
+    ]
+
+
+class SynthSearchTask(vf.Task[SynthSearchData, vf.State, SynthSearchTaskConfig]):
+    pass                         # oracle / closed-book: judge-graded, tool-free
+
+
+class SearchTask(SynthSearchTask):
+    tools = (SearchToolset,)     # the real task: the evidence must be searched for
+
+
 class SynthSearchConfig(vf.TasksetConfig):
     mode: Mode = "search"
     pairs_file: str = "data/generated_pairs.jsonl"
-    judge: JudgeConfig = JudgeConfig()
-    tools: SearchToolConfig = SearchToolConfig()
+    task: SynthSearchTaskConfig = SynthSearchTaskConfig()
 
 
 class SynthSearchTaskset(vf.Taskset[SynthSearchTask, SynthSearchConfig]):
-    def load_tasks(self) -> list[SynthSearchTask]:
+    def load(self) -> list[SynthSearchTask]:
+        task_cls = SearchTask if self.config.mode == "search" else SynthSearchTask
         tasks = []
-        for i, row in enumerate(load_jsonl(self.config.pairs_file)):
+        for i, line in enumerate(open(self.config.pairs_file)):
+            row = json.loads(line)
             if self.config.mode == "oracle":
                 prompt = ORACLE_TEMPLATE.format(
                     oracle_content=row["oracle_content"], question=row["question"]
                 )
             else:  # search and closed_book both see only the question
                 prompt = row["question"]
-            tasks.append(SynthSearchTask(
-                idx=i, prompt=prompt,
-                question=row["question"], answer=row["answer"],
-                oracle_content=row["oracle_content"],
+            tasks.append(task_cls(
+                SynthSearchData(
+                    idx=i, prompt=prompt,
+                    question=row["question"], answer=row["answer"],
+                    oracle_content=row["oracle_content"],
+                ),
+                self.config.task,
             ))
         return tasks
-
-    def tools(self, task: SynthSearchTask) -> list[vf.Toolset]:
-        if self.config.mode != "search":
-            return []                       # ablations run tool-free
-        return [SearchToolset(self.config.tools)]
-
-    @vf.reward(weight=1.0)
-    async def judged(self, task, trace) -> float:
-        ...  # same judge in every mode — that's the point
 ```
 
 The generation step itself (corpus section → generator LLM → `{question, answer, oracle_content}` JSONL) is a one-time script; keep the source section with every pair — it *is* the oracle, and pairs without provenance can't be audited.
@@ -88,14 +112,14 @@ The generation step itself (corpus section → generator LLM → `{question, ans
 Two runs, differing in exactly one flag. Use a **strong** model — the probe should be at least as capable as any model you'll ever evaluate here, so that "the strong model couldn't do it with the answer in hand" means *broken task*, not *weak prober*. And use multiple rollouts: per-task verdicts from a single sample are coin flips.
 
 ```bash
-prime eval run synth-search --taskset.mode oracle \
+uv run eval synth_search --taskset.mode oracle \
   -r 4 --model openai/gpt-5.4 -o outputs/audit-oracle
 
-prime eval run synth-search --taskset.mode closed_book \
+uv run eval synth_search --taskset.mode closed_book \
   -r 4 --model openai/gpt-5.4 -o outputs/audit-closed
 ```
 
-Then join the two runs per task — each `results.jsonl` holds every rollout's trace with its task index and reward:
+Then join the two runs per task — each `traces.jsonl` holds every rollout's trace with its task data and named rewards:
 
 ```python
 import json
@@ -105,18 +129,18 @@ def pass_rates(path):
     rates = defaultdict(list)
     for line in open(path):
         t = json.loads(line)
-        rates[t["task"]["idx"]].append(t["reward"])
+        rates[t["task"]["data"]["idx"]].append(sum(t["rewards"].values()))
     return {i: sum(r) / len(r) for i, r in rates.items()}
 
-oracle = pass_rates("outputs/audit-oracle/results.jsonl")
-closed = pass_rates("outputs/audit-closed/results.jsonl")
+oracle = pass_rates("outputs/audit-oracle/traces.jsonl")
+closed = pass_rates("outputs/audit-closed/traces.jsonl")
 
 sound = [i for i in oracle if oracle[i] >= 0.75 and closed.get(i, 0) <= 0.25]
 print(f"{len(sound)}/{len(oracle)} pairs are sound")
 json.dump(sound, open("data/sound_ids.json", "w"))
 ```
 
-(Adjust the field access to your trace schema; thresholds are dials — 0.75/0.25 is a sane start.)
+(Thresholds are dials — 0.75/0.25 is a sane start.)
 
 ## Read the quadrants
 
@@ -140,10 +164,10 @@ class SynthSearchConfig(vf.TasksetConfig):
     ...
     sound_ids_file: str | None = None    # audit output; None = unfiltered
 
-# in load_tasks:
+# at the end of load():
 if self.config.sound_ids_file:
     keep = set(json.load(open(self.config.sound_ids_file)))
-    tasks = [t for t in tasks if t.idx in keep]
+    tasks = [t for t in tasks if t.data.idx in keep]
 ```
 
 Now the real environment runs filtered by default, and the audit trail is reproducible: anyone can re-run the two ablations and regenerate `sound_ids.json`. Record the yield in the env README — *"412/500 generated pairs passed the oracle/closed-book audit (gpt-5.4, 4 rollouts, 0.75/0.25 thresholds)"* — that one sentence is what makes a synthetic benchmark trustworthy to someone who didn't build it.

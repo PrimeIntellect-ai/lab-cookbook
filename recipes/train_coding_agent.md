@@ -36,8 +36,8 @@ The bundled `r2e_gym_v1` and `swelego_v1` partitions are gold/no-op validated up
 You can't measure improvement without a before-number. The held-out benchmark, evaluated with the *same harness you'll train with*:
 
 ```bash
-uv run eval @ configs/recipes/swe-baseline-eval.toml          # 5-task local smoke (Docker)
-prime eval run @ configs/recipes/swe-baseline-eval.toml --hosted   # the real 500-task number
+uv run eval @ configs/recipes/swe-baseline-eval.toml           # 5-task local smoke (Docker)
+uv run eval @ configs/recipes/swe-baseline-eval.toml -n 500    # the real 500-task number
 ```
 
 The harness choice matters more here than anywhere: a model trained inside `mini_swe_agent`'s bash-loop learns *that scaffold's* moves ([Build Your Own Coding-Agent Harness](coding_agent_harness.md) showed how differently scaffolds behave). Keep harness and version identical across baseline, training, and final eval, or the delta stops being attributable to the weights.
@@ -98,7 +98,7 @@ A cost note, so nobody is surprised: the blog's reference run — GLM-4.5-Air on
 
 ## Watch the run
 
-`prime rl rollouts` early and late, same as tutorial 3, but the SWE-specific signals are:
+`prime train rollouts` early and late, same as tutorial 3, but the SWE-specific signals are:
 
 - **Training reward vs. held-out pass rate.** The blog's run reached ~0.50 training reward and 0.554 held-out Pass@1. If training reward climbs while the held-out curve doesn't, the model is learning the training distribution's tells, not software engineering — the multi-env mix and verified rewards are your defenses, and the held-out curve is the tripwire.
 - **Turns per task.** Watch it drift: agents under RL pressure first learn to *stop wasting turns* (fewer aimless `ls`/`cat` excursions), then to commit earlier. A collapse to very few turns with flat reward is degenerate behavior worth reading transcripts about.

@@ -6,14 +6,14 @@ A new model drops. The launch post quotes three benchmarks; your use case appear
 
 ## Pick the battery
 
-A report card should test *different* capabilities, not the same one five times. A solid default, all from the Environment Hub:
+A report card should test *different* capabilities, not the same one five times. A solid default, all bundled with this cookbook (and published on the Environment Hub):
 
 | Capability | Environment | What it measures |
 | --- | --- | --- |
-| Math reasoning | `primeintellect/aime25_v1` | Competition math — hard, verifiable answers. |
-| Instruction following | `primeintellect/ifeval_v1` | Does it obey precise, checkable constraints ("exactly three bullet points…")? |
-| Factuality | `primeintellect/simpleqa_verified_v1` | Short factual questions — measures knowledge *and* the tendency to guess. |
-| Agentic / terminal | `primeintellect/terminal-bench-2-v1` | Multi-step tasks in a real container, with a harness. |
+| Math reasoning | `aime25_v1` | Competition math — hard, verifiable answers. |
+| Instruction following | `ifeval_v1` | Does it obey precise, checkable constraints ("exactly three bullet points…")? |
+| Factuality | `simpleqa_verified_v1` | Short factual questions — measures knowledge *and* the tendency to guess. |
+| Agentic / terminal | `terminal_bench_2_v1` | Multi-step tasks in a real container, with a harness. |
 
 Swap rows for what *you* care about (browse `prime env list`) — the recipe is the same. Keep the battery small enough that you'll actually re-run it on the next model; four or five well-chosen environments beat fifteen you run once.
 
@@ -21,7 +21,7 @@ Swap rows for what *you* care about (browse `prime env list`) — the recipe is 
 
 This is the step that separates a defensible report card from a random number generator. Models are trained to be sampled a certain way: temperature, top-p, reasoning effort. Evaluating an open model at the wrong temperature can swing scores by double digits, and the *model* will take the blame.
 
-Look up the recommended parameters (for open models: the Hugging Face model card and its `generation_config.json`; for API models: provider docs) and write them down in a per-model config, e.g. `report/nemotron.toml`:
+Look up the recommended parameters (for open models: the Hugging Face model card and its `generation_config.json`; for API models: provider docs) and write them down — this cookbook keeps them in `configs/report/`, one file per environment, all sharing the model's sampling block:
 
 ```toml
 model = "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B"
@@ -39,7 +39,7 @@ Note what `max_tokens` is doing here: too small a cap doesn't make a reasoning m
 One config per environment, sharing the model block. The pattern, per environment:
 
 ```toml
-# report/aime25.toml
+# configs/report/aime25.toml
 model = "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B"
 num_rollouts = 4        # pass@k needs k attempts — see below
 
@@ -49,20 +49,20 @@ top_p = 0.95
 max_tokens = 8192
 
 [taskset]
-id = "primeintellect/aime25_v1"
+id = "aime25_v1"        # local env bundled with the cookbook (environments/aime25_v1)
 ```
 
 Stage the spend:
 
 ```bash
 # 1. free: every config resolves
-for f in report/*.toml; do prime eval run @ $f --dry-run; done
+for f in configs/report/*.toml; do uv run eval @ $f --dry-run; done
 
 # 2. cheap: smoke run, 5 tasks each — catches broken plumbing before it's expensive
-for f in report/*.toml; do prime eval run @ $f -n 5; done
+for f in configs/report/*.toml; do uv run eval @ $f -n 5; done
 
-# 3. real: full runs, on platform infrastructure
-for f in report/*.toml; do prime eval run @ $f --hosted; done
+# 3. real: full runs — no -n cap, the whole taskset
+for f in configs/report/*.toml; do uv run eval @ $f; done
 ```
 
 Notes on the real runs:
@@ -78,7 +78,7 @@ Before quoting any mean, decompose the rollouts. Every trace ends in one of four
 1. **Valid completion, correct** — genuine success.
 2. **Valid completion, wrong** — genuine failure. These two are the actual measurement.
 3. **Truncated** — hit the token cap mid-answer. This measured your `max_tokens`, not the model. If it's more than a couple percent, raise the cap and re-run.
-4. **Errored** — provider timeouts, rate limits, harness crashes. Infrastructure, not capability. Re-run the gaps with `prime eval run --resume <output-dir>` (it re-does only missing/errored rollouts).
+4. **Errored** — provider timeouts, rate limits, harness crashes. Infrastructure, not capability. Re-run the gaps with `uv run eval --resume <output-dir>` (it re-does only missing/errored rollouts).
 
 `prime eval view` makes the triage fast; the traces' stop conditions and error fields tell you which bucket each rollout is in. **Report the failure rate alongside the score** — "62% (3% of rollouts errored and were resumed)" is a number people can trust.
 
@@ -97,7 +97,7 @@ Two honesty rules for the prose around it: quote sample sizes, and resist explai
 
 The second model is where the setup pays off: re-run the same configs with only the `model` line (and its sampling block!) changed. Same tasksets, same harness and version, same caps. Every delta in the table is now attributable to the model — which was the entire point.
 
-Share it: hosted runs land in your dashboard, and `prime eval push` publishes local results so your team sees the same evidence you do.
+Share it: runs upload to your dashboard automatically (`--push` is on by default; add `--no-push` to keep one local), so your team sees the same evidence you do.
 
 ## Things to try
 
@@ -107,4 +107,4 @@ Share it: hosted runs land in your dashboard, and `prime eval push` publishes lo
 
 ## Recap
 
-Pick a battery of distinct capabilities; fix sampling *per model, deliberately*; stage spend (dry-run → smoke → hosted full runs); decompose outcomes before averaging; report scores with sample sizes and failure rates. The result is a table you can re-run on every new model — and defend line by line.
+Pick a battery of distinct capabilities; fix sampling *per model, deliberately*; stage spend (dry-run → smoke → full runs); decompose outcomes before averaging; report scores with sample sizes and failure rates. The result is a table you can re-run on every new model — and defend line by line.

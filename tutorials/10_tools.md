@@ -17,7 +17,8 @@ class WikiSearchToolset(vf.Toolset[vf.SharedToolsetConfig]):
     async def setup(self) -> None:
         # runs once per server: load the corpus, build/open the Chroma index
         ...
-        self.wiki = WikiIndex(collection, page_id_to_title, page_id_to_content)
+        self.pages = {r["id"]: {"title": r["title"], "content": r["content"]} for r in rows}
+        self.collection = col
 
     @vf.tool
     def search_pages(self, query: str) -> list[dict]:
