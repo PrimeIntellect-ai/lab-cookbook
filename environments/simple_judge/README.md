@@ -1,11 +1,11 @@
 # simple-judge
 
-A tiny v1 instruction-following taskset scored by an LLM judge.
+A tiny latest-verifiers-v1 instruction-following taskset scored by an LLM judge.
 
-- Task: prompt plus criterion
-- Config: nested `judge` client config
-- Reward: judge replies `yes` or `no`
-- Stop: one model turn
+- `SimpleJudgeTaskData` carries each prompt's grading criterion.
+- `SimpleJudgeTask` owns the one-turn stop and judge-backed reward.
+- `SimpleJudge` records its response and billed usage on the rollout trace.
+- Judge settings live under the task config.
 
 Run:
 
@@ -17,6 +17,6 @@ uv run eval @ configs/07/simple-judge-eval.toml
 [taskset]
 id = "simple-judge"
 
-[taskset.judge]
+[taskset.task.judge]
 model = "openai/gpt-4.1-mini"
 ```

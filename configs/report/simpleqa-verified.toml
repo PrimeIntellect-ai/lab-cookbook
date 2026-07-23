@@ -1,0 +1,13 @@
+model = "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B"
+num_rollouts = 1        # large, low-variance set — one attempt is fine
+
+[sampling]
+temperature = 1.0
+top_p = 0.95
+max_tokens = 8192
+
+[taskset]
+id = "simpleqa_verified_v1"   # local env bundled with the cookbook (environments/simpleqa_verified_v1)
+
+[taskset.task.judge]
+model = "openai/gpt-4.1-mini"  # the grader; pin it so factuality scores stay comparable across runs

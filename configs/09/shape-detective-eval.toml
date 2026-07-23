@@ -12,5 +12,8 @@ mode = "multi"
 num_tasks = 12
 seed = 0
 
+[taskset.task.user]
+colocated = false
+
 [harness]
 id = "default"

@@ -1,0 +1,18 @@
+model = "openai/gpt-5.4-nano"
+num_tasks = 5
+num_rollouts = 2
+max_turns = 4
+
+[sampling]
+max_tokens = 1024
+
+[taskset]
+id = "math-python"
+num_tasks = 50
+
+[taskset.task.tools]
+timeout_seconds = 60
+runtime = { type = "docker", image = "python:3.11-slim", workdir = "/tmp" }
+
+[harness]
+id = "default"

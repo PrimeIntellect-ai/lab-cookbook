@@ -1,0 +1,13 @@
+model = "openai/gpt-5.4-nano"
+num_tasks = 5
+num_rollouts = 2
+max_turns = 8
+
+[sampling]
+max_tokens = 2048
+
+[taskset]
+id = "wiki_search_v1"
+
+[harness]
+id = "default"

@@ -12,11 +12,7 @@ max_tokens = 2048
 enable_thinking = false
 
 [taskset]
-id = "wiki-search"
-max_examples = 250
-
-[taskset.tools]
-shared = true
+id = "wiki_search_v1"
 
 [harness]
 id = "default"

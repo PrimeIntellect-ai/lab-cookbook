@@ -1,0 +1,14 @@
+model = "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B"
+num_rollouts = 2        # agentic runs are high-variance — never trust a single rollout
+
+[sampling]
+temperature = 1.0
+top_p = 0.95
+max_tokens = 8192
+
+[taskset]
+id = "terminal_bench_2_v1"    # local env bundled with the cookbook (environments/terminal_bench_2_v1)
+
+[harness]
+id = "codex"                  # pin the harness + version when you re-run the battery on another model
+runtime = { type = "docker" } # each task executes in a container — Docker must be running

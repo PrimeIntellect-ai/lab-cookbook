@@ -9,4 +9,4 @@ num_rollouts = 1
 max_tokens = 1024
 
 [taskset]
-id = "reverse-text"
+id = "reverse_text_v1"

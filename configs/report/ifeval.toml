@@ -1,0 +1,10 @@
+model = "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B"
+num_rollouts = 1        # large, low-variance set — one attempt is fine
+
+[sampling]
+temperature = 1.0
+top_p = 0.95
+max_tokens = 8192
+
+[taskset]
+id = "ifeval_v1"        # local env bundled with the cookbook (environments/ifeval_v1)

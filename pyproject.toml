@@ -8,16 +8,17 @@ version = "0.1.0"
 description = "Guides and recipes for Prime Intellect Lab"
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.11,<3.14"
+requires-python = ">=3.12,<3.14"
 dependencies = [
-    "verifiers>=0.1.15.dev404",
+    "verifiers>=0.2.1.dev46",
     "datasets>=2.0",
     "openai>=1.0",
     "scikit-learn>=1.3",
-    "gsm8k",
-    "wordle",
-    "reverse-text",
-    "wiki-search",
+    "gsm8k-v1",
+    "wordle-v1",
+    "reverse-text-v1",
+    "wiki-search-v1",
+    "alphabet-sort-v1",
     "shape-detective",
     "math-python",
     "calendar-scheduling",
@@ -30,14 +31,28 @@ dependencies = [
     "advanced-patent-q-and-a",
     "patent-technical-analysis",
     "simple-judge",
+    "mini-loop",
+    "tau2-bench-v1",
+    "terminal-bench-2-v1",
+    "aime25-v1",
+    "aime26-v1",
+    "code-golf-v1",
+    "ifeval-v1",
+    "simpleqa-verified-v1",
+    "r2e-gym-v1",
+    "swelego-v1",
+    "swebench-verified-v1",
+    "math500-v1",
+    "unscramble-v1",
 ]
 
 [tool.uv.workspace]
 members = [
-    "environments/gsm8k",
-    "environments/wordle",
-    "environments/reverse_text",
-    "environments/wiki_search",
+    "environments/gsm8k_v1",
+    "environments/wordle_v1",
+    "environments/reverse_text_v1",
+    "environments/wiki_search_v1",
+    "environments/alphabet_sort_v1",
     "environments/shape_detective",
     "environments/math_python",
     "environments/calendar_scheduling",
@@ -50,13 +65,28 @@ members = [
     "environments/patent_search/advanced_patent_q_and_a",
     "environments/patent_search/patent_technical_analysis",
     "environments/simple_judge",
+    "environments/mini_loop",
+    "environments/tau2_bench_v1",
+    "environments/terminal_bench_2_v1",
+    "environments/aime25_v1",
+    "environments/aime26_v1",
+    "environments/code_golf_v1",
+    "environments/ifeval_v1",
+    "environments/simpleqa_verified_v1",
+    "environments/r2e_gym_v1",
+    "environments/swelego_v1",
+    "environments/swebench_verified_v1",
+    "environments/math500_v1",
+    "environments/unscramble_v1",
 ]
 
 [tool.uv.sources]
-reverse-text = { workspace = true }
-wordle = { workspace = true }
-gsm8k = { workspace = true }
-wiki-search = { workspace = true }
+verifiers = { git = "https://github.com/PrimeIntellect-ai/verifiers.git", branch = "main" }
+reverse-text-v1 = { workspace = true }
+wordle-v1 = { workspace = true }
+gsm8k-v1 = { workspace = true }
+wiki-search-v1 = { workspace = true }
+alphabet-sort-v1 = { workspace = true }
 shape-detective = { workspace = true }
 math-python = { workspace = true }
 calendar-scheduling = { workspace = true }
@@ -69,6 +99,19 @@ basic-patent-q-and-a = { workspace = true }
 advanced-patent-q-and-a = { workspace = true }
 patent-technical-analysis = { workspace = true }
 simple-judge = { workspace = true }
+mini-loop = { workspace = true }
+tau2-bench-v1 = { workspace = true }
+terminal-bench-2-v1 = { workspace = true }
+aime25-v1 = { workspace = true }
+aime26-v1 = { workspace = true }
+code-golf-v1 = { workspace = true }
+ifeval-v1 = { workspace = true }
+simpleqa-verified-v1 = { workspace = true }
+r2e-gym-v1 = { workspace = true }
+swelego-v1 = { workspace = true }
+swebench-verified-v1 = { workspace = true }
+math500-v1 = { workspace = true }
+unscramble-v1 = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -82,7 +125,9 @@ dev = [
 [tool.uv]
 default-groups = ["dev"]
 prerelease = "allow"
-upgrade-package = ["verifiers"]
+# prerelease = "allow" (needed for verifiers dev builds) would otherwise let
+# mcp resolve to the 2.x betas, which removed mcp.server.fastmcp.
+constraint-dependencies = ["mcp<2"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["lab_cookbook"]

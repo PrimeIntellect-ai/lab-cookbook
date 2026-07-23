@@ -1,0 +1,14 @@
+model = "openai/gpt-5.4-mini"
+num_tasks = 5
+num_rollouts = 2
+max_concurrent = 4
+
+[sampling]
+max_tokens = 4096
+
+[taskset]
+id = "tau2-bench-v1"
+domain = "telecom"
+
+[harness]
+id = "tau2-bench-v1"
