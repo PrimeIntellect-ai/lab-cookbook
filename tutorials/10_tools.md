@@ -4,7 +4,7 @@ Some tasks are unanswerable from parametric memory — the model has to *look th
 
 Before writing a tool, check whether you need one: many harnesses ship with bash, file, and web-search tools already, and a taskset that relies on harness-provided tools runs everywhere. Custom toolsets are for capabilities the task itself owns — here, search over a *specific pinned corpus*, so the eval measures search behavior rather than whatever the open web returns. Note that custom tools are installed via MCP, and not every harness supports that (the harness advertises it with `SUPPORTS_MCP`; the `default` harness does).
 
-**You need:** [Build Your First Environment](5_build_first_environment.md). For the use-case view of this same environment — evaluating and *training* the search behavior — see the [Search Agent](17_search_agent.md) recipe.
+**You need:** [Build Your First Environment](5_build_first_environment.md). For the use-case view of this same environment — evaluating and *training* the search behavior — see the [Search Agent](../recipes/search_agent.md) recipe.
 
 ## The anatomy of a toolset
 
@@ -98,7 +98,7 @@ uv run eval @ configs/10/wiki-search-eval.toml
 
 The first run pays the index build; subsequent runs reuse `~/.cache/wiki_search` (override it with `WIKI_SEARCH_CACHE`). In `traces.jsonl`, follow the assistant tool calls and matching tool messages: a good trajectory searches, opens a page's sections, reads one, and answers.
 
-This environment trains as-is — `configs/10/wiki-search-rl.toml` embeds it in a training config exactly as [tutorial 3](3_first_rl.md) described, tools included. The [Search Agent](17_search_agent.md) recipe walks that full loop.
+This environment trains as-is — `configs/10/wiki-search-rl.toml` embeds it in a training config exactly as [tutorial 3](3_first_rl.md) described, tools included. The [Search Agent](../recipes/search_agent.md) recipe walks that full loop.
 
 ## Try it
 

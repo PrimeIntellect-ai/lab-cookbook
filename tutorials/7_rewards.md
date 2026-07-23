@@ -124,7 +124,7 @@ Practical notes:
 
 ## Errors are not zeros
 
-One rule keeps your numbers meaningful: **a reward of 0.0 must mean "the model failed," never "my scoring code broke."** If the verifier itself hits an invalid condition — malformed ground truth, a scoring dependency missing — raise an ordinary exception. The framework records it as a `TasksetError` on the trace, which keeps it out of your means and visible in your error accounting ([Model Report Card](13_eval_report_card.md) shows why that separation matters). Swallowing scoring bugs into zeros is how environments quietly rot.
+One rule keeps your numbers meaningful: **a reward of 0.0 must mean "the model failed," never "my scoring code broke."** If the verifier itself hits an invalid condition — malformed ground truth, a scoring dependency missing — raise an ordinary exception. The framework records it as a `TasksetError` on the trace, which keeps it out of your means and visible in your error accounting ([Model Report Card](../recipes/eval_report_card.md) shows why that separation matters). Swallowing scoring bugs into zeros is how environments quietly rot.
 
 Notice the distinction inside `evaluate`: a program that *runs and prints the wrong thing* is scored `passed = 0.0` — that's the model failing, a legitimate zero. If instead the runtime itself couldn't start, that should surface as an error, not a zero. The flip side, for tool-heavy environments: *model-facing* errors (a timeout, a bad tool argument) should usually be returned to the model as text so it can recover — see [Coding Agent Environments](11_coding_agents.md) for that pattern. Raise for broken environments; reply for recoverable model mistakes.
 

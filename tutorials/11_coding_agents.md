@@ -1,10 +1,16 @@
 # Coding Agent Environments
 
-Code-executing environments raise the stakes: the model's output *runs*. This tutorial uses two v1 cookbook packages: a math taskset with a persistent Python interpreter tool, and a **Harbor** suite driven by a coding-agent harness in Docker.
+Code-executing environments raise the stakes: the model's output *runs*. This tutorial uses two v1 cookbook packages: a math taskset with a persistent Python interpreter tool, and a **[Harbor](https://www.harborframework.com/docs)** suite driven by a coding-agent harness in Docker — ending with everything you need to package and run Harbor tasksets of your own.
 
 The taskset/harness split carries the load here: verification and scoring stay on the taskset; the harness and its runtime decide how and where the agent acts.
 
-**You need:** [Build Your First Environment](5_build_first_environment.md) and [Tool Use and Search](10_tools.md); Docker running locally for the Harbor half.
+**You need:** [Build Your First Environment](5_build_first_environment.md) and [Tool Use and Search](10_tools.md); Docker running locally and Python 3.12 or newer for the Harbor half. The cookbook's `opencode-harbor` dependency already requests `verifiers[harbor]`, so sync it with:
+
+```bash
+uv sync --python 3.12
+```
+
+In a standalone project, add the `verifiers[harbor]` extra explicitly.
 
 ## Where code runs: runtimes
 
@@ -127,7 +133,221 @@ uv run eval @ configs/11/opencode-harbor.toml
 
 The trace keeps the boundary visible: the harness owns the agent transcript and `HarborTask.solved` owns the reward. Neither reaches into the other.
 
-When a Harbor task lacks a usable image, build and publish one before evaluation. [Harbor Tasksets](20_harbor.md) covers `task.toml`, `prime images push`, bulk prebuilds, image overrides, and multimodal prompt handling.
+The rest of this tutorial covers the Harbor format itself: what a task contains, the minimal Python wrapper, prebuilt images, and prompt handling.
+
+## What a Harbor task contains
+
+One task is one directory that looks like this:
+
+```text
+regex-log/
+├── instruction.md
+├── task.toml
+├── environment/
+│   └── Dockerfile
+├── tests/
+│   ├── test.sh
+│   └── test_outputs.py
+└── solution/
+    └── solve.sh
+```
+
+`instruction.md` becomes the agent prompt. `solution/` is useful for author validation but is not given to the agent. `task.toml` provides the general configuration for a task, including timeouts, resources, metadata, and most importantly, a pullable image:
+
+```toml
+version = "1.0"
+
+[verifier]
+timeout_sec = 900.0
+
+[agent]
+timeout_sec = 900.0
+
+[environment]
+docker_image = "us-central1-docker.pkg.dev/prime-intellect-platform/prod-sandbox/alexgshaw/regex-log:20251031"
+cpus = 1
+memory = "2G"
+storage = "10G"
+```
+
+After the harness edits the live container, `HarborTaskset` copies `tests/` into it and runs `tests/test.sh`. That script must write a numeric score to:
+
+```text
+/logs/verifier/reward.txt
+```
+
+A binary verifier ends with `echo 1 > /logs/verifier/reward.txt` on success and `echo 0 > /logs/verifier/reward.txt` on failure. A missing, empty, or non-numeric file scores `0`.
+
+## Run the local smoke test
+
+The smallest useful config pins one bundled task (`configs/11/harbor-smoke.toml`):
+
+```toml
+model = "openai/gpt-5.4-mini"
+num_tasks = 1
+num_rollouts = 1
+
+[sampling]
+max_tokens = 4096
+
+[taskset]
+id = "opencode-harbor"
+tasks = ["hello-world"]
+
+[harness]
+id = "opencode-harbor"
+runtime = { type = "docker" }
+```
+
+Check resolution first, then run one rollout:
+
+```bash
+uv run eval @ configs/11/harbor-smoke.toml --dry-run
+uv run eval @ configs/11/harbor-smoke.toml
+```
+
+Here, “local” describes the importable Python package and bundled task data in `environments/opencode_harbor`; Docker still pulls the public `python:3.11-slim` image declared by `hello-world`.
+
+## The minimal wrapper
+
+For a Harbor package that needs no custom behavior, the Python side is only a typed config and taskset:
+
+```python
+import verifiers.v1 as vf
+from verifiers.v1.tasksets.harbor import HarborConfig, HarborTask, HarborTaskset
+
+
+class MyHarborConfig(HarborConfig):
+    dataset: str = "harbor/hello-world"
+
+
+class MyHarborTaskset(
+    HarborTaskset,
+    vf.Taskset[HarborTask, MyHarborConfig],
+):
+    pass
+```
+
+`dataset` selects the Harbor data package. It is separate from `[taskset].id`, which selects the Python wrapper:
+
+- **Harbor Hub:** use an `org/name` dataset, optionally pinned as `org/name@ref`.
+- **Local or legacy registry:** use a bare dataset name and set `registry_path`; `repo` and `registry_url` cover the other Harbor registry selectors.
+- **Environment Hub:** an id such as `org/my-harbor-env@version` can select a published Python taskset instead of a local package.
+
+Filter a downloaded package with `tasks = ["task-name"]`. To relax authored limits without editing task data:
+
+```toml
+[taskset]
+id = "my-harbor"
+timeout_multiplier = 2.0
+resource_multiplier = 1.5
+```
+
+`timeout_multiplier` scales both agent and verifier timeouts. `resource_multiplier` scales CPU, memory, and disk; it does not scale GPUs.
+
+## Use prebuilt images
+
+`HarborTaskset` does **not** build `environment/Dockerfile` during a rollout. It uses `[environment].docker_image`; a Dockerfile-only task is rejected because silently running it on the harness image would test the wrong environment. `ignore_dockerfile = true` explicitly permits that fallback, but is only correct when the harness image already contains everything the task needs.
+
+Build one task image in the Prime registry:
+
+```bash
+prime images push opencode-harbor.x86.regex-log:latest \
+  --context environments/opencode_harbor/tasks/regex-log/environment \
+  --platform linux/amd64
+```
+
+Or discover and build every Dockerfile-only Harbor task in a directory:
+
+```bash
+prime images push-bulk \
+  --harbor environments/opencode_harbor/tasks \
+  --name-template "opencode-harbor.x86.{dir}" \
+  --tag latest \
+  --platform linux/amd64 \
+  --dry-run
+
+prime images push-bulk \
+  --harbor environments/opencode_harbor/tasks \
+  --name-template "opencode-harbor.x86.{dir}" \
+  --tag latest \
+  --platform linux/amd64
+```
+
+`push-bulk --harbor` skips tasks that already declare `docker_image`. Both image commands build remotely; the rollout only pulls the resulting image.
+
+If you cannot change upstream `task.toml` files, override the frozen `TaskData.image` while loading:
+
+```python
+from pathlib import Path
+
+import verifiers.v1 as vf
+from verifiers.v1.tasksets.harbor import HarborConfig, HarborTask, HarborTaskset
+
+IMAGE_TEMPLATE = "<registry-ref>/opencode-harbor.x86.{task}:latest"
+
+
+class MyHarborConfig(HarborConfig):
+    dataset: str = "org/dataset"
+    ignore_dockerfile: bool = True
+
+
+class MyHarborTaskset(
+    HarborTaskset,
+    vf.Taskset[HarborTask, MyHarborConfig],
+):
+    def load(self) -> list[HarborTask]:
+        return [
+            HarborTask(
+                task.data.model_copy(
+                    update={
+                        "image": IMAGE_TEMPLATE.format(
+                            task=Path(task.data.task_dir).name
+                        )
+                    }
+                ),
+                task.config,
+            )
+            for task in super().load()
+        ]
+```
+
+Replace `<registry-ref>` with the prefix printed by `prime images push`. The copied `TaskData` points each task at its prebuilt image, so no runtime build is needed.
+
+## Prompt compatibility
+
+Harbor's loader reads `instruction.md` as a plain Python `str`, which works with CLI-agent harnesses such as this cookbook's OpenCode harness. Images cannot be piped through a command-line prompt. Attach them to the task as typed `vf.Messages` while loading:
+
+```python
+class ImageHarborTaskset(HarborTaskset, vf.Taskset[HarborTask, MyHarborConfig]):
+    def load(self) -> list[HarborTask]:
+        return [
+            HarborTask(
+                task.data.model_copy(
+                    update={
+                        "prompt": [
+                            vf.UserMessage(
+                                content=[
+                                    vf.TextContentPart(text=task.data.prompt_text),
+                                    vf.ImageUrlContentPart(
+                                        image_url=vf.ImageUrlSource(url=image_url(task))
+                                    ),
+                                ]
+                            )
+                        ]
+                    }
+                ),
+                task.config,
+            )
+            for task in super().load()
+        ]
+```
+
+The harness must then declare `SUPPORTS_MESSAGE_PROMPT = True`; the built-in `default` and `codex` harnesses do. The local OpenCode harness deliberately requires a string prompt, so message-list prompts fail fast rather than being flattened silently.
+
+## Current parity gaps
+
+`HarborTaskset` does not yet implement every Harbor feature. Known gaps include sandbox `no-network` policy, shared versus separate verifier environments, and multi-step tasks. Check the [Harbor documentation](https://www.harborframework.com/docs) before adopting those features, and validate both a known-good solution and a no-op task before trusting a new reward.
 
 ## Try it
 
@@ -137,4 +357,4 @@ When a Harbor task lacks a usable image, build and publish one before evaluation
 
 ## Next
 
-You've completed the Ramping up series. The [recipes](README.md#recipes) put these pieces to work on real use cases — [Compare Harnesses](12_compare_harnesses.md) and [Search Agent](17_search_agent.md) are natural continuations of this tutorial.
+→ [Best Practices](12_best_practices.md) closes the Ramping up series with the authoring checklist. Then the [recipes](../recipes/README.md) put these pieces to work on real use cases — [Build Your Own Coding-Agent Harness](../recipes/coding_agent_harness.md) and [Search Agent](../recipes/search_agent.md) are natural continuations of this tutorial.

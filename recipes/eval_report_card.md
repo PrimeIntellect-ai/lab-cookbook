@@ -1,8 +1,8 @@
-# Creating a Model Report Card
+# A Model Report Card
 
 A new model drops. The launch post quotes three benchmarks; your use case appears in none of them. In this recipe you'll build a **report card**: a small battery of evaluations across distinct capabilities, run with settings you chose deliberately, producing numbers you can defend when someone asks *"how did you get that?"*
 
-**You need:** tutorials [1](1_setup.md)–[2](2_first_eval.md), and inference credits proportional to your ambition (the smoke-scale version costs little; full runs cost real money — estimates below on how to stage it).
+**You need:** tutorials [1](../tutorials/1_setup.md)–[2](../tutorials/2_first_eval.md), and inference credits proportional to your ambition (the smoke-scale version costs little; full runs cost real money — estimates below on how to stage it).
 
 ## Pick the battery
 
@@ -69,7 +69,7 @@ Notes on the real runs:
 
 - **Don't set `num_tasks`** — the full taskset is the benchmark; a subset is a different (and incomparable) number.
 - **`num_rollouts = 4`** on small, high-variance sets like AIME (30 problems) — report the mean over attempts, or pass@4 if that's your use case; a single rollout on 30 tasks is a coin flip. On large sets (IFEval, SimpleQA), `num_rollouts = 1` is fine.
-- **The agentic row needs a harness** — add `[harness] id = "codex"` (pinned `version = ...`) plus a runtime to the terminal-bench config, and keep it identical when you later re-run the battery on another model. Harness choice changes agentic scores as much as model choice; see [Compare Harnesses](12_compare_harnesses.md).
+- **The agentic row needs a harness** — add `[harness] id = "codex"` (pinned `version = ...`) plus a runtime to the terminal-bench config, and keep it identical when you later re-run the battery on another model. Harness choice changes agentic scores as much as model choice; see [Build Your Own Coding-Agent Harness](coding_agent_harness.md).
 
 ## Grade honestly
 
@@ -101,7 +101,7 @@ Share it: hosted runs land in your dashboard, and `prime eval push` publishes lo
 
 ## Things to try
 
-- Add a row for *your* domain — a private env of your real tasks is worth more than every public benchmark combined. [Turn a dataset into one](5_build_first_environment.md) in an afternoon.
+- Add a row for *your* domain — a private env of your real tasks is worth more than every public benchmark combined. [Turn a dataset into one](../tutorials/5_build_first_environment.md) in an afternoon.
 - Run the battery on the model you currently use in production. Having the incumbent's card ready is what makes the next launch-day evaluation take an hour instead of a week.
 - For factuality sets, look at *wrong-vs-abstained* in the traces: two models with equal SimpleQA scores can differ enormously in how confidently they hallucinate.
 

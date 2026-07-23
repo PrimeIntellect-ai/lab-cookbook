@@ -31,7 +31,7 @@ def tile_image_data_url(tiles: list[Tile]) -> str:
 Two things to notice about this approach:
 
 - **The task is fully self-contained.** A data URI travels inside the task itself — no image hosting, no broken links, and the environment stays a single installable package. (For large real-image datasets, tasks can reference dataset assets instead; the message-list shape is the same.)
-- **Generated images are ground-truth-exact.** Because the environment *draws* the grid, it knows precisely what's in every tile — the same generate-then-score advantage as [Infinite Tasksets](14_infinite_tasksets.md) and [Synthetic Worlds](15_synthetic_world.md), extended to pixels. There is no labeling step to get wrong.
+- **Generated images are ground-truth-exact.** Because the environment *draws* the grid, it knows precisely what's in every tile — the generate-then-score advantage extended to pixels. There is no labeling step to get wrong.
 
 Everything else is ordinary v1 task structure:
 

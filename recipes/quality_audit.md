@@ -1,8 +1,8 @@
-# Recipe — Quality-Auditing Synthetic Tasks
+# Quality-Auditing Synthetic Tasks
 
 Generating tasks is easy — an LLM will happily turn any corpus into ten thousand QA pairs overnight. The hard question comes after: **are they any good?** A synthetic taskset looks exactly like a real one from the outside; the aggregate score won't tell you that a third of the questions are unanswerable and another fifth are guessable without doing the task. In this recipe you'll build the audit that catches both — demonstrated on a synthetic *search* environment, where the technique is at its cleanest: **a QA pair is sound if a strong model scores high with the oracle content in context, and low without it.**
 
-**You need:** tutorials [1](1_setup.md)–[2](2_first_eval.md); [Search Agent](17_search_agent.md) for context on search environments, and [Infinite Tasksets](14_infinite_tasksets.md) if generated tasks are new to you.
+**You need:** tutorials [1](../tutorials/1_setup.md)–[2](../tutorials/2_first_eval.md); [Search Agent](search_agent.md) for context on search environments.
 
 ## The two ways a synthetic task lies
 
@@ -17,10 +17,12 @@ Both are invisible in the mean score. Both are common in generated data. And the
 
 The insight is that a search task makes an implicit two-part claim — *the answer is in the content* (answerable) and *the answer requires the content* (retrieval-necessary). Each part can be tested directly by manipulating what's in context, using a strong model as the probe:
 
-| Run | What the model gets | A sound task's result |
-| --- | --- | --- |
-| **Oracle** | The question **plus the source section** pasted into the prompt. No tools. | **High** — if a strong model can't answer *with the evidence in hand*, the pair (or the judge) is broken. |
-| **Closed-book** | The question alone. No tools, no content. | **Low** — if the model answers *without* the evidence, search was never required. |
+
+| Run             | What the model gets                                                        | A sound task's result                                                                                     |
+| --------------- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| **Oracle**      | The question **plus the source section** pasted into the prompt. No tools. | **High** — if a strong model can't answer *with the evidence in hand*, the pair (or the judge) is broken. |
+| **Closed-book** | The question alone. No tools, no content.                                  | **Low** — if the model answers *without* the evidence, search was never required.                         |
+
 
 A task is **sound** when it passes both: high with oracle, low without. Notice what makes this powerful: it needs no human labels, it audits the *judge* along the way (oracle failures with a correct-looking response are judge failures), and it produces a per-task verdict you can filter on.
 
@@ -120,10 +122,12 @@ json.dump(sound, open("data/sound_ids.json", "w"))
 
 Every task now sits in one of four cells, and each cell has a different diagnosis:
 
-| | **Closed-book low** | **Closed-book high** |
-| --- | --- | --- |
-| **Oracle high** | ✅ **Sound** — answerable, and search is required. Keep. | ⚠️ **Guessable** — real question, but the world already knows the answer. Drop for a search env (it trains tool-skipping); fine for a plain QA set. |
-| **Oracle low** | ❌ **Broken** — bad gold, ambiguous question, or a judge that can't recognize correctness. Read a few traces before dropping: if the model's oracle answer *looks* right, your **judge** is the broken part — fix it and re-audit, because a broken judge poisons all four cells. | 🚨 **Inverted** — the model answers "correctly" from memory but fails *with the evidence*? Almost always a gold answer that contradicts the source, or the question and section drifted apart during generation. Inspect by hand. |
+
+|                 | **Closed-book low**                                                                                                                                                                                                                                                              | **Closed-book high**                                                                                                                                                                                                              |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Oracle high** | ✅ **Sound** — answerable, and search is required. Keep.                                                                                                                                                                                                                          | ⚠️ **Guessable** — real question, but the world already knows the answer. Drop for a search env (it trains tool-skipping); fine for a plain QA set.                                                                               |
+| **Oracle low**  | ❌ **Broken** — bad gold, ambiguous question, or a judge that can't recognize correctness. Read a few traces before dropping: if the model's oracle answer *looks* right, your **judge** is the broken part — fix it and re-audit, because a broken judge poisons all four cells. | 🚨 **Inverted** — the model answers "correctly" from memory but fails *with the evidence*? Almost always a gold answer that contradicts the source, or the question and section drifted apart during generation. Inspect by hand. |
+
 
 Spend ten minutes reading traces from the two failure cells — generated-task failures are highly patterned (the generator writes ambiguous questions in one recognizable style, leaks answers in another), and one prompt fix to the *generator* often clears a whole cluster on the next batch. The audit isn't just a filter; it's the feedback loop for your generation prompt.
 
@@ -148,14 +152,16 @@ Two habits to go with it: **re-audit whenever anything upstream changes** (gener
 
 ## Beyond search
 
-The bracket generalizes to any synthetic task with hidden ground truth: the oracle run gives the model whatever information makes the task *trivially checkable* (the relevant document, the constraint list, the intermediate result), the closed-book run withholds it, and soundness is the gap between them. Note what each half audits: the oracle side validates your **data and judge**; the closed-book side validates that the task measures the **capability you built it for**. Environments with generated worlds get the first half free — a validated generator ([Synthetic Worlds](15_synthetic_world.md)) can't produce unanswerable tasks — but the leakage half still applies to anything whose answers exist in pretraining data.
+The bracket generalizes to any synthetic task with hidden ground truth: the oracle run gives the model whatever information makes the task *trivially checkable* (the relevant document, the constraint list, the intermediate result), the closed-book run withholds it, and soundness is the gap between them. Note what each half audits: the oracle side validates your **data and judge**; the closed-book side validates that the task measures the **capability you built it for**. Environments with generated worlds get the first half free — a validated generator can’t produce unanswerable tasks — but the leakage half still applies to anything whose answers exist in pretraining data.
 
 ## Things to try
 
 - **Add a distractor leg:** oracle content plus three irrelevant sections. High performance with a clean oracle but low with distractors reveals questions that are answerable but *fragile* — a difficulty signal the two-run audit can't see.
 - **Two-prober agreement:** run the audit with two different strong models and keep only tasks where both agree. Disagreement clusters are almost always ambiguity.
 - **Audit an existing taskset:** run the closed-book leg alone against any search environment you already use — the guessable fraction of established QA sets is routinely surprising.
-- **Close the training loop:** RL-train a search agent ([Search Agent](17_search_agent.md)) on the unfiltered vs. the filtered taskset and compare tool-use rates — the filtered run should search *more*, because guessing no longer pays.
+- **Close the training loop:** RL-train a search agent ([Search Agent](search_agent.md)) on the unfiltered vs. the filtered taskset and compare tool-use rates — the filtered run should search *more*, because guessing no longer pays.
+
+
 
 ## Recap
 

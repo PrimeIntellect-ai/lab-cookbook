@@ -1,8 +1,8 @@
-# Recipe — A Search Agent
+# A Search Agent
 
-Some questions can't be answered from memory — the model has to *look things up*. In this recipe you'll work with `wiki-search`, an environment where the model answers obscure trivia questions by searching a pinned Wikipedia corpus through custom tools. You'll see how tools are built and wired, evaluate a model's search behavior, and then — the payoff — train a model with RL to search *better*.
+Some questions can't be answered from memory — the model has to *look things up*. In this recipe you'll work with `wiki_search_v1`, an environment where the model answers obscure trivia questions by searching a pinned Wikipedia corpus through custom tools. You'll see how tools are built and wired, evaluate a model's search behavior, and then — the payoff — train a model with RL to search *better*.
 
-**You need:** tutorials [1](1_setup.md)–[3](3_first_rl.md). The environment ships in this repo at `environments/wiki_search/`.
+**You need:** tutorials [1](../tutorials/1_setup.md)–[3](../tutorials/3_first_rl.md). The official environment ships in this repo at `environments/wiki_search_v1/`.
 
 ## Why custom tools at all?
 
@@ -12,10 +12,10 @@ Custom tools are served to the model over MCP, and the harness must support that
 
 ## The tools
 
-A `vf.Toolset` bundles tools the way a taskset bundles tasks. Wiki-search exposes three, deliberately shaped like a research workflow (`environments/wiki_search/wiki_search.py`, abbreviated):
+A `vf.Toolset` bundles tools the way a taskset bundles tasks. Wiki search exposes three, deliberately shaped like a research workflow (`environments/wiki_search_v1/wiki_search_v1/servers/wiki.py`, abbreviated):
 
 ```python
-class WikiSearchToolset(vf.Toolset[WikiToolConfig]):
+class WikiSearchToolset(vf.Toolset[vf.SharedToolsetConfig]):
     TOOL_PREFIX = "wiki"
 
     async def setup(self) -> None:
@@ -41,20 +41,18 @@ if __name__ == "__main__":
 
 What to notice:
 
-- **`@vf.tool` methods become the model's tools.** The docstring is the description the model reads; the signature is the schema. Write both *for the model*.
+- `@vf.tool` **methods become the model's tools.** The docstring is the description the model reads; the signature is the schema. Write both *for the model*.
 - **The tools force navigation.** Search returns page *ids*; sections are read *one at a time*. The model must search → skim → read, like a person would — tool granularity is task design. One "give me the answer" tool would measure nothing.
-- **`setup()` runs once per server** and holds the expensive part (building the embedding index). Because that setup is costly and read-only, the config sets `shared = true`: one tool server serves all rollouts instead of one each. (The full menu of placement options — per-rollout, shared, colocated, remote — is in [Tool Use and Search](9_tools.md).)
+- `setup()` **runs once per server** and holds the expensive part (building the embedding index). Because this server is costly and read-only, the taskset declares it with `SharedToolsetConfig`: one server serves an environment worker's rollouts. (The full menu of placement options is in [Tool Use and Search](../tutorials/10_tools.md).)
 
-The taskset wires tools in per task, and scores with an LLM judge comparing the model's final answer to the trivia ground truth:
+The taskset declares the shared tool server, while each task is configured with a reference judge:
 
 ```python
 class WikiSearchTaskset(vf.Taskset[TriviaTask, WikiSearchConfig]):
-    def tools(self, task: TriviaTask) -> list[vf.Toolset]:
-        return [WikiSearchToolset(self.config.tools)]
+    tools = (WikiSearchToolset,)
 
-    @vf.reward(weight=1.0)
-    async def judged(self, task: TriviaTask, trace: vf.Trace) -> float:
-        ...  # judge: is the final answer correct, given the ground truth?
+class WikiSearchTaskConfig(vf.TaskConfig):
+    judges: vf.Judges = [vf.ReferenceJudgeConfig(...)]
 ```
 
 Tools change *how* the model works, never *what counts as correct*.
@@ -62,7 +60,7 @@ Tools change *how* the model works, never *what counts as correct*.
 ## Evaluate the agent
 
 ```bash
-prime eval run @ configs/08/wiki-search-eval.toml
+uv run eval @ configs/10/wiki-search-eval.toml
 ```
 
 The config, with the parts that matter:
@@ -77,18 +75,13 @@ max_turns = 8               # search takes turns — leave room
 max_tokens = 2048
 
 [taskset]
-id = "wiki-search"
-max_examples = 250
-
-[taskset.tools]             # nested tool config, overridable like everything else
-shared = true
-chroma_db_dir = ".chroma_db/wiki-search-small"
+id = "wiki_search_v1"
 
 [harness]
 id = "default"
 ```
 
-The first run pays the one-time index build; later runs reuse the Chroma directory.
+The first run pays the one-time index build; later runs reuse `~/.cache/wiki_search` (or the directory selected by `WIKI_SEARCH_CACHE`).
 
 Now read the traces (`prime eval view`) — with tools, the transcript grows a third voice. Alongside the model's messages you'll see `trace.tool_messages`: every search it issued, every section it read. A good rollout reads like research — search, open a page's sections, read the right one, answer. The failures are more instructive, and they cluster into visibly different species:
 
@@ -103,10 +96,10 @@ Diagnose which species dominates before changing anything — they have differen
 Which brings us to the payoff. Search is a *behavior*, not a fact — exactly what RL trains. This environment is training-ready:
 
 ```bash
-prime rl init primeintellect/wiki_search_v1
+prime rl init wiki_search_v1
 ```
 
-The essentials of the training config (`configs/08/wiki-search-rl.toml` shows a complete open-source-trainer variant):
+The essentials of the training config (`configs/10/wiki-search-rl.toml` shows a complete open-source-trainer variant):
 
 ```toml
 model = "openai/gpt-oss-20b"
@@ -120,18 +113,20 @@ max_tokens = 2048
 [[env]]
 name = "wiki-search"
 max_turns = 8
-taskset = { id = "primeintellect/wiki_search_v1", max_examples = 512, tools = { shared = true } }
+taskset = { id = "wiki_search_v1" }
 harness = { id = "default" }
 ```
 
-Everything from [tutorial 3](3_first_rl.md) applies — groups, sometimes-solvable tasks, watching reward climb. What's new is *what improvement looks like*: check `prime rl rollouts` early and late in the run. Early: skipped searches, one-shot queries, answers ungrounded in what was read. Later: consistent search-first behavior, query reformulation after a miss, answers quoting the retrieved section. The reward only said "right answer or not" — the *strategy* is what the model discovered under it.
+Everything from [tutorial 3](../tutorials/3_first_rl.md) applies — groups, sometimes-solvable tasks, watching reward climb. What's new is *what improvement looks like*: check `prime rl rollouts` early and late in the run. Early: skipped searches, one-shot queries, answers ungrounded in what was read. Later: consistent search-first behavior, query reformulation after a miss, answers quoting the retrieved section. The reward only said "right answer or not" — the *strategy* is what the model discovered under it.
 
 ## Things to try
 
 - Compare two models on the same 50 tasks and count tool calls per rollout from the traces: stronger models often search *less but better* — fewer, sharper queries.
 - Tighten `max_turns` from 8 to 4 and watch the reward drop: how much of the score was persistence? (For training, that same cap is pressure toward *efficient* search.)
-- Break it on purpose: run with the judge swapped to a weaker model (`--taskset.judge.model ...`) and audit 10 verdicts by hand — a search agent's eval is only as good as its judge ([Judges](6_judges.md)).
+- Break it on purpose: run with the judge swapped to a weaker model (`--taskset.judge.model ...`) and audit 10 verdicts by hand — a search agent's eval is only as good as its judge ([Judges](../tutorials/6_judges.md)).
 - Swap the corpus: the tool config takes a different `corpus_dataset` — your internal docs instead of rare wiki pages, and the same environment evaluates *your* retrieval task.
+
+
 
 ## Recap
 
