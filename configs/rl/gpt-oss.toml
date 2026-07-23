@@ -11,6 +11,6 @@ max_tokens = 1024
 reasoning_effort = "low"
 
 [[orchestrator.train.env]]
-name = "reverse-text"
-taskset = { id = "reverse-text" }
+name = "reverse_text_v1"
+taskset = { id = "reverse_text_v1" }
 harness = { id = "default" }

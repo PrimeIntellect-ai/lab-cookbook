@@ -1,17 +1,14 @@
 [project]
 name = "simple-judge"
-description = "Toy instruction-following environment scored by a trivial LLM judge."
+description = "Toy instruction-following taskset scored by an LLM judge."
 tags = ["single-turn", "judge", "instruction-following", "eval"]
 version = "0.1.0"
 requires-python = ">=3.11,<3.14"
-dependencies = [
-    "verifiers>=0.1.15.dev403",
-    "openai>=1.0.0",
-]
+dependencies = ["verifiers>=0.2.1.dev46"]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.hatch.build]
-include = ["simple_judge.py", "pyproject.toml", "README.md"]
+[tool.hatch.build.targets.wheel]
+packages = ["simple_judge"]

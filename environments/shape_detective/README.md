@@ -1,11 +1,14 @@
 # shape-detective
 
-A v1 multimodal deduction taskset.
+A latest-verifiers-v1 multimodal deduction taskset modeled on
+`color_codeword_v1`.
 
-- Task: image-bearing prompt with a hidden target tile
-- Mode: `single` asks for one direct answer; `multi` uses a user simulator for clues
-- User simulator: `ShapeDetectiveUser`
-- Reward: exact target-tile identification
+- `ShapeDetectiveTaskData` and `ShapeDetectiveState` type the task and rollout state.
+- The initial prompt is a message list containing text and the generated grid image.
+- `single` asks for one direct answer; `multi` uses the dedicated
+  `ShapeDetectiveUser` server to reveal later clues.
+- `ShapeDetectiveTask` declares the user server and owns stopping and exact-match
+  reward behavior.
 
 Run:
 
@@ -21,4 +24,7 @@ id = "shape-detective"
 mode = "multi"
 num_tasks = 12
 seed = 0
+
+[taskset.task.user]
+colocated = false
 ```

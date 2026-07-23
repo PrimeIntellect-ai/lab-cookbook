@@ -12,4 +12,4 @@ max_tokens = 1024
 enable_thinking = false
 
 [taskset]
-id = "reverse-text"
+id = "reverse_text_v1"

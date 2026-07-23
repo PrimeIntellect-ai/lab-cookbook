@@ -1,6 +1,6 @@
 # configs
 
-Starter TOMLs for v1 eval, legacy GEPA, and hosted training examples.
+Starter TOMLs for v1 eval and GEPA, plus hosted training examples.
 
 ## Layout
 
@@ -9,7 +9,7 @@ Starter TOMLs for v1 eval, legacy GEPA, and hosted training examples.
 | Numbered directories | Guide-specific commands | v1 eval or training configs used in each guide. |
 | `eval/` | `uv run eval @ <file>` | One v1 taskset per file, tuned for a model family. |
 | `rl/` | Hosted training / prime-rl configs | Training configs embedding v1 env definitions under `[[orchestrator.train.env]]`. |
-| `gepa/` | `prime gepa run <file>` | Legacy v0 GEPA configs. |
+| `gepa/` | Legacy `vf-gepa` examples | Older v0 GEPA configs retained for reference. New configs should use the v1 `gepa` command. |
 | `endpoints.toml` | Prime CLI helpers | Endpoint aliases for commands that still read the shared registry. |
 
 ## v1 Eval Configs
@@ -26,8 +26,7 @@ max_turns = 6
 max_tokens = 1024
 
 [taskset]
-id = "wordle"
-num_tasks = 100
+id = "wordle_v1"
 
 [harness]
 id = "default"
@@ -49,7 +48,7 @@ Training configs embed the same v1 env definition:
 [[orchestrator.train.env]]
 name = "wiki-search"
 max_turns = 8
-taskset = { id = "wiki-search", max_examples = 512, tools = { shared = true } }
+taskset = { id = "wiki_search_v1" }
 harness = { id = "default" }
 ```
 
@@ -57,4 +56,4 @@ Add another `[[orchestrator.train.env]]` block only when you deliberately train 
 
 ## GEPA Configs
 
-The GEPA CLI in this checkout still loads v0 environments. Files under `configs/gepa/` are kept for that legacy workflow and should not be used as v1 taskset config examples.
+The current `uv run gepa` CLI uses the same v1 taskset and harness loader as eval. `configs/04/wordle-gepa.toml` is the canonical local v1 example; files under `configs/gepa/` are older v0 examples retained for reference.

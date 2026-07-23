@@ -1,0 +1,37 @@
+# Multi-environment RL on SWE tasks — see recipes/train_coding_agent.md
+# Train with: prime train configs/recipes/swe-rl.toml
+model = "zai-org/GLM-4.5-Air"
+
+max_steps = 200
+batch_size = 128
+rollouts_per_example = 8
+
+[sampling]
+max_tokens = 8192
+
+[[env]]
+name = "r2e-gym"
+max_turns = 50
+taskset = { id = "r2e_gym_v1" }
+harness = { id = "mini_swe_agent", runtime = { type = "prime" } }
+
+[[env]]
+name = "swe-lego"
+max_turns = 50
+taskset = { id = "swelego_v1" }
+harness = { id = "mini_swe_agent", runtime = { type = "prime" } }
+
+# Held-out benchmark, scored periodically during the run — never trained on.
+[eval]
+interval = 20
+
+[[eval.env]]
+name = "swebench-verified"
+num_examples = 50
+rollouts_per_example = 1
+taskset = { id = "swebench_verified_v1" }
+harness = { id = "mini_swe_agent", runtime = { type = "prime" } }
+
+[[pre_batch_filters]]
+type = "zero_advantage"
+enforce = true

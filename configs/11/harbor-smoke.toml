@@ -1,0 +1,14 @@
+model = "openai/gpt-5.4-mini"
+num_tasks = 1
+num_rollouts = 1
+
+[sampling]
+max_tokens = 4096
+
+[taskset]
+id = "opencode-harbor"
+tasks = ["hello-world"]
+
+[harness]
+id = "opencode-harbor"
+runtime = { type = "docker" }

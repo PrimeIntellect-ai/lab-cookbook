@@ -10,6 +10,6 @@ rollouts_per_example = 8
 max_tokens = 1024
 
 [[orchestrator.train.env]]
-name = "reverse-text"
-taskset = { id = "reverse-text" }
+name = "reverse_text_v1"
+taskset = { id = "reverse_text_v1" }
 harness = { id = "default" }

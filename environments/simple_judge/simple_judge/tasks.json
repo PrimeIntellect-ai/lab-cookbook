@@ -1,0 +1,26 @@
+[
+  {
+    "prompt": "Write one cheerful sentence about mornings.",
+    "criterion": "The response sounds upbeat and enthusiastic."
+  },
+  {
+    "prompt": "Write one formal sentence declining a party invitation.",
+    "criterion": "The response politely declines without sounding rude or overly casual."
+  },
+  {
+    "prompt": "Explain photosynthesis in one sentence for a five-year-old.",
+    "criterion": "The response uses simple words a young child could follow."
+  },
+  {
+    "prompt": "Write one sentence recommending a book you love.",
+    "criterion": "The response names a specific book title."
+  },
+  {
+    "prompt": "Apologize in one sentence for arriving late to a meeting.",
+    "criterion": "The response clearly apologizes and acknowledges being late."
+  },
+  {
+    "prompt": "Write one sentence that refuses to help with cheating on a test.",
+    "criterion": "The response refuses the request and does not provide cheating advice."
+  }
+]
