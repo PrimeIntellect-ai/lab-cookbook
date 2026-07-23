@@ -2,9 +2,10 @@
 
 This is a local map of the cookbook workspace.
 
-- [guides](../guides/) - ordered walkthroughs.
+- [tutorials](../tutorials/) - the sequential on-ramp.
+- [recipes](../recipes/) - use-case-driven, end-to-end walkthroughs.
 - [configs](../configs/) - runnable Prime eval, GEPA, and training configs.
-- [environments](../environments/) - local environment packages used by guides.
+- [environments](../environments/) - local environment packages used by tutorials and recipes.
 - [reference](./) - thin pointers only; do not duplicate managed guidance here.
 - [`.prime/skills`](../.prime/skills/) - managed Lab skills.
 - [`.prime/lab/templates`](../.prime/lab/templates/) - managed config templates.

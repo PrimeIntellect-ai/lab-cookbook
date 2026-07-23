@@ -156,16 +156,10 @@ regex-log/
     └── solve.sh
 ```
 
-`instruction.md` becomes the agent prompt. `solution/` is useful for author validation but is not given to the agent. `task.toml` provides the general configuration for a task, including timeouts, resources, metadata, and most importantly, a pullable image:
+`instruction.md` becomes the agent prompt. `solution/` is useful for author validation but is not given to the agent. `task.toml` provides the general configuration for a task — resources, metadata, and most importantly, a pullable image:
 
 ```toml
 version = "1.0"
-
-[verifier]
-timeout_sec = 900.0
-
-[agent]
-timeout_sec = 900.0
 
 [environment]
 docker_image = "us-central1-docker.pkg.dev/prime-intellect-platform/prod-sandbox/alexgshaw/regex-log:20251031"
@@ -173,6 +167,8 @@ cpus = 1
 memory = "2G"
 storage = "10G"
 ```
+
+The format also accepts `[agent]`/`[verifier]` `timeout_sec` limits — prefer not to set them. A wall-clock timeout confounds model capability with how fast your inference infrastructure happens to serve tokens; a slow provider fails tasks a capable model would solve. If you inherit tasks with tight authored limits, `timeout_multiplier` (below) relaxes them without editing task data.
 
 After the harness edits the live container, `HarborTaskset` copies `tests/` into it and runs `tests/test.sh`. That script must write a numeric score to:
 
@@ -274,15 +270,16 @@ prime images push-bulk \
 
 `push-bulk --harbor` skips tasks that already declare `docker_image` — every bundled task under `environments/opencode_harbor/tasks` does, so pointing it there reports nothing to build. Both image commands build remotely; the rollout only pulls the resulting image.
 
-If you cannot change upstream `task.toml` files, override the frozen `TaskData.image` while loading:
+If you cannot change upstream `task.toml` files, override the frozen `TaskData.image` while loading. This is the pattern production tasksets use (OpenThoughts-TBLite ships exactly this shape — Dockerfile-only tasks, images prebuilt once with `prime images push-bulk`, refs resolved in `load`):
 
 ```python
+from collections.abc import Iterator
 from pathlib import Path
 
 import verifiers.v1 as vf
 from verifiers.v1.tasksets.harbor import HarborConfig, HarborTask, HarborTaskset
 
-IMAGE_TEMPLATE = "<registry-ref>/opencode-harbor.x86.{task}:latest"
+IMAGE_TEMPLATE = "my-tasks/{task}:latest"   # must match the refs `prime images push-bulk` printed
 
 
 class MyHarborConfig(HarborConfig):
@@ -290,27 +287,15 @@ class MyHarborConfig(HarborConfig):
     ignore_dockerfile: bool = True
 
 
-class MyHarborTaskset(
-    HarborTaskset,
-    vf.Taskset[HarborTask, MyHarborConfig],
-):
-    def load(self) -> list[HarborTask]:
-        return [
-            HarborTask(
-                task.data.model_copy(
-                    update={
-                        "image": IMAGE_TEMPLATE.format(
-                            task=Path(task.data.task_dir).name
-                        )
-                    }
-                ),
-                task.config,
-            )
-            for task in super().load()
-        ]
+class MyHarborTaskset(HarborTaskset, vf.Taskset[HarborTask, MyHarborConfig]):
+    def load(self) -> Iterator[HarborTask]:
+        for task in super().load():
+            image = IMAGE_TEMPLATE.format(task=Path(task.data.task_dir).name)
+            task.data = task.data.model_copy(update={"image": image})
+            yield task
 ```
 
-Replace `<registry-ref>` with the prefix printed by `prime images push`. The copied `TaskData` points each task at its prebuilt image, so no runtime build is needed.
+The updated `TaskData` points each task at its prebuilt image, so no runtime build is needed. One caveat on where refs resolve: org-less refs like `my-tasks/{task}` are platform-registry shorthand — they work in the `prime` runtime, but a local Docker daemon treats them as (nonexistent) Docker Hub repos. For tasksets that must also run locally, keep publicly pullable refs in `task.toml` and reserve the override for platform runs.
 
 ## Prompt compatibility
 

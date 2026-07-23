@@ -148,7 +148,6 @@ max_tokens = 4096
 
 [taskset]
 id = "terminal-bench-2-v1"
-use_prime_registry = true   # pull task images from the Prime registry (avoids Docker Hub rate limits)
 
 [harness]
 runtime = { type = "docker" }

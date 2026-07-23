@@ -1,9 +1,11 @@
+"""OpenCode CLI harness routed through the v1 interception endpoint."""
+
 import json
 import shlex
 from pathlib import PurePosixPath
 
 import verifiers.v1 as vf
-from verifiers.v1.tasksets.harbor import HarborConfig, HarborTask, HarborTaskset
+from pydantic import Field
 
 DEFAULT_RELEASE_REPO = "PrimeIntellect-ai/opencode"
 DEFAULT_RELEASE_VERSION = "1.1.63-rl2"
@@ -13,7 +15,7 @@ DEFAULT_SYSTEM_PROMPT = """You are an autonomous coding agent running inside the
 Edit files and run tests as needed. When you believe the task is complete, stop after a concise final message.
 """
 
-DEFAULT_DISABLED_TOOLS = [
+DEFAULT_DISABLED_TOOLS = (
     "apply_patch",
     "write",
     "multiedit",
@@ -33,21 +35,9 @@ DEFAULT_DISABLED_TOOLS = [
     "lsp",
     "codesearch",
     "skill",
-]
+)
 
 JsonValue = str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
-
-
-class OpenCodeHarborConfig(HarborConfig):
-    dataset: str = "hello-world"
-    ignore_dockerfile: bool = True
-
-
-class OpenCodeHarborTaskset(
-    HarborTaskset,
-    vf.Taskset[HarborTask, OpenCodeHarborConfig],
-):  # ty: ignore[invalid-generic-class]
-    pass
 
 
 class OpenCodeHarnessConfig(vf.HarnessConfig):
@@ -62,7 +52,9 @@ class OpenCodeHarnessConfig(vf.HarnessConfig):
     log_path: str = "/opencode/logs.txt"
     agent_workdir: str = "/app"
     system_prompt: str = DEFAULT_SYSTEM_PROMPT
-    disabled_tools: list[str] | None = DEFAULT_DISABLED_TOOLS
+    disabled_tools: list[str] | None = Field(
+        default_factory=lambda: list(DEFAULT_DISABLED_TOOLS)
+    )
 
 
 def build_install_script(config: OpenCodeHarnessConfig) -> str:
@@ -73,7 +65,8 @@ def build_install_script(config: OpenCodeHarnessConfig) -> str:
     )
     return f"""\
 set -e
-apt-get -o Acquire::Retries=3 update -qq && apt-get -o Acquire::Retries=3 install -y -qq curl tar > /dev/null 2>&1
+apt-get -o Acquire::Retries=3 update -qq
+apt-get -o Acquire::Retries=3 install -y -qq curl tar > /dev/null 2>&1
 {rg_install}
 
 case "$(uname -m)" in
@@ -106,6 +99,7 @@ def build_opencode_config(config: OpenCodeHarnessConfig) -> str:
         build_config["tools"] = {tool: False for tool in config.disabled_tools}
     if build_config:
         agent_config["build"] = build_config
+
     payload: dict[str, JsonValue] = {
         "${SCHEMA_DOLLAR}schema": "https://opencode.ai/config.json",
         "provider": {
@@ -120,7 +114,10 @@ def build_opencode_config(config: OpenCodeHarnessConfig) -> str:
                 "models": {
                     "${OPENAI_MODEL##*/}": {
                         "name": "${OPENAI_MODEL##*/}",
-                        "modalities": {"input": ["text", "image"], "output": ["text"]},
+                        "modalities": {
+                            "input": ["text", "image"],
+                            "output": ["text"],
+                        },
                         "interleaved": {"field": "reasoning_content"},
                     }
                 },
@@ -145,14 +142,17 @@ class OpenCodeHarness(vf.Harness[OpenCodeHarnessConfig]):
             "mkdir -p /tmp/vf-opencode && "
             f"flock /tmp/vf-opencode/install.lock sh -c {shlex.quote(install)}"
         )
-        result = await runtime.run(["sh", "-c", guarded], self.config.env)
+        result = await runtime.run(
+            ["sh", "-c", guarded],
+            self.config.resolved_env,
+        )
         if result.exit_code != 0:
             detail = (result.stderr or result.stdout).strip()[-2000:]
             raise RuntimeError(f"OpenCode install failed: {detail}")
 
     async def launch(
         self,
-        ctx: vf.RolloutContext,
+        ctx: vf.ModelContext,
         trace: vf.Trace,
         runtime: vf.Runtime,
         endpoint: str,
@@ -161,7 +161,8 @@ class OpenCodeHarness(vf.Harness[OpenCodeHarnessConfig]):
     ) -> vf.ProgramResult:
         if mcp_urls:
             raise ValueError("OpenCodeHarness does not expose taskset MCP servers")
-        task_system_prompt, prompt = self.resolve_prompt(trace.task)
+
+        task_system_prompt, prompt = self.resolve_prompt(trace.task.data)
         if not isinstance(prompt, str):
             raise ValueError("OpenCodeHarness requires a string task prompt")
         system_prompt = "\n\n".join(
@@ -169,7 +170,11 @@ class OpenCodeHarness(vf.Harness[OpenCodeHarnessConfig]):
         )
         await runtime.write(self.config.prompt_path, prompt.encode())
         if system_prompt:
-            await runtime.write(self.config.system_prompt_path, system_prompt.encode())
+            await runtime.write(
+                self.config.system_prompt_path,
+                system_prompt.encode(),
+            )
+
         log_dir = str(PurePosixPath(self.config.log_path).parent)
         config_json = build_opencode_config(self.config)
         script = f"""\
@@ -190,7 +195,7 @@ cd {shlex.quote(self.config.agent_workdir)}
 cat {shlex.quote(self.config.prompt_path)} | opencode run 2>&1 | tee {shlex.quote(self.config.log_path)}
 """
         env = {
-            **self.config.env,
+            **self.config.resolved_env,
             "OPENAI_BASE_URL": endpoint,
             "OPENAI_API_KEY": secret,
             "OPENAI_MODEL": ctx.model,
@@ -198,4 +203,4 @@ cat {shlex.quote(self.config.prompt_path)} | opencode run 2>&1 | tee {shlex.quot
         return await runtime.run_program(["bash", "-lc", script], env)
 
 
-__all__ = ["OpenCodeHarborTaskset", "OpenCodeHarness"]
+__all__ = ["OpenCodeHarness", "OpenCodeHarnessConfig"]

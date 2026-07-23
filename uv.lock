@@ -2342,15 +2342,11 @@ name = "opencode-harbor"
 version = "0.1.3"
 source = { editable = "environments/opencode_harbor" }
 dependencies = [
-    { name = "prime-sandboxes" },
-    { name = "verifiers" },
+    { name = "verifiers", extra = ["harbor"] },
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "prime-sandboxes", specifier = ">=0.2.10" },
-    { name = "verifiers", git = "https://github.com/PrimeIntellect-ai/verifiers.git?branch=main" },
-]
+requires-dist = [{ name = "verifiers", extras = ["harbor"], git = "https://github.com/PrimeIntellect-ai/verifiers.git?branch=main" }]
 
 [[package]]
 name = "opentelemetry-api"
@@ -4213,7 +4209,7 @@ wheels = [
 
 [[package]]
 name = "terminal-bench-2-v1"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "environments/terminal_bench_2_v1" }
 dependencies = [
     { name = "verifiers", extra = ["harbor"] },

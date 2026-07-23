@@ -48,3 +48,4 @@ venv/
 /.opencode/skills/
 /.pi/skills/
 /environments/AGENTS.md
+.cursor/
